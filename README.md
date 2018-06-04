@@ -650,5 +650,4 @@ executed; be sure to provide appropriate values for
 
 ## External Resources
 
-* [Kinetica Spark Docker Image](https://bitbucket.org/gisfederal/gpudb-docker/src/HEAD/spark-connector/?at=master)
 * [Spark SQL Guide](https://spark.apache.org/docs/latest/sql-programming-guide.html)

@@ -1,0 +1,29 @@
+<assembly xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2 http://maven.apache.org/xsd/assembly-1.1.2.xsd">
+    <id>dist</id>
+    <formats>
+        <format>zip</format>
+    </formats>
+    <fileSets>
+        <fileSet>
+            <directory>${project.basedir}</directory>
+            <outputDirectory>.</outputDirectory>
+            <includes>
+                <include>*.md</include>
+                <include>scripts/**</include>
+                <include>doc/**</include>
+            </includes>
+        </fileSet>
+    </fileSets>
+    <files>
+        <file>
+            <source>${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</source>
+            <outputDirectory>target/</outputDirectory>
+        </file>
+        <file>
+            <source>${project.build.directory}/${project.build.finalName}-tests.jar</source>
+            <outputDirectory>target/</outputDirectory>
+        </file>
+    </files>
+</assembly>

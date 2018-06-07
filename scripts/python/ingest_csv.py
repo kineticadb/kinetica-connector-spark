@@ -20,12 +20,12 @@ if __name__ == "__main__":
     print('Writing records to {}: {}'.format(tableName, tableDF.count()))
 
     tableDF.write.format('com.kinetica.spark') \
-        .option('database.url', 'http://gpudb:9191') \
-        .option('database.jdbc_url', 'jdbc:simba://gpudb:9292;ParentSet=test') \
-        .option('table.name', tableName) \
-        .option('table.is_replicated' ,'false') \
-        .option('table.map_columns_by_name', 'false') \
-        .option('table.create', 'true') \
+        .option('kinetica-url', 'http://gpudb:9191') \
+        .option('kinetica-jdbcurl', 'jdbc:simba://gpudb:9292;ParentSet=test') \
+        .option('kinetica-desttablename', tableName) \
+        .option('kinetica-replicatedtable' ,'false') \
+        .option('kinetica-maptoschema', 'false') \
+        .option('kinetica-createtable', 'true') \
         .save()
 
     print('All done!')

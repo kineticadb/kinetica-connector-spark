@@ -3,7 +3,6 @@ package com.kinetica.spark.egressutil
 import java.sql.{ ResultSetMetaData, Connection, SQLException }
 import java.util.Properties
 import org.apache.spark.sql.types._
-import com.kinetica.spark.LoaderParams
 
 /**
  * Generates schema for the data source by mapping to Kinetica jdbc type to Spark sql data types.
@@ -22,7 +21,7 @@ private[kinetica] object KineticaSchema {
      * @throws SQLException if the table specification is garbage.
      * @throws SQLException if the table contains an unsupported type.
      */
-    def getSparkSqlSchema(url: String, properties: LoaderParams, table: String): StructType = {
+    def getSparkSqlSchema(url: String, properties: Properties, table: String): StructType = {
 
         //println(s"########## Getting schema for table ${table} ############# ") 
         val conn: Connection = KineticaJdbcUtils.getConnector(url, properties)()

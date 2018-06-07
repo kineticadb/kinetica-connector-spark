@@ -39,11 +39,11 @@ class KineticaSubmitTest extends FunSuite with LazyLogging {
 
     // config options
     private final val KineticaOptions = Map(
-        "database.jdbc_url" -> "jdbc:simba://localhost:9292",
-        "database.username" -> "",
-        "database.password" -> "",
-        "table.name" -> TableName,
-        "spark.num_partitions" -> "4")
+        "kinetica-jdbcurl" -> "jdbc:simba://localhost:9292",
+        "kinetica-username" -> "",
+        "kinetica-password" -> "",
+        "kinetica-desttablename" -> TableName,
+        "connector-numparitions" -> "4")
 
     test("Egress CSV file") {
         logger.info("Starting CSV egress test")
@@ -102,15 +102,15 @@ class KineticaSubmitTest extends FunSuite with LazyLogging {
         tableDF.printSchema()
 
         var writeToKineticaOpts = Map(
-             "database.url" -> "http://localhost:9191",
-             "table.name" -> "flights",
-             "table.is_replicated" -> "false",
-             "table.map_columns_by_name" -> "false",
-             "table.create" -> "true",
-             "database.jdbc_url" -> "jdbc:simba://localhost:9292",
-             "database.username" -> "",
-             "ingester.multi_head" -> "false",
-             "database.password" -> "");
+             "kinetica-url" -> "http://localhost:9191",
+             "kinetica-desttablename" -> "flights",
+             "kinetica-replicatedtable" -> "false",
+             "kinetica-maptoschema" -> "false",
+             "kinetica-createtable" -> "true",
+             "kinetica-jdbcurl" -> "jdbc:simba://localhost:9292",
+             "kinetica-username" -> "",
+             "kinetica-multihead" -> "false",
+             "kinetica-password" -> "");
 
         tableDF.write.format("com.kinetica.spark").options(writeToKineticaOpts).save()
     }

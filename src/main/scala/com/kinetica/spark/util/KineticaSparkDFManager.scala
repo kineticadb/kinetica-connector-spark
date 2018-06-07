@@ -67,9 +67,12 @@ object KineticaSparkDFManager extends LazyLogging {
 
     private def getGPUDBOptions(lp: LoaderParams): GPUdbBase.Options = {
         val opts: GPUdbBase.Options = new GPUdbBase.Options
-        logger.debug("Setting username and password")
-        opts.setUsername(lp.getKusername.trim())
-        opts.setPassword(lp.getKpassword.trim())
+        logger.debug("Authentication enabled: " + lp.isKauth)
+        if (lp.isKauth) {
+            logger.debug("Setting username and password")
+            opts.setUsername(lp.getKusername.trim())
+            opts.setPassword(lp.getKpassword.trim())
+        }
         opts.setThreadCount(lp.getThreads)
         opts
     }
@@ -141,8 +144,7 @@ object KineticaSparkDFManager extends LazyLogging {
                                             classOf[Date].cast(rtemp).toString)
                                         isARecord = true
                                     } else {
-                                        logger.debug("Spark type {} ", rtemp.getClass())
-                                        logger.debug("Kin instance type is {} {}", column.getType, column.getName)
+                                        logger.debug("other instance type is {}", column.getType)
                                         genericRecord.put(
                                             column.getName,
                                             column.getType.cast(rtemp))
@@ -203,15 +205,11 @@ object KineticaSparkDFManager extends LazyLogging {
                             val rtemp: Any = row.get({ i += 1; i - 1 })
                             if (rtemp != null) {
                                 logger.debug("object not null " + rtemp)
-                                if (rtemp.isInstanceOf[java.sql.Timestamp]) {
+                                if (rtemp.isInstanceOf[Timestamp]) {
                                     logger.debug("Timestamp instance")
                                     genericRecord.put(
                                         column.getName,
-                                        classOf[java.sql.Timestamp].cast(rtemp).getTime)
-                                    isARecord = true
-                                } else if (rtemp.isInstanceOf[java.sql.Date]) {
-                                    logger.debug("Date instance")
-                                    genericRecord.put(column.getName, rtemp.toString)
+                                        classOf[Timestamp].cast(rtemp).getTime)
                                     isARecord = true
                                 } else if (rtemp.isInstanceOf[java.lang.Boolean]) {
                                     logger.debug("Boolean instance")
@@ -275,8 +273,7 @@ object KineticaSparkDFManager extends LazyLogging {
                                     }
                                     isARecord = true
                                 } else {
-                                    logger.debug("Spark type and value {} {}", rtemp.getClass(), rtemp)
-                                    logger.debug("Kin instance " + column.getType)
+                                    logger.debug("other instance " + column.getType)
                                     genericRecord.put(column.getName, rtemp)
                                     isARecord = true
                                 }
@@ -314,24 +311,5 @@ object KineticaSparkDFManager extends LazyLogging {
             })
         }
     }
+
 }
-/*
-if( maptoschem ) {
-	Kinetica type t
-	for each row r {
-		for each col c in t {
-			colValue = r.getAs(c.getName)
-			gr.put(c.getName, cast(colValue))
-		}
-	}
-} else {
-	Kinetica type t
-	for each row r {
-		int cnt = 0;
-		for each col c in t {
-			colValue = r.get(cnt++)
-			gr.put(c.getName, cast(colValue))
-		}
-	}			
-}
-*/

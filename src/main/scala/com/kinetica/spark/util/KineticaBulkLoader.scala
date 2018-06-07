@@ -133,9 +133,12 @@ class KineticaBulkLoader(bkp: LoaderParams) extends LazyLogging {
      */
     private def getGPUDBOptions(): GPUdbBase.Options = {
         val opts: GPUdbBase.Options = new GPUdbBase.Options()
-        logger.debug("Setting username and password")
-        opts.setUsername(lp.kusername.trim())
-        opts.setPassword(lp.kpassword.trim())
+        logger.debug("Authentication enabled: " + lp.kauth)
+        if (lp.kauth) {
+            logger.debug("Setting username and password")
+            opts.setUsername(lp.kusername.trim())
+            opts.setPassword(lp.kpassword.trim())
+        }
         opts.setThreadCount(lp.getThreads())
         opts.setUseSnappy(lp.useSnappy)
         opts

@@ -7,8 +7,6 @@ import org.apache.spark.sql.execution.datasources.jdbc.DriverRegistry
 import org.apache.spark.sql.sources.Filter
 import org.slf4j.LoggerFactory
 
-import com.kinetica.spark.LoaderParams
-
 /**
   * Utility jdbc methods to communicate with Kinetica. These methods are based on Spark SQL code,
   * and depends on the internal class DriverRegistry.
@@ -27,7 +25,7 @@ private[kinetica] object KineticaJdbcUtils {
     *
     * @return A function that loads the driver and connects to the url.
     */
-  def getConnector(url: String, lp: LoaderParams): () => Connection = {
+  def getConnector(url: String, properties: Properties): () => Connection = {
     () => {
       val driver = "com.simba.client.core.jdbc4.SCJDBC4Driver"
       try {
@@ -36,10 +34,7 @@ private[kinetica] object KineticaJdbcUtils {
         case e: ClassNotFoundException =>
           log.error(s"Couldn't find class $driver", e)
       }
-      val p: Properties = new Properties()
-      p.setProperty("UID", lp.getKusername)
-      p.setProperty("PWD", lp.getKpassword)
-      DriverManager.getConnection(url, p)
+      DriverManager.getConnection(url, properties)
     }
   }
 
@@ -49,7 +44,7 @@ private[kinetica] object KineticaJdbcUtils {
 
   def getCountWithFilter(
       url: String,
-      properties: LoaderParams,
+      properties: Properties,
       table: String,
       filters: Array[Filter]): Long = {
     val whereClause = KineticaFilters.getFilterClause(filters)

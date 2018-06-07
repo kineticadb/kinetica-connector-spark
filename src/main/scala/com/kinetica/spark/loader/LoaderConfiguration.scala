@@ -50,10 +50,6 @@ class LoaderConfiguration(params: Map[String, String]) extends LoaderParams(para
     @BeanProperty
     val partitionRows: Int = params.get(KINETICA_PARTROWS_PARAM).getOrElse("-1").toInt
 
-    if(tablename == null) {
-        throw new Exception( "Parameter is required: " + KINETICA_TABLENAME_PARAM)
-    }
-
     private val tableParams: Array[String] = tablename.split("\\.")
     if (tableParams.length != 2) {
         throw new Exception( "loader.dest-table must have [schema].[table]: " + tablename)

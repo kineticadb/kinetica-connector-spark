@@ -5,13 +5,7 @@ import org.apache.spark.sql.{ SaveMode, SparkSession }
 
 object KineticaEgressTest extends App {
 
-    println("Application Kinetica to Spark started...")
-    
-    if( args.length != 1 ) {
-        println(" 1 params needed - <KineticaHostName/IP>")
-        println(" Aborting test")
-        System.exit(-1);
-    }
+    println("Application Spark to Kinetica started...")
 
     System.setProperty("spark.sql.warehouse.dir", "file:///C:/1SPARK/spark-warehouse");
     System.setProperty("hadoop.home.dir", "c:/1SPARK/")
@@ -20,30 +14,49 @@ object KineticaEgressTest extends App {
     println("Conf created...")
     val spark = SparkSession.builder().config(conf).master("local").getOrCreate()
 
-    val host = args(0)
-    val URL = s"http://${host}:9191"
-    
+    /* If we decide to write code.....*/
     val kineticaOptions = Map(
-        "database.jdbc_url" -> s"jdbc:simba://${host}:9292;URL=${URL};ParentSet=MASTER",
-        "database.username" -> "",
-        "database.password" -> "",
-        "table.name" -> "airline",
-        "spark.num_partitions" -> "80")
-        
+        "kinetica-jdbcurl" -> "jdbc:simba://172.31.70.13:9292;URL=http://172.31.70.13:9191;ParentSet=MASTER",
+        "kinetica-username" -> "",
+        "kinetica-password" -> "",
+        "kinetica-desttablename" -> "ALLTYPE",//"airline"
+        "connector-numparitions" -> "4")
+
     val sqlContext = spark.sqlContext
     val productdf = sqlContext.read.format("com.kinetica.spark").options(kineticaOptions).load()
     
     productdf.printSchema
     
-    val df = productdf.filter("DayOfMonth >= 12")
+    // FOR ALLTYPE
+    val df = productdf.filter("CDOUBLE >= 10.5 AND CINT >= 11")
     
-    //println(df.count())
+    //val df = productdf.filter("DayOfMonth >= 6")
 
-    println(df.groupBy("FlightNum").sum("DayOfWeek").orderBy("FlightNum").show(20000))
+
+    /* If we want to use the stock jdbc relation - method 1
+    val df = spark.read.format("org.apache.spark.sql.execution.datasources.jdbc.JdbcRelationProvider").
+        options(Map("url" -> "jdbc:simba://172.31.70.13:9292;URL=http://172.31.70.13:9191;ParentSet=MASTER",  
+                "user" -> "", "dbtable"-> "movieuser",
+                "password" -> "", "driver" -> "com.simba.client.core.jdbc4.SCJDBC4Driver")).load 
+    */
     
-    //df.write.format("csv").save("c:/1SPARK/data/dom12/")
+    /* If we want to use the stock jdbc relation - method 2
+    spark.sql("""CREATE TABLE movieuserspark USING org.apache.spark.sql.execution.datasources.jdbc.JdbcRelationProvider 
+          OPTIONS (url 'jdbc:simba://172.31.70.13:9292;URL=http://172.31.70.13:9191;ParentSet=MASTER', 
+          dbtable 'movieuser', user '', password '', driver 'com.simba.client.core.jdbc4.SCJDBC4Driver')""") 
+          
+    val df = spark.sql("select * from movieuserspark where _c2 = 'M'")          
+    */      
+          
+    df.printSchema
+    
+    //println(df.count)
+    
+    println(df.groupBy("CSTRING").sum("CINT").show())
+    
+    //println(df.groupBy("FlightNum").sum("DayOfWeek").show())
 
-    println("Egress completed....")
+    println("That is all folks.........")
     System.exit(0);
 
 }

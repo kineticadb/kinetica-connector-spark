@@ -29,9 +29,6 @@ class LoaderParams extends Serializable with LazyLogging {
     @BooleanBeanProperty
     var updateOnExistingPk: Boolean = false
 
-    @BooleanBeanProperty
-    var kauth: Boolean = false
-
     @BeanProperty
     var kusername: String = null
 
@@ -65,7 +62,6 @@ class LoaderParams extends Serializable with LazyLogging {
         require(params.nonEmpty, "Config cannot be empty")
 
         kineticaURL = params.get(KINETICA_URL_PARAM).getOrElse(null) 
-        kauth = params.get(KINETICA_ENABLEAUTH_PARAM).getOrElse("false").toBoolean 
         kusername = params.get(KINETICA_USERNAME_PARAM).getOrElse("")
         kpassword = params.get(KINETICA_PASSWORD_PARAM).getOrElse("")
         threads =   params.get(KINETICA_NUMTHREADS_PARAM).getOrElse("4").toInt      
@@ -84,15 +80,5 @@ class LoaderParams extends Serializable with LazyLogging {
         this.alterTable = params.get(KINETICA_ALTERTABLE_PARAM).getOrElse("false").toBoolean
         this.mapToSchema = params.get(KINETICA_MAPTOSCHEMA_PARAM).getOrElse("false").toBoolean
 
-        valdiateUserNamePassword()
-    }
-
-    private def valdiateUserNamePassword(): Unit = {
-        if (kauth) {
-            if (kusername.trim().length < 1)
-                throw new RuntimeException("Invalid Username")
-            if (kpassword.trim().length < 1)
-                throw new RuntimeException("Invalid password")
-        }
     }
 }

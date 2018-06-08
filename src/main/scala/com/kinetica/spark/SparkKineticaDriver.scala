@@ -44,16 +44,13 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
 
     var params = scala.collection.mutable.Map[String, String]()
 
-    val kit : Iterator[_] = propertyConf.getKeys("kinetica")
-    val cit : Iterator[_] = propertyConf.getKeys("connector")
-    val ait = kit ++ cit
+    val propIt : Iterator[_] = propertyConf.getKeys()
 
-    while (ait.hasNext) {
-        val key: String  = ait.next.toString
-        val keydotgone: String = key.replace(".", "-")
+    while (propIt.hasNext) {
+        val key: String  = propIt.next.toString
         val param: String = propertyConf.getString(key)
         logger.debug("config: {} = {}", key, param)
-        params += (keydotgone -> param)
+        params += (key -> param)
     }
 
     val immutableParams = params.map(kv => (kv._1,kv._2)).toMap
@@ -87,7 +84,7 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
             inputDs = sess.sql(sql)
         } else if (dataPath != null) {
             if (dataFormat == null) {
-                throw new Exception("You must specify parameter 'connector.dataformat'")
+                throw new Exception("You must specify parameter 'source.data_format'")
             }
 
             var finalDataFormat: String = dataFormat

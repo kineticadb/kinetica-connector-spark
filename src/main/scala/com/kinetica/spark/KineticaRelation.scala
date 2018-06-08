@@ -46,12 +46,13 @@ class KineticaRelation(
     
     val properties = new Properties() 
     parameters.foreach { case (k, v) => properties.setProperty(k, v) }
+    val conf: LoaderParams = new LoaderParams(parameters)
 
     lazy val querySchema: StructType = {
         logger.debug("*********************** KR:querySchema")
-        val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'kineticajdbcurl' not specified"))
-        val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'kineticadesttablename' not specified"))
-        KineticaSchema.getSparkSqlSchema(url, properties, table)
+        val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'database.jdbc_url' not specified"))
+        val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'table.name' not specified"))
+        KineticaSchema.getSparkSqlSchema(url, conf, table)
     }
 
     override def schema: StructType = querySchema
@@ -62,18 +63,19 @@ class KineticaRelation(
         
         logger.debug("*********************** KR:BS ")
 
-        val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'kineticajdbcurl' not specified"))
-        val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'kineticadesttablename' not specified"))
+        val conf: LoaderParams = new LoaderParams(parameters)
+        val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'database.jdbc_url' not specified"))
+        val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'table.name' not specified"))
         val numPartitions = parameters.getOrElse(CONNECTOR_NUMPARTITIONS_PARAM, "4").toInt
         
         if (requiredColumns.isEmpty) {
             emptyRowRDD(filters, url, table, numPartitions)
         } else {
             val parts = com.kinetica.spark.egressutil.KineticaInputFormat.getDataSlicePartition(
-                com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, properties)(), numPartitions.toInt, table, filters)
+                com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)(), numPartitions.toInt, table, filters)
             new KineticaRDD(
                 sqlContext.sparkContext,
-                KineticaJdbcUtils.getConnector(url, properties),
+                KineticaJdbcUtils.getConnector(url, conf),
                 KineticaSchema.pruneSchema(schema, requiredColumns),
                 table,
                 requiredColumns,
@@ -127,8 +129,6 @@ class KineticaRelation(
     
     private def insertConnectorWay(df: DataFrame, dummy: Boolean): Unit = {
               
-        val conf: LoaderParams = new LoaderParams(parameters)
-
         /* FOR DEBUGGING - KEEP COMMENTED OUT
         val kineticaUrl = conf.getKineticaURL();
         val dfSchema = df.schema
@@ -199,7 +199,7 @@ class KineticaRelation(
      * @return
      */
     private def emptyRowRDD(filters: Array[Filter], url: String, table: String, numPartitions: Integer): RDD[Row] = {
-        val numRows: Long = KineticaJdbcUtils.getCountWithFilter(url, properties, table, filters)
+        val numRows: Long = KineticaJdbcUtils.getCountWithFilter(url, conf, table, filters)
         val emptyRow = Row.empty
         sqlContext.sparkContext.parallelize(1L to numRows, numPartitions).map(_ => emptyRow)
     }

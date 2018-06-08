@@ -117,8 +117,10 @@ class KineticaBulkLoader(bkp: LoaderParams) extends LazyLogging {
         if (workers != null) {
             logger.debug("Number of workers: " + workers.size)
             var iter: Iterator[URL] = workers.iterator()
-            while (iter.hasNext) logger.debug(
-                "GPUdb BulkInserter worker: " + iter.next())
+//            while (iter.hasNext) {
+//                val whatever = iter.next()
+//                logger.debug("GPUdb BulkInserter worker: " + whatever)
+//            }
             workers
         } else {
             logger.info("No workers available. Multi-head ingest may be turned off")
@@ -133,12 +135,9 @@ class KineticaBulkLoader(bkp: LoaderParams) extends LazyLogging {
      */
     private def getGPUDBOptions(): GPUdbBase.Options = {
         val opts: GPUdbBase.Options = new GPUdbBase.Options()
-        logger.debug("Authentication enabled: " + lp.kauth)
-        if (lp.kauth) {
-            logger.debug("Setting username and password")
-            opts.setUsername(lp.kusername.trim())
-            opts.setPassword(lp.kpassword.trim())
-        }
+        logger.debug("Setting username and password")
+        opts.setUsername(lp.kusername.trim())
+        opts.setPassword(lp.kpassword.trim())
         opts.setThreadCount(lp.getThreads())
         opts.setUseSnappy(lp.useSnappy)
         opts

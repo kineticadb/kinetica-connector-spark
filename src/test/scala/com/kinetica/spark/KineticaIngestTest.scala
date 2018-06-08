@@ -23,7 +23,7 @@ object KineticaIngestTest extends App {
     val conf = new SparkConf().setAppName("spark-custom-datasource")
     conf.set("spark.driver.userClassPathFirst" , "true");
     println("Conf created...")
-    val spark = SparkSession.builder().config(conf).getOrCreate()
+    val spark = SparkSession.builder().config(conf).master("local").getOrCreate()
     
     if( args.length != 3 ) {
         println(" 3 params needed - InputFile KineticaTableName kineticaIp")
@@ -60,11 +60,11 @@ object KineticaIngestTest extends App {
     userDF.printSchema()
     
     // Tested with createtable true and false......createtable=true will take way more time since 
-    var writeToKineticaOpts = Map("kinetica-url" -> s"http://${kineticaIp}:9191", "kinetica-desttablename" -> tableName,
-            "kinetica-replicatedtable" -> "false", "kinetica-ipregex" -> "", "kinetica-batchsize" -> "10000", "kinetica-updateonexistingpk" -> "true",
-            "kinetica-maptoschema" -> "false", "kinetica-numthreads" -> "4", "kinetica-createtable" -> "true",
-            "kinetica-jdbcurl" -> s"jdbc:simba://${kineticaIp}:9292;URL=http://${kineticaIp}:9191;ParentSet=MASTER",
-            "kinetica-username" -> "", "kinetica-password" -> "");
+    var writeToKineticaOpts = Map("database.url" -> s"http://${kineticaIp}:9191", "table.name" -> tableName,
+            "table.is_replicated" -> "false", "ingester.ip_regex" -> "", "ingester.batch_size" -> "10000", "table.update_on_existing_pk" -> "true",
+            "table.map_columns_by_name" -> "false", "ingester.num_threads" -> "4", "table.create" -> "true",
+            "database.jdbc_url" -> s"jdbc:simba://${kineticaIp}:9292;URL=http://${kineticaIp}:9191;ParentSet=MASTER",
+            "database.username" -> "", "database.password" -> "");
     println("writeToKineticaOpts set...")
     
     println("Starting Kinetica write...")

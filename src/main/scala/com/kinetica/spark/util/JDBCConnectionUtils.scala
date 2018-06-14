@@ -4,6 +4,7 @@ import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
 import java.sql.Statement
+import java.sql.DatabaseMetaData
 import java.util.Properties
 import com.kinetica.spark.LoaderParams
 
@@ -57,4 +58,13 @@ object JDBCConnectionUtils {
         }
     }
 
+    def tableExists(tableName: String): Boolean = {
+        val dbm = connection.getMetaData();
+        val tables = dbm.getTables(null, null, tableName, null);
+        if (tables.next()) {
+            true
+        } else {
+            false
+        }
+    }
 }

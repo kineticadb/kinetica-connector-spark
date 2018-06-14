@@ -29,8 +29,8 @@ import com.typesafe.scalalogging.LazyLogging
 class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
 
     private val gpudb: GPUdb = conf.getGpudb
-    private val tableName: String = conf.tableName
-    private val schemaName: String = conf.schemaName
+    private val tableName: String = conf.tablename
+    private val schemaName: String = conf.schemaname
     private val useTemplates: Boolean = conf.useTemplates
 
     @BeanProperty
@@ -41,10 +41,18 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
     def createTable(): Unit = {
         logger.info( "Creating table <{}.{}> (type={})", this.schemaName, this.tableName, this.destTypeId)
 
+        var options : java.util.Map[String, String] = null
+        if( conf.tableReplicated ) {
+            options = GPUdbBase.options(CreateTableRequest.Options.COLLECTION_NAME, this.schemaName,
+                    CreateTableRequest.Options.IS_REPLICATED, CreateTableRequest.Options.TRUE)
+        } else {
+            options = GPUdbBase.options(CreateTableRequest.Options.COLLECTION_NAME, this.schemaName)
+        }
+
         this.gpudb.createTable(
             this.tableName,
             this.destTypeId,
-            GPUdbBase.options(CreateTableRequest.Options.COLLECTION_NAME, this.schemaName))
+            options)
     }
 
     def truncateTable(): Unit = {
@@ -82,15 +90,14 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
         val tableNames: List[String] = response.getTableNames
         val prefix: String = this.tableName + "."
 
-        val templateName = tableNames
+        val templateName: String  = tableNames
             .filter(x => x.startsWith(prefix))
-            .sortBy(- _.size).head.orElse(null)
+            .sorted.lastOption.getOrElse {
+                throw new Exception(
+                    String.format("Could not find a suitable template in <%s> for table <%s.%s>",
+                        templateSchema, this.schemaName, this.tableName))
+            }
 
-        if (templateName == null) {
-            throw new Exception(
-                String.format("Could not find a suitable template in <%s> for table <%s.%s>",
-                    templateSchema, this.schemaName, this.tableName))
-        }
         val tableIndex: Int = tableNames.indexOf(templateName)
         this.destTypeId = response.getTypeIds.get(tableIndex)
         val typeString: String = response.getTypeSchemas.get(tableIndex)

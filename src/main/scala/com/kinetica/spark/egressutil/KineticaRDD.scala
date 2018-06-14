@@ -15,10 +15,12 @@ import org.apache.spark.util.CompletionIterator
 
 import scala.util.control.NonFatal
 
+import com.typesafe.scalalogging.LazyLogging
+
 /**
  * Data corresponding to one partition of a Kinetica RDD.
  */
-private[kinetica] case class KineticaPartition(startRow: Int, numRows: Int, idx: Int) extends Partition {
+private[kinetica] case class KineticaPartition(startRow: Int, numRows: Int, idx: Int) extends Partition with LazyLogging {
     override def index: Int = idx
 }
 
@@ -36,7 +38,7 @@ private[kinetica] class KineticaRDD(
     filters: Array[Filter],
     partitions: Array[Partition],
     properties: Properties)
-    extends RDD[Row](sc, Nil) {
+    extends RDD[Row](sc, Nil) with LazyLogging {
 
     /**
      * Retrieve the list of partitions corresponding to this RDD.
@@ -51,7 +53,9 @@ private[kinetica] class KineticaRDD(
         conn = getConnection()
 
         val part = thePart.asInstanceOf[KineticaPartition]
-        val stmt = conn.prepareStatement(buildTableQuery(conn, table, columns, filters, part, schema))
+        val query = buildTableQuery(conn, table, columns, filters, part, schema)
+        logger.debug("Query is {}", query)
+        val stmt = conn.prepareStatement(query)
         rs = stmt.executeQuery
 
         val internalRows = KineticaUtils.resultSetToSparkInternalRows(rs, schema)
@@ -112,11 +116,6 @@ private[kinetica] class KineticaRDD(
         }
 
         myrows
-
-        /*
-        CompletionIterator[InternalRow, Iterator[InternalRow]](
-          new InterruptibleIterator(context, rowsIterator), close())
-        */
     }
 
     def buildTableQuery(
@@ -128,7 +127,7 @@ private[kinetica] class KineticaRDD(
         schema: StructType): String = {
 
         val baseQuery = {
-            val whereClause = KineticaFilters.getWhereClause(filters, partition)
+            val (whereClause, maxRowsToFetch) = KineticaFilters.getWhereClause(filters, partition)
             val colStrBuilder = new StringBuilder()
 
             //log.info(" KineticaDataReader buildTableQuery are - ")
@@ -140,7 +139,7 @@ private[kinetica] class KineticaRDD(
             } else {
                 colStrBuilder.append("1")
             }
-            s"SELECT $colStrBuilder FROM $table $whereClause"
+            s"/* KI_HINT_MAX_ROWS_TO_FETCH($maxRowsToFetch) */SELECT $colStrBuilder FROM $table $whereClause"
         }
         log.info("External Table Query: " + baseQuery)
         baseQuery.toString()

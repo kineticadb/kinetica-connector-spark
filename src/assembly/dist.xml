@@ -12,7 +12,6 @@
             <includes>
                 <include>*.md</include>
                 <include>scripts/**</include>
-                <include>doc/**</include>
             </includes>
         </fileSet>
     </fileSets>

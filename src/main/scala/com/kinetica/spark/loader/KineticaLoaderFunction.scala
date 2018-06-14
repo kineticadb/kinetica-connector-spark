@@ -6,78 +6,22 @@ import java.util.Date
 import java.util.HashMap
 import java.util.Iterator
 import java.util.List
-import java.util.Map.Entry
-
-import org.apache.spark.api.java.function.ForeachPartitionFunction
-
-import org.apache.spark.sql.Row
-import com.gpudb.BulkInserter
-import com.gpudb.GenericRecord
-
-import com.gpudb.Type
-import com.gpudb.Type.Column
-
-import com.typesafe.scalalogging.LazyLogging
 
 //remove if not needed
-import scala.collection.JavaConversions._
+import scala.collection.JavaConversions.mapAsScalaMap
 
-object KineticaLoaderFunction {
+import org.apache.spark.api.java.function.ForeachPartitionFunction
+import org.apache.spark.sql.Row
 
-    private def convertValue(inValue: Any, destColDef: Column): Any = {
-        val colProps: List[String] = destColDef.getProperties
-        if (inValue == null) {
-            return null
-        }
-        
-        val destType: Class[_] = destColDef.getType
-        val srcType: Class[_] = inValue.getClass
-        
-        var outValue: Any = null
-        if (destType == srcType) {
-            // fast path
-            outValue = inValue
-        } else if (classOf[Number].isAssignableFrom(destType) && classOf[Number]
-            .isAssignableFrom(srcType)) {
-            // numeric conversion
-            outValue = convertFromNumber(destType, inValue.asInstanceOf[Number])
-        } else if (colProps.contains("timestamp") && classOf[Date]
-            .isAssignableFrom(srcType)) {
-            // timestamp conversion
-            val inTimestamp: Date = inValue.asInstanceOf[Date]
-            outValue = inTimestamp.getTime.underlying
-        } else if (destType == classOf[java.lang.Integer] && srcType == classOf[java.lang.Boolean]) {
-            // boolean conversion
-            val inBool: java.lang.Boolean = inValue.asInstanceOf[java.lang.Boolean]
-            outValue = if (inBool) 1.underlying else 0.underlying
-        }
-        if (outValue == null) {
-            throw new Exception(
-                String.format("Could not convert from type: %s", destType.getName))
-        }
-        outValue
-    }
-
-    private def convertFromNumber(destType: Class[_], inNumber: Number): Number = {
-        var outValue: Number = null
-        if (destType == classOf[Integer]) {
-            outValue = inNumber.intValue()
-        } else if (destType == classOf[Long]) {
-            outValue = inNumber.longValue()
-        } else if (destType == classOf[Float]) {
-            outValue = inNumber.floatValue()
-        } else if (destType == classOf[Double]) {
-            outValue = inNumber.doubleValue()
-        }
-        outValue
-    }
-
-}
-
-import KineticaLoaderFunction._
+import com.gpudb.BulkInserter
+import com.gpudb.GenericRecord
+import com.gpudb.Type
+import com.gpudb.Type.Column
+import com.kinetica.spark.util.KineticaBulkLoader
+import com.typesafe.scalalogging.LazyLogging
 
 @SerialVersionUID(-594351038800346275L)
-class KineticaLoaderFunction(
+class KineticaLoaderFunction (
     private val loaderConfig: LoaderConfiguration,
     private val columnMap: HashMap[Integer, Integer])
     extends ForeachPartitionFunction[Row] with LazyLogging {
@@ -85,13 +29,16 @@ class KineticaLoaderFunction(
     private val tableType: Type = this.loaderConfig.getType
 
     override def call(rowset: Iterator[Row]): Unit = {
-        val bi: BulkInserter[GenericRecord] = this.loaderConfig.getBulkInserter
+
+        val kbl: KineticaBulkLoader = new KineticaBulkLoader(loaderConfig)
+        val bi: BulkInserter[GenericRecord] = kbl.GetBulkInserter()
+        //val bi: BulkInserter[GenericRecord] = this.loaderConfig.getBulkInserter
         val start: Instant = Instant.now()
         val rowcount: Long = insertRows(rowset, bi)
         val end: Instant = Instant.now()
         logger.info("Inserted rows={}", rowcount)
         logger.info("Inserted rows time={}", Duration.between(start, end))
-            
+
     }
 
     private def insertRows(
@@ -132,6 +79,57 @@ class KineticaLoaderFunction(
             record.put(destColIdx, destValue)
         }
         record
+    }
+
+    private def convertValue(inValue: Any, destColDef: Column): Any = {
+        val colProps: List[String] = destColDef.getProperties
+        if (inValue == null) {
+            return null
+        }
+
+        val destType: Class[_] = destColDef.getType
+        val srcType: Class[_] = inValue.getClass
+
+        var outValue: Any = null
+        if (destType == srcType) {
+            // fast path
+            outValue = inValue
+        }
+        else if (classOf[Number].isAssignableFrom(destType)
+                && classOf[Number].isAssignableFrom(srcType)) {
+            // numeric conversion
+            outValue = convertFromNumber(destType, inValue.asInstanceOf[Number])
+        }
+        else if (colProps.contains("timestamp") && classOf[Date].isAssignableFrom(srcType)) {
+            // timestamp conversion
+            val inTimestamp: Date = inValue.asInstanceOf[Date]
+            outValue = inTimestamp.getTime.underlying
+        }
+        else if (destType == classOf[java.lang.Integer] && srcType == classOf[java.lang.Boolean]) {
+            // boolean conversion
+            val inBool: java.lang.Boolean = inValue.asInstanceOf[java.lang.Boolean]
+            outValue = if (inBool) 1.underlying else 0.underlying
+        }
+
+        if (outValue == null) {
+            throw new Exception(
+                String.format("Could not convert from type: %s", destType.getName))
+        }
+        outValue
+    }
+
+    private def convertFromNumber(destType: Class[_], inNumber: Number): Number = {
+        var outValue: Number = null
+        if (destType == classOf[java.lang.Integer]) {
+            outValue = inNumber.intValue()
+        } else if (destType == classOf[java.lang.Long]) {
+            outValue = inNumber.longValue()
+        } else if (destType == classOf[java.lang.Float]) {
+            outValue = inNumber.floatValue()
+        } else if (destType == classOf[java.lang.Double]) {
+            outValue = inNumber.doubleValue()
+        }
+        outValue
     }
 
 }

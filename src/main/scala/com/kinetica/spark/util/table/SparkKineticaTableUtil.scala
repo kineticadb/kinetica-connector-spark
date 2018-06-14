@@ -71,6 +71,17 @@ object SparkKineticaTableUtil extends LazyLogging {
     lz4hcfields = new ArrayList[String]()
     alterStatements = new ArrayList[String]()
   }
+  
+  def verifyJdbcUrl(lp: LoaderParams) : Unit = {
+      try if (lp.getJdbcURL.trim().isEmpty)
+        throw new RuntimeException("Missing JDBC URL or invalid")
+      catch {
+        case e: Exception => {
+          logger.error("JDBC url missing")
+          throw new RuntimeException("Missing JDBC URL or invalid")
+        }
+    }
+  }
 
   /**
     * Creates Kinetica table from spark dataframe
@@ -79,17 +90,8 @@ object SparkKineticaTableUtil extends LazyLogging {
     * @throws KineticaException
     */
   def createTable(ds: DataFrame, lp: LoaderParams): Unit = {
-    logger.info("KineticaMapWriter")
-    logger.debug("Mapping DataFrame columns to Kinetica")
-    try if (lp.getJdbcURL.trim().isEmpty)
-      throw new RuntimeException("Missing JDBC URL or invalid")
-    catch {
-      case e: Exception => {
-        logger.error("JDBC url missing")
-        throw new RuntimeException("Missing JDBC URL or invalid")
-      }
-
-    }
+    logger.info("createTable")
+    verifyJdbcUrl(lp)
     SparkKineticaTableUtil.buildCreateTableDDL(ds, lp)
     JDBCConnectionUtils.Init(lp)
     //execute create table
@@ -103,6 +105,25 @@ object SparkKineticaTableUtil extends LazyLogging {
     */
     SparkKineticaTableUtil.init()
   }
+  
+  def truncateTable(ds: DataFrame, lp: LoaderParams): Unit = {
+    logger.info("truncateTable")
+    verifyJdbcUrl(lp)
+    JDBCConnectionUtils.Init(lp)
+    //execute truncate table
+    JDBCConnectionUtils.executeSQL(s"TRUNCATE TABLE ${lp.tablename}")
+    JDBCConnectionUtils.close()
+  }
+  
+  def tableExists(lp: LoaderParams): Boolean = {
+    logger.info("truncateTable")
+    verifyJdbcUrl(lp)
+    JDBCConnectionUtils.Init(lp)
+    val te = JDBCConnectionUtils.tableExists(lp.tablename)
+    JDBCConnectionUtils.close()
+    te
+  }
+
 
   /**
     * Kinetica table must already exist to use this method

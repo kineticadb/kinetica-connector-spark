@@ -9,7 +9,7 @@
     <packaging>jar</packaging>
     <name>spark-kinetica</name>
     <description>Tools for reading/writing data from/to Spark into Kinetica</description>
-    <url>https://github.com/kinetica</url>
+    <url>https://github.com/kineticadb/kinetica-connector-spark</url>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -39,6 +39,15 @@
             <url>http://files.kinetica.com/nexus/content/repositories/thirdparty/</url>
         </repository>
     </repositories>
+
+    <!-- The scm is used so that the we can pass the Git branch and hash info to the
+         buildnumber plugin. -->
+    <scm>
+        <connection>scm:git:file://.</connection>
+        <developerConnection>scm:git:file://.</developerConnection>
+        <url>scm:git:file://.</url>
+        <tag>HEAD</tag>
+    </scm>
 
     <profiles>
         <profile>
@@ -74,16 +83,21 @@
             </resource>
         </resources>
 
-        <plugins>
-            <plugin>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.0</version>
-                <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
-                </configuration>
-            </plugin>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.0</version>
+                    <configuration>
+                        <source>${java.version}</source>
+                        <target>${java.version}</target>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
 
+        <plugins>
             <plugin>
                 <groupId>net.alchim31.maven</groupId>
                 <artifactId>scala-maven-plugin</artifactId>
@@ -131,10 +145,44 @@
                 </configuration>
             </plugin>
 
+            <!--  The buildnumber plugin will take Git commit information and embed it in the JAR manifest.
+                  When the program is run it will print the release information to the console. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>buildnumber-maven-plugin</artifactId>
+                <version>1.4</version>
+                <executions>
+                    <execution>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>create</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <doCheck>false</doCheck>
+                    <doUpdate>false</doUpdate>
+                    <shortRevisionLength>8</shortRevisionLength>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.1.0</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <addClasspath>false</addClasspath>
+                            <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                            <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+                        </manifest>
+                        <manifestEntries>
+                            <Build-Time>${maven.build.timestamp}</Build-Time>
+                            <Implementation-Version>${scmBranch}-${buildNumber}</Implementation-Version>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>
@@ -153,9 +201,18 @@
                     <execution>
                         <id>make-assembly</id>
                         <configuration>
-                        <!--
-                            <finalName>${project.artifactId}-${spark.version}-${project.version}-connector</finalName>
-                            -->
+                            <archive>
+                                <manifest>
+                                    <addClasspath>false</addClasspath>
+                                    <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                                    <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+                                </manifest>
+                                <manifestEntries>
+                                    <Build-Time>${maven.build.timestamp}</Build-Time>
+                                    <Implementation-Version>${scmBranch}-${buildNumber}</Implementation-Version>
+                                </manifestEntries>
+                            </archive>
+                            <!-- <finalName>${project.artifactId}-${spark.version}-${project.version}-connector</finalName> -->
                             <descriptorRefs>
                                 <descriptorRef>jar-with-dependencies</descriptorRef>
                             </descriptorRefs>

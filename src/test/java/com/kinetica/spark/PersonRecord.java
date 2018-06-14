@@ -12,7 +12,7 @@ import java.io.Serializable;
 /**
  * Simple representation of a person, which extends RecordObject so that it can
  * be written directly to GPUdb
- * 
+ *
  * @author ksutton
  */
 public class PersonRecord extends RecordObject implements Serializable
@@ -30,7 +30,7 @@ public class PersonRecord extends RecordObject implements Serializable
 	/** Date of birth of person, in milliseconds since the epoch */
 	@RecordObject.Column(order = 2, properties = { ColumnProperty.TIMESTAMP })
 	public long birthDate;
-	
+
 	/**
 	 * Creates a person with no values specified
 	 */
@@ -38,7 +38,7 @@ public class PersonRecord extends RecordObject implements Serializable
 
 	/**
 	 * Creates a person with the specified values
-	 * 
+	 *
 	 * @param id unique ID of person
 	 * @param name name of person
 	 * @param birthDate date of birth of person, in milliseconds since the epoch

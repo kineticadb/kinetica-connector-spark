@@ -19,6 +19,8 @@ import com.typesafe.scalalogging.LazyLogging
 
 object SparkKineticaDriver extends LazyLogging {
 
+    logger.info("Version {}", getVersionString())
+
     def main(args: Array[String]): Unit = {
         System.setProperty("spark.sql.warehouse.dir", "file:///C:/1SPARK/spark-warehouse");
         System.setProperty("hadoop.home.dir", "c:/1SPARK/")
@@ -26,11 +28,22 @@ object SparkKineticaDriver extends LazyLogging {
             throw new Exception("First argument must be a properties file.")
         }
         val loaderJob: SparkKineticaDriver = new SparkKineticaDriver(args)
+        
         val sess = SparkSession.builder()
             .appName(classOf[SparkKineticaDriver].getSimpleName)
             .enableHiveSupport()
             .getOrCreate
         loaderJob.start(sess)
+        
+        sess.close()
+        sess.stop()
+    }
+
+    private def getVersionString(): String = {
+        val thisPackage: Package = this.getClass.getPackage
+        val thisTitle: String = thisPackage.getImplementationTitle
+        val thisVersion: String = thisPackage.getImplementationVersion
+        String.format("%s (build %s)", thisTitle, thisVersion)
     }
 }
 
@@ -52,6 +65,10 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
         logger.debug("config: {} = {}", key, param)
         params += (key -> param)
     }
+    
+    // Dataframe is ready. Lets put a flag in the params so the datasource API can take
+    // one of the 2 different paths from 2 original connectors.
+    params += (ConfigurationConstants.LOADERCODEPATH -> "true")
 
     val immutableParams = params.map(kv => (kv._1,kv._2)).toMap
     val loaderConfig = new LoaderConfiguration(immutableParams)
@@ -59,10 +76,6 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
     def start(sess: SparkSession): Unit = {
         logger.info("Starting job: {}", sess.conf.get("spark.app.name"))
         val inputDs: DataFrame = getDataset(sess)
-
-        // Dataframe is ready. Lets put a flag in the params so the datasource API can take
-        // one of the 2 different paths from 2 original connectors.
-        params += (ConfigurationConstants.LOADERCODEPATH -> "true")
 
         logger.info("Starting Kinetica write...")
         inputDs.write.format("com.kinetica.spark").options(params).save()

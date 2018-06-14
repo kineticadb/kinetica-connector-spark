@@ -93,37 +93,36 @@ class KineticaBulkLoader(bkp: LoaderParams) extends LazyLogging {
 
     private def getWorkers(gpudb: GPUdb): BulkInserter.WorkerList = {
         var workers: BulkInserter.WorkerList = null
-        if ((lp.KdbIpRegex != null) && !(lp.KdbIpRegex.trim().equalsIgnoreCase(""))) {
-            logger.debug("gpudbIpRegex not null: " + lp.KdbIpRegex)
-            val pattern: Pattern = Pattern.compile(lp.KdbIpRegex)
-            try workers = new BulkInserter.WorkerList(gpudb, pattern)
-            catch {
-                case e: Exception => {
-                    e.printStackTrace()
-                    logger.error("failure:", e)
-                }
 
-            }
-        } else {
-            try workers = new BulkInserter.WorkerList(gpudb)
-            catch {
-                case e: Exception => {
-                    e.printStackTrace()
-                    logger.error("failure:", e)
-                }
+        if (lp.multiHead) {
+            if ((lp.KdbIpRegex != null) && !(lp.KdbIpRegex.trim().equalsIgnoreCase(""))) {
+                logger.debug("gpudbIpRegex not null: " + lp.KdbIpRegex)
+                val pattern: Pattern = Pattern.compile(lp.KdbIpRegex)
+                try workers = new BulkInserter.WorkerList(gpudb, pattern)
+                catch {
+                    case e: Exception => {
+                        e.printStackTrace()
+                        logger.error("failure:", e)
+                    }
 
+                }
+            } else {
+                try workers = new BulkInserter.WorkerList(gpudb)
+                catch {
+                    case e: Exception => {
+                        e.printStackTrace()
+                        logger.error("failure:", e)
+                    }
+
+                }
             }
         }
         if (workers != null) {
             logger.debug("Number of workers: " + workers.size)
             var iter: Iterator[URL] = workers.iterator()
-//            while (iter.hasNext) {
-//                val whatever = iter.next()
-//                logger.debug("GPUdb BulkInserter worker: " + whatever)
-//            }
             workers
         } else {
-            logger.info("No workers available. Multi-head ingest may be turned off")
+            logger.debug("No workers available. Multi-head ingest may be turned off")
             null
         }
     }
@@ -140,6 +139,7 @@ class KineticaBulkLoader(bkp: LoaderParams) extends LazyLogging {
         opts.setPassword(lp.kpassword.trim())
         opts.setThreadCount(lp.getThreads())
         opts.setUseSnappy(lp.useSnappy)
+        opts.setTimeout(lp.timeoutMs)
         opts
     }
 }

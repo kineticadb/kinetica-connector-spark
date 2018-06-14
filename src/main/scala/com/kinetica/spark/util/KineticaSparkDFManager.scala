@@ -71,6 +71,7 @@ object KineticaSparkDFManager extends LazyLogging {
         opts.setUsername(lp.getKusername.trim())
         opts.setPassword(lp.getKpassword.trim())
         opts.setThreadCount(lp.getThreads)
+        opts.setTimeout(lp.getTimeoutMs())
         opts
     }
 

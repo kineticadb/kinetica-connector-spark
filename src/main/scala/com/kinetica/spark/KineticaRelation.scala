@@ -88,8 +88,6 @@ class KineticaRelation(
     override def insert(df: DataFrame, dummy: Boolean): Unit = {
         logger.debug("*********************** KR:insert")
         val loaderPath: Boolean = parameters.get(ConfigurationConstants.LOADERCODEPATH).getOrElse("false").toBoolean
-        //println(" loaderpath " + loaderPath)    
-
         if (loaderPath) {
             insertLoaderWay(df, dummy) 
         } else {
@@ -146,8 +144,17 @@ class KineticaRelation(
         if (conf.isCreateTable && conf.isAlterTable) {
             throw new KineticaException("Create table and alter table option set to true. Only one must be set to true ");
         }
-
-        if (conf.isCreateTable) {
+        
+        if( SparkKineticaTableUtil.tableExists(conf) ) {
+          if( conf.truncateTable ) {
+              logger.info("Truncating/Creating table " + conf.getTablename);
+              try {
+                  SparkKineticaTableUtil.truncateTable(df, conf);
+              } catch {
+                  case e: Throwable => throw new RuntimeException("Failed with errors ", e);
+              }
+          }
+        } else if (conf.isCreateTable) {
             logger.info("Creating table " + conf.getTablename);
             try {
                 SparkKineticaTableUtil.createTable(df, conf);

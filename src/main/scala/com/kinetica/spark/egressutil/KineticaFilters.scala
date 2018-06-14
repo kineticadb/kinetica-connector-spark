@@ -23,12 +23,12 @@ private[kinetica] object KineticaFilters {
     /**
      * Returns a WHERE clause representing both filter if any, and the current partition LIMIT clause.
      */
-    def getWhereClause(filters: Array[Filter], part: KineticaPartition): String = {
+    def getWhereClause(filters: Array[Filter], part: KineticaPartition): (String, String) = {
         val filterWhereClause = getFilterClause(filters)
         if (filterWhereClause.length > 0) {
-            filterWhereClause + " LIMIT " + part.startRow + "," + part.numRows
+            (filterWhereClause + " LIMIT " + part.startRow + "," + part.numRows, ""+part.numRows)
         } else {
-            " LIMIT " + part.startRow + "," + part.numRows
+            (" LIMIT " + part.startRow + "," + part.numRows, ""+part.numRows)
         }
     }
 

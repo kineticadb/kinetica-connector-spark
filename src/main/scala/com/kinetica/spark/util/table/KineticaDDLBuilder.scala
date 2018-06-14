@@ -20,11 +20,11 @@ object KineticaDDLBuilder extends LazyLogging {
     createTableDDL =
       if (lp.isTableReplicated)
         new StringBuffer().append(
-          "CREATE OR REPLACE REPLICATED TABLE " + lp.getTablename +
+                    "CREATE REPLICATED TABLE " + lp.getTablename +
             " (")
       else
         new StringBuffer()
-          .append("CREATE OR REPLACE TABLE " + lp.getTablename + " (")
+          .append("CREATE TABLE " + lp.getTablename + " (")
     compressDDLs = new ArrayList[String]()
     firstColumn = true
     SubTypeDDL.init()

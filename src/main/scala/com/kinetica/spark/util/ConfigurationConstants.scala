@@ -4,6 +4,7 @@ object ConfigurationConstants {
 
     val KINETICA_URL_PARAM: String = "database.url"
     val KINETICA_JDBCURL_PARAM: String = "database.jdbc_url"
+    val KINETICA_STREAMURL_PARAM: String = "database.stream_url"
     val KINETICA_USERNAME_PARAM: String = "database.username"
     val KINETICA_PASSWORD_PARAM: String = "database.password"
     val KINETICA_RETRYCOUNT_PARAM: String = "database.retry_count"

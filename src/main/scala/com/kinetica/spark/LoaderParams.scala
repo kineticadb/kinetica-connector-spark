@@ -9,13 +9,22 @@ import com.kinetica.spark.util.ConfigurationConstants._
 class LoaderParams extends Serializable with LazyLogging {
     
     @BeanProperty
+    var timeoutMs: Int = 10000
+    
+    @BeanProperty
     var kineticaURL: String = null
+
+    @BeanProperty
+    var streamURL: String = null
 
     @BeanProperty
     var tableType: Type = null
 
     @BeanProperty
     var tablename: String = null
+
+    @BeanProperty
+    var schemaname: String = ""
 
     @BooleanBeanProperty
     var tableReplicated: Boolean = false
@@ -55,6 +64,15 @@ class LoaderParams extends Serializable with LazyLogging {
 
     @BooleanBeanProperty
     var alterTable: Boolean = false
+    
+    @BeanProperty
+    var multiHead: Boolean = false
+    
+    @BeanProperty
+    var truncateTable: Boolean = false
+    
+    @BeanProperty
+    var loaderPath: Boolean = false
 
     def this(params: Map[String, String]) = {
         this()
@@ -62,6 +80,7 @@ class LoaderParams extends Serializable with LazyLogging {
         require(params.nonEmpty, "Config cannot be empty")
 
         kineticaURL = params.get(KINETICA_URL_PARAM).getOrElse(null) 
+        streamURL = params.get(KINETICA_STREAMURL_PARAM).getOrElse(null) 
         kusername = params.get(KINETICA_USERNAME_PARAM).getOrElse("")
         kpassword = params.get(KINETICA_PASSWORD_PARAM).getOrElse("")
         threads =   params.get(KINETICA_NUMTHREADS_PARAM).getOrElse("4").toInt      
@@ -74,11 +93,30 @@ class LoaderParams extends Serializable with LazyLogging {
         
         retryCount = params.get(KINETICA_RETRYCOUNT_PARAM).getOrElse("5").toInt    
         jdbcURL = params.get(KINETICA_JDBCURL_PARAM).getOrElse(null)
-        tablename = params.get(KINETICA_TABLENAME_PARAM).getOrElse(null)
         createTable = params.get(KINETICA_CREATETABLE_PARAM).getOrElse("false").toBoolean
         
-        this.alterTable = params.get(KINETICA_ALTERTABLE_PARAM).getOrElse("false").toBoolean
-        this.mapToSchema = params.get(KINETICA_MAPTOSCHEMA_PARAM).getOrElse("false").toBoolean
+        alterTable = params.get(KINETICA_ALTERTABLE_PARAM).getOrElse("false").toBoolean
+        mapToSchema = params.get(KINETICA_MAPTOSCHEMA_PARAM).getOrElse("false").toBoolean
 
+        timeoutMs = params.get(KINETICA_TIMEOUT_PARAM).getOrElse("10000").toInt
+        multiHead = params.get(KINETICA_MULTIHEAD_PARAM).getOrElse("false").toBoolean
+        
+        truncateTable = params.get(KINETICA_TRUNCATETABLE_PARAM).getOrElse("false").toBoolean
+        
+        loaderPath = params.get(LOADERCODEPATH).getOrElse("false").toBoolean
+
+        tablename = params.get(KINETICA_TABLENAME_PARAM).getOrElse(null)
+        if(tablename == null) {
+            throw new Exception( "Parameter is required: " + KINETICA_TABLENAME_PARAM)
+        }
+
+        if( loaderPath ) {
+            val tableParams: Array[String] = tablename.split("\\.")
+            if (tableParams.length != 2) {
+                throw new Exception( "tablename is needed in the form [schema].[table] " + tablename)
+            }                 
+            tablename = tableParams(1)
+            schemaname = tableParams(0)
+        }
     }
 }

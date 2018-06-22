@@ -102,9 +102,7 @@ class GPUdbWriter[T <: Record] (lp : LoaderParams ) extends Serializable with La
     def flush(): Unit = {
         try {
             logger.debug("Creating new GPUdb...")
-            val gpudb: GPUdb = new GPUdb(
-                lp.kineticaURL,
-                new GPUdbBase.Options().setThreadCount(threads))
+            val gpudb: GPUdb = lp.getGpudb()
             val recordsToInsert: List[T] = records
             records = new ArrayList[T]()
             logger.info(

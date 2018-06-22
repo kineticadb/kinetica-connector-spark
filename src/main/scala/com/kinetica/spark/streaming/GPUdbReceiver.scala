@@ -65,7 +65,7 @@ class GPUdbReceiver( lp:LoaderParams)
         try {
             // Create table monitor
             zmqURL = lp.streamURL
-            gpudb = new GPUdb(lp.kineticaURL)
+            gpudb = lp.getGpudb()
             val response: CreateTableMonitorResponse =
                 gpudb.createTableMonitor(lp.tablename, null)
             topicID = response.getTopicId

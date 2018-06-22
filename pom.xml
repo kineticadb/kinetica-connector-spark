@@ -10,6 +10,10 @@
     <name>spark-kinetica</name>
     <description>Tools for reading/writing data from/to Spark into Kinetica</description>
     <url>https://github.com/kineticadb/kinetica-connector-spark</url>
+    <organization>
+        <name>Kinetica</name>
+        <url>http://www.kinetica.com</url>
+    </organization>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -21,6 +25,8 @@
         <zeromq.version>0.3.5</zeromq.version>
         <MaxPermSize>128m</MaxPermSize>
         <slf4j.version>1.7.12</slf4j.version>
+        <version.number>${git.commit.time}.${git.commit.id.abbrev}</version.number>
+        <version.timestamp>${git.commit.time}</version.timestamp>
     </properties>
 
     <repositories>
@@ -39,15 +45,6 @@
             <url>http://files.kinetica.com/nexus/content/repositories/thirdparty/</url>
         </repository>
     </repositories>
-
-    <!-- The scm is used so that the we can pass the Git branch and hash info to the
-         buildnumber plugin. -->
-    <scm>
-        <connection>scm:git:file://.</connection>
-        <developerConnection>scm:git:file://.</developerConnection>
-        <url>scm:git:file://.</url>
-        <tag>HEAD</tag>
-    </scm>
 
     <profiles>
         <profile>
@@ -145,24 +142,22 @@
                 </configuration>
             </plugin>
 
-            <!--  The buildnumber plugin will take Git commit information and embed it in the JAR manifest.
-                  When the program is run it will print the release information to the console. -->
             <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>buildnumber-maven-plugin</artifactId>
-                <version>1.4</version>
+                <groupId>pl.project13.maven</groupId>
+                <artifactId>git-commit-id-plugin</artifactId>
+                <version>2.2.1</version>
                 <executions>
                     <execution>
                         <phase>validate</phase>
                         <goals>
-                            <goal>create</goal>
+                            <goal>revision</goal>
                         </goals>
                     </execution>
                 </executions>
                 <configuration>
-                    <doCheck>false</doCheck>
-                    <doUpdate>false</doUpdate>
-                    <shortRevisionLength>8</shortRevisionLength>
+                    <dateFormat>YYYYMMDDHHmmSS</dateFormat>
+                    <dotGitDirectory>${project.basedir}/.git</dotGitDirectory>
+                    <generateGitPropertiesFile>false</generateGitPropertiesFile>
                 </configuration>
             </plugin>
 
@@ -178,8 +173,8 @@
                             <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
                         </manifest>
                         <manifestEntries>
-                            <Build-Time>${maven.build.timestamp}</Build-Time>
-                            <Implementation-Version>${scmBranch}-${buildNumber}</Implementation-Version>
+                            <Implementation-Version>${version.number}</Implementation-Version>
+                            <SCM-Revision>${git.branch}-${git.commit.id}</SCM-Revision>
                         </manifestEntries>
                     </archive>
                 </configuration>
@@ -208,8 +203,8 @@
                                     <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
                                 </manifest>
                                 <manifestEntries>
-                                    <Build-Time>${maven.build.timestamp}</Build-Time>
-                                    <Implementation-Version>${scmBranch}-${buildNumber}</Implementation-Version>
+                                    <Implementation-Version>${version.number}</Implementation-Version>
+                                    <SCM-Revision>${git.commit.id}</SCM-Revision>
                                 </manifestEntries>
                             </archive>
                             <!-- <finalName>${project.artifactId}-${spark.version}-${project.version}-connector</finalName> -->

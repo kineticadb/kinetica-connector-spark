@@ -178,7 +178,7 @@ class KineticaRelation(
             logger.info("Table is not replicated");
         }
 
-        logger.debug("isAlterTable: " + conf.isAlterTable);
+        logger.info("isAlterTable: " + conf.isAlterTable);
         if (conf.isAlterTable) {
             logger.info("Altering table " + conf.getTablename());
             try {
@@ -195,7 +195,7 @@ class KineticaRelation(
             }
         }
 
-        logger.debug("Map and Write to Kinetica");
+        logger.info("Map and Write to Kinetica");
         KineticaSparkDFManager.KineticaMapWriter(conf);
     }
 

@@ -31,17 +31,16 @@ object GPUdbWriter {
  * @param <T> type of RecordObject to insert into GPUdb
  */
 @SerialVersionUID(-5273795273398765842L)
-class GPUdbWriter[T <: RecordObject] (conf: LoaderParams, destTableName: String ) extends Serializable with LazyLogging {
+class GPUdbWriter[T <: Record] (lp : LoaderParams ) extends Serializable with LazyLogging {
   
-    private val params = this.conf
-    private val threads: Int = conf.threads
-    private val tableName: String = destTableName
-    private val insertSize: Int = conf.insertSize
+    private val threads: Int = 4
+    private val tableName: String = lp.tablename
+    private val insertSize: Int = lp.insertSize
 
     private var records: List[T] = new ArrayList[T]()
 
-    if (conf.kineticaURL == null || conf.kineticaURL.isEmpty)
-        throw new IllegalArgumentException("No Kinetica URL defined")
+    if (lp.tablename == null || lp.tablename.isEmpty())
+        throw new IllegalArgumentException("No database url defined")
 
     /**
      * Writes the contents of an RDD to GPUdb
@@ -85,7 +84,7 @@ class GPUdbWriter[T <: RecordObject] (conf: LoaderParams, destTableName: String 
             }
         })
     }
-
+    
     /**
      * Writes a record to GPUdb
      *
@@ -96,7 +95,7 @@ class GPUdbWriter[T <: RecordObject] (conf: LoaderParams, destTableName: String 
         logger.debug("Added <{}> to write queue", t)
         if (records.size >= insertSize) flush()
     }
-
+    
     /**
      * Flushes the set of accumulated records, writing them to GPUdb
      */
@@ -104,7 +103,7 @@ class GPUdbWriter[T <: RecordObject] (conf: LoaderParams, destTableName: String 
         try {
             logger.debug("Creating new GPUdb...")
             val gpudb: GPUdb = new GPUdb(
-                params.kineticaURL,
+                lp.kineticaURL,
                 new GPUdbBase.Options().setThreadCount(threads))
             val recordsToInsert: List[T] = records
             records = new ArrayList[T]()

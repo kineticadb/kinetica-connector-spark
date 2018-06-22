@@ -21,5 +21,9 @@ class AvroWrapper(private var schemaStr: String, private var bytes: Array[Byte])
     retVal = getGenericRecord.toString
     retVal
   }
+  
+  def getSchemaString() : String = {
+      schemaStr
+  }
 
 }

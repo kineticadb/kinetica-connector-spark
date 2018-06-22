@@ -107,7 +107,7 @@ object SparkKineticaTableUtil extends LazyLogging {
   }
   
   def truncateTable(ds: DataFrame, lp: LoaderParams): Unit = {
-    logger.info("truncateTable")
+    logger.debug("truncateTable")
     verifyJdbcUrl(lp)
     JDBCConnectionUtils.Init(lp)
     //execute truncate table
@@ -116,7 +116,7 @@ object SparkKineticaTableUtil extends LazyLogging {
   }
   
   def tableExists(lp: LoaderParams): Boolean = {
-    logger.info("truncateTable")
+    logger.debug("tableExists")
     verifyJdbcUrl(lp)
     JDBCConnectionUtils.Init(lp)
     val te = JDBCConnectionUtils.tableExists(lp.tablename)

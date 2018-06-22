@@ -6,80 +6,30 @@ import java.util.HashMap
 import java.util.Iterator
 import java.util.Map
 import java.util.regex.Pattern
-import KineticaBulkLoader._
+//import KineticaBulkLoader._
 import scala.beans.{ BeanProperty, BooleanBeanProperty }
 import scala.collection.JavaConversions._
 import com.typesafe.scalalogging.LazyLogging
 import com.kinetica.spark.LoaderParams
 
-object KineticaBulkLoader {
 
-}
+class KineticaBulkLoader(lp: LoaderParams) extends LazyLogging {
 
-class KineticaBulkLoader(bkp: LoaderParams) extends LazyLogging {
-    val lp = bkp
     def GetBulkInserter(): BulkInserter[GenericRecord] = {
-        var gpudb: GPUdb = null
-        try {
-            logger.debug("connecting to: " + lp.kineticaURL, getGPUDBOptions)
-            gpudb = new GPUdb(lp.kineticaURL, getGPUDBOptions)
-        } catch {
-            case e: Exception => {
-                e.printStackTrace()
-                logger.error("failure:", e)
-            }
-
-        }
         var bulkInserter: BulkInserter[GenericRecord] = null
 
-        if (lp.isTableReplicated) {
-            logger.info("Table is set to Is Replication: True")
-            try {
-                bulkInserter = new BulkInserter[GenericRecord](
-                    gpudb,
-                    lp.tablename,
-                    lp.tableType,
-                    lp.insertSize,
-                    getUpsertOptions)
-                bulkInserter.setRetryCount(lp.retryCount)
-            } catch {
-                case e: GPUdbException => {
-                    e.printStackTrace()
-                    logger.error("failure:", e)
-                }
+        val gpudb = lp.getGpudb
 
-            }
-        } else {
-            try {
-                logger.info("Table is not replicated table")
-                val workers: BulkInserter.WorkerList = getWorkers(gpudb)
-                if (workers != null) {
-                    logger.info("multi-head ingest turned on")
-                    bulkInserter = new BulkInserter[GenericRecord](
-                        gpudb,
-                        lp.tablename,
-                        lp.tableType,
-                        lp.insertSize,
-                        getUpsertOptions,
-                        workers)
-                } else {
-                    logger.info("Multi-head ingest is turned off")
-                    bulkInserter = new BulkInserter[GenericRecord](
-                        gpudb,
-                        lp.tablename,
-                        lp.tableType,
-                        lp.insertSize,
-                        getUpsertOptions)
-                }
-                bulkInserter.setRetryCount(lp.retryCount)
-            } catch {
-                case e: GPUdbException => {
-                    e.printStackTrace()
-                    logger.error("failure:", e)
-                }
+        var workers: BulkInserter.WorkerList = getWorkers(gpudb)
+        bulkInserter = new BulkInserter[GenericRecord](
+            gpudb,
+            lp.tablename,
+            lp.tableType,
+            lp.insertSize,
+            getUpsertOptions,
+            workers)
 
-            }
-        }
+        bulkInserter.setRetryCount(lp.retryCount)
         bulkInserter
     }
 
@@ -92,54 +42,39 @@ class KineticaBulkLoader(bkp: LoaderParams) extends LazyLogging {
     }
 
     private def getWorkers(gpudb: GPUdb): BulkInserter.WorkerList = {
-        var workers: BulkInserter.WorkerList = null
 
-        if (lp.multiHead) {
-            if ((lp.KdbIpRegex != null) && !(lp.KdbIpRegex.trim().equalsIgnoreCase(""))) {
-                logger.debug("gpudbIpRegex not null: " + lp.KdbIpRegex)
-                val pattern: Pattern = Pattern.compile(lp.KdbIpRegex)
-                try workers = new BulkInserter.WorkerList(gpudb, pattern)
-                catch {
-                    case e: Exception => {
-                        e.printStackTrace()
-                        logger.error("failure:", e)
-                    }
+        // yes, this is a return in Scala and it is cleaner.
+        // Scala purists can sue me :-)
 
-                }
-            } else {
-                try workers = new BulkInserter.WorkerList(gpudb)
-                catch {
-                    case e: Exception => {
-                        e.printStackTrace()
-                        logger.error("failure:", e)
-                    }
-
-                }
-            }
+        if(lp.isTableReplicated) {
+            logger.info("Table is set to Is Replication: True")
+            return null
         }
-        if (workers != null) {
-            logger.debug("Number of workers: " + workers.size)
-            var iter: Iterator[URL] = workers.iterator()
-            workers
-        } else {
-            logger.debug("No workers available. Multi-head ingest may be turned off")
-            null
+
+        if (!lp.multiHead) {
+            logger.info("Multi-head ingest is turned off")
+            return null
         }
+
+        logger.info("multi-head ingest turned on")
+
+        val pattern: Pattern = null
+        if ((lp.KdbIpRegex != null) && !(lp.KdbIpRegex.trim().equalsIgnoreCase(""))) {
+            logger.info("gpudbIpRegex not null: " + lp.KdbIpRegex)
+            val pattern: Pattern = Pattern.compile(lp.KdbIpRegex)
+        }
+
+        var workers: BulkInserter.WorkerList = new BulkInserter.WorkerList(gpudb, pattern)
+        if(workers.size == 0) {
+            throw new Exception("No workers found")
+        }
+
+        var iter: Iterator[URL] = workers.iterator()
+        for (url: URL <- workers) {
+            logger.info("Worker: {}", url)
+        }
+
+        workers
     }
 
-    /**
-     * WritenBy - sunman
-     * 9/2/2018
-     * @return GPUdbBase.Options
-     */
-    private def getGPUDBOptions(): GPUdbBase.Options = {
-        val opts: GPUdbBase.Options = new GPUdbBase.Options()
-        logger.debug("Setting username and password")
-        opts.setUsername(lp.kusername.trim())
-        opts.setPassword(lp.kpassword.trim())
-        opts.setThreadCount(lp.getThreads())
-        opts.setUseSnappy(lp.useSnappy)
-        opts.setTimeout(lp.timeoutMs)
-        opts
-    }
 }

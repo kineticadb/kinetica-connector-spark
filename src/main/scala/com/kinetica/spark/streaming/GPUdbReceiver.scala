@@ -34,17 +34,12 @@ object GPUdbReceiver {
 }
 
 @SerialVersionUID(-5558211843505774265L)
-class GPUdbReceiver( loaderConfig: LoaderParams)
+class GPUdbReceiver( lp:LoaderParams)
     extends Receiver[AvroWrapper](StorageLevel.MEMORY_AND_DISK_2) with LazyLogging {
     
-    private val config = loaderConfig
-
     private var gpudb: GPUdb = _
-
     private var zmqURL: String = _
-
     private var topicID: String = _
-
     private var objectType: Type = _
 
     override def onStart(): Unit = {
@@ -69,12 +64,12 @@ class GPUdbReceiver( loaderConfig: LoaderParams)
     private def receive(): Unit = {
         try {
             // Create table monitor
-            zmqURL = config.streamURL
-            gpudb = new GPUdb(config.kineticaURL)
+            zmqURL = lp.streamURL
+            gpudb = new GPUdb(lp.kineticaURL)
             val response: CreateTableMonitorResponse =
-                gpudb.createTableMonitor(config.tablename, null)
+                gpudb.createTableMonitor(lp.tablename, null)
             topicID = response.getTopicId
-            objectType = Type.fromTable(gpudb, config.tablename)
+            objectType = Type.fromTable(gpudb, lp.tablename)
             // Attach to table monitor streaming data queue
             val zmqContext: ZMQ.Context = ZMQ.context(1)
             val subscriber: Socket = zmqContext.socket(ZMQ.SUB)

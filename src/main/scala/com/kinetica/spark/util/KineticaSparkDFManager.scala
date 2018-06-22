@@ -49,9 +49,9 @@ object KineticaSparkDFManager extends LazyLogging {
 
     def setType(lp: LoaderParams): Unit = {
         try {
-            //println("Kinetica URL is " + lp.getKineticaURL)
-            val gpudb: GPUdb = new GPUdb(lp.getKineticaURL, getGPUDBOptions(lp))
-            //println(" Attempting Type.fromTable for table name " + lp.getTablename)
+            logger.debug("Kinetica URL is " + lp.getKineticaURL)
+            val gpudb: GPUdb = lp.getGpudb
+            logger.debug(" Attempting Type.fromTable for table name " + lp.getTablename)
             myType = Type.fromTable(gpudb, lp.getTablename)
         } catch {
             case e: GPUdbException => e.printStackTrace()
@@ -65,16 +65,6 @@ object KineticaSparkDFManager extends LazyLogging {
      */
     def getType(): Type = myType
 
-    private def getGPUDBOptions(lp: LoaderParams): GPUdbBase.Options = {
-        val opts: GPUdbBase.Options = new GPUdbBase.Options
-        logger.debug("Setting username and password")
-        opts.setUsername(lp.getKusername.trim())
-        opts.setPassword(lp.getKpassword.trim())
-        opts.setThreadCount(lp.getThreads)
-        opts.setTimeout(lp.getTimeoutMs())
-        opts
-    }
-
     def toDouble: (Any) => Double = { case i: Int => i case f: Float => f case d: Double => d }
 
     /**
@@ -82,7 +72,7 @@ object KineticaSparkDFManager extends LazyLogging {
      * @param lp LoaderParams
      */
     def KineticaMapWriter(lp: LoaderParams): Unit = {
-        logger.info("KineticaMapWriter")
+        logger.debug("KineticaMapWriter")
         val typef: Type = myType
         val bkp: LoaderParams = lp
         if (lp.isMapToSchema) {

@@ -168,8 +168,8 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
         val streamingOptions = Map(
             "database.url" -> URL,
             "database.stream_url" -> STREAM_URL,
-            "database.username" -> "",
-            "database.password" -> "",
+            "database.username" -> "admin",
+            "database.password" -> "Kinetica1!",
             "ingester.batch_size" -> ingestBatchSize,
             "ingester.num_threads" -> "4",
             "table.name" -> srcTableName
@@ -193,10 +193,10 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
         val ingestOptions = Map(
             "database.url" -> URL,
             "database.jdbc_url" -> s"jdbc:simba://${host}:9292;URL=${URL};ParentSet=MASTER",
-            "database.username" -> "",
-            "database.password" -> "",
-            "ingester.batch_size" -> "5",
-            "ingester.num_threads" -> ingestBatchSize,
+            "database.username" -> "admin",
+            "database.password" -> "Kinetica1!",
+            "ingester.batch_size" -> ingestBatchSize,
+            "ingester.num_threads" -> "4",
             "table.name" -> destTableName,
             "table.map_columns_by_name" -> "true",
             "table.create" -> "false"

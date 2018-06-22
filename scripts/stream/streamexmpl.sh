@@ -33,7 +33,7 @@ function usage
 function streamExample
 {
 	$SPARK_HOME/bin/spark-submit \
-	        --class "com.kinetica.spark.StreamExample" \
+	        --class "com.kinetica.spark.streaming.StreamExample" \
 	        --master ${sparkUrl} \
 	        --driver-class-path "${exampleHome}" \
 	        --jars "${exampleTestLib}" \

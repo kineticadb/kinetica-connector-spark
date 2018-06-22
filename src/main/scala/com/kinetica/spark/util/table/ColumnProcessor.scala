@@ -58,14 +58,16 @@ object ColumnProcessor extends LazyLogging {
         //set to 0 for new columns
         var existingColumnMaxLength: Int = 0
         
-        val maxInt = 1
+        var maxInt = 1
         try {
-            val maxInt = maxIntDs.first.getInt(0)
+            maxInt = maxIntDs.first.getInt(0)
         } catch {
             case e: Exception => {
-                logger.debug("Could not determine max length for column, setting to 1 " + columnName)
+                logger.info("Could not determine max length for column, setting to 1 " + columnName)
             }
         }
+        
+        logger.debug(" @@@@@@@@@@@@ column name and max length is " + columnName + "/" + maxInt)
 
         try if (alterDDL && existingColumn) {
             existingColumnMaxLength =

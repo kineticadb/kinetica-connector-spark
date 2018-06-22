@@ -33,6 +33,8 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
     private val schemaName: String = conf.schemaname
     private val useTemplates: Boolean = conf.useTemplates
 
+    private var isReplicated: Boolean = false
+
     @BeanProperty
     var destType: Type = _
 
@@ -61,10 +63,28 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
     }
 
     def setTypeFromTable(): Unit = {
+
+        if(this.useTemplates) {
+            throw new Exception("Templates must be used in combination with truncate or create.")
+        }
+
         val response: ShowTableResponse = this.gpudb.showTable(this.tableName, null)
-        this.destTypeId = response.getTypeIds.get(0)
-        val typeSchema: String = response.getTypeSchemas.get(0)
-        this.destType = new Type(typeSchema)
+        setTypeFromResponse(response, 0)
+    }
+
+    def setTypeFromResponse(response: ShowTableResponse, index: Int): Unit = {
+        this.destTypeId = response.getTypeIds().get(index)
+
+        val typeSchema: String = response.getTypeSchemas.get(index)
+        val typeLabel: String = response.getTypeLabels.get(index)
+        val typeProps: java.util.Map[String, java.util.List[String]] = response.getProperties.get(index)
+        this.destType = new Type(typeLabel, typeSchema, typeProps)
+
+        // check if this table is replicated
+        val tableDesc: List[String] = response.getTableDescriptions().get(index)
+        if(tableDesc.contains("REPLICATED")) {
+            this.isReplicated = tableDesc.contains("REPLICATED")
+        }
     }
 
     def mapSchema(sparkSchema: StructType): Unit = {
@@ -99,10 +119,7 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
             }
 
         val tableIndex: Int = tableNames.indexOf(templateName)
-        this.destTypeId = response.getTypeIds.get(tableIndex)
-        val typeString: String = response.getTypeSchemas.get(tableIndex)
-        this.destType = new Type(typeString)
-
+        setTypeFromResponse(response, tableIndex)
         logger.info("Found template table: {} (ID={}) ", templateName, this.destTypeId)
     }
 

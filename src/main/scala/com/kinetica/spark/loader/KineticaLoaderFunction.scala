@@ -82,16 +82,20 @@ class KineticaLoaderFunction (
     }
 
     private def convertValue(inValue: Any, destColDef: Column): Any = {
-        val colProps: List[String] = destColDef.getProperties
         if (inValue == null) {
             return null
         }
 
         val destType: Class[_] = destColDef.getType
         val srcType: Class[_] = inValue.getClass
-
+        val colProps: List[String] = destColDef.getProperties
         var outValue: Any = null
-        if (destType == srcType) {
+
+        // need to check timestamp first because it may need normalization
+        if (colProps.contains("timestamp")) {
+            outValue = convertFromDate(srcType, inValue);
+        }
+        else if (destType == srcType) {
             // fast path
             outValue = inValue
         }
@@ -99,11 +103,6 @@ class KineticaLoaderFunction (
                 && classOf[Number].isAssignableFrom(srcType)) {
             // numeric conversion
             outValue = convertFromNumber(destType, inValue.asInstanceOf[Number])
-        }
-        else if (colProps.contains("timestamp") && classOf[Date].isAssignableFrom(srcType)) {
-            // timestamp conversion
-            val inTimestamp: Date = inValue.asInstanceOf[Date]
-            outValue = inTimestamp.getTime.underlying
         }
         else if (destType == classOf[java.lang.Integer] && srcType == classOf[java.lang.Boolean]) {
             // boolean conversion
@@ -116,6 +115,31 @@ class KineticaLoaderFunction (
                 String.format("Could not convert from type: %s", destType.getName))
         }
         outValue
+    }
+
+    private def convertFromDate(destType: Class[_], inObject: Any): Long = {
+
+        // Dates larger than this will fail in 6.1
+        val MAX_DATE: Long = 29379542399999L
+        val MIN_DATE: Long = -30610224000000L
+        var dateVal: Long = 0L
+
+        if(classOf[java.util.Date].isAssignableFrom(destType)) {
+            val inDate: Date = inObject.asInstanceOf[java.util.Date]
+            dateVal = inDate.getTime
+        }
+        else if(classOf[java.lang.Long].isAssignableFrom(destType)) {
+            dateVal = inObject.asInstanceOf[java.lang.Long]
+        }
+
+        if (dateVal > MAX_DATE) {
+            dateVal = MAX_DATE
+        }
+        else if (dateVal < MIN_DATE) {
+            dateVal = MIN_DATE
+        }
+
+        dateVal
     }
 
     private def convertFromNumber(destType: Class[_], inNumber: Number): Number = {

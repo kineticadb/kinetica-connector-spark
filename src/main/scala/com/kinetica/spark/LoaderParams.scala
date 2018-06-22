@@ -1,10 +1,23 @@
 package com.kinetica.spark
 
 import com.gpudb.Type
+import com.gpudb.GPUdb
+import com.gpudb.GPUdbBase
+import com.gpudb.GenericRecord
+
 import java.io.Serializable
 import scala.beans.{ BeanProperty, BooleanBeanProperty }
 import com.typesafe.scalalogging.LazyLogging
 import com.kinetica.spark.util.ConfigurationConstants._
+
+import com.kinetica.spark.ssl.X509KeystoreOverride
+import com.kinetica.spark.ssl.X509TrustManagerOverride
+import com.kinetica.spark.ssl.X509TustManagerBypass
+
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.KeyManager
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
 
 class LoaderParams extends Serializable with LazyLogging {
     
@@ -74,6 +87,21 @@ class LoaderParams extends Serializable with LazyLogging {
     @BeanProperty
     var loaderPath: Boolean = false
 
+    @BeanProperty
+    var bypassCert: Boolean = false
+
+    @BeanProperty
+    var trustStorePath: String = null
+    
+    @BeanProperty
+    var trustStorePassword: String = null
+
+    @BeanProperty
+    var keyStorePath: String = null
+
+    @BeanProperty
+    var keyStorePassword: String = null
+    
     def this(params: Map[String, String]) = {
         this()
         require(params != null, "Config cannot be null")
@@ -118,5 +146,98 @@ class LoaderParams extends Serializable with LazyLogging {
             tablename = tableParams(1)
             schemaname = tableParams(0)
         }
+        
+        // SSL
+        bypassCert = params.get(KINETICA_SSLBYPASSCERTCJECK_PARAM).getOrElse("false").toBoolean
+        trustStorePath =  params.get(KINETICA_TRUSTSTOREJKS_PARAM).getOrElse(null)
+        trustStorePassword = params.get(KINETICA_TRUSTSTOREPASSWORD_PARAM).getOrElse(null)
+        keyStorePath = params.get(KINETICA_KEYSTOREP12_PARAM).getOrElse(null)
+        keyStorePassword = params.get(KINETICA_KEYSTOREPASSWORD_PARAM).getOrElse(null)
+    }
+    
+    // below are not serializable so they are created on demand
+    @transient
+    private var cachedGpudb: GPUdb = null
+
+    def getType(): Type = this.tableType
+
+    def setType(kineticaType: Type): Unit = {
+        this.tableType = kineticaType
+    }
+
+    def getGpudb(): GPUdb = {
+        if (this.cachedGpudb != null) {
+            this.cachedGpudb
+        }
+        this.cachedGpudb = connect()
+        this.cachedGpudb
+    }
+
+    private def connect(): GPUdb = {
+        setupSSL()
+        logger.info("Connecting to {} as <{}>", kineticaURL, kusername)
+        val opts: GPUdbBase.Options = new GPUdbBase.Options()
+        opts.setUsername(kusername)
+        opts.setPassword(kpassword)
+        opts.setThreadCount(threads)
+        opts.setTimeout(timeoutMs)
+        opts.setUseSnappy(useSnappy)
+        val gpudb: GPUdb = new GPUdb(kineticaURL, opts)
+        checkConnection(gpudb)
+        gpudb
+    }
+
+    private def checkConnection(conn: GPUdb): Unit = {
+        val CORE_VERSION: String = "version.gpudb_core_version"
+        val VERSION_DATE: String = "version.gpudb_version_date"
+        val options: java.util.Map[String, String] = new java.util.HashMap[String, String]()
+        options.put(CORE_VERSION, "")
+        options.put(VERSION_DATE, "")
+        val rsMap: java.util.Map[String, String] = conn.showSystemProperties(options).getPropertyMap
+        logger.info("Conected to {} ({})", rsMap.get(CORE_VERSION), rsMap.get(VERSION_DATE))
+    }
+
+    def hasTable(): Boolean = {
+        val gpudb: GPUdb = this.getGpudb
+        if (!gpudb.hasTable(this.tablename, null).getTableExists) {
+            false
+        } else {
+            logger.info("Found existing table: {}", this.tablename)
+            true
+        }
+    }
+
+    private def setupSSL(): Unit = {
+        if (this.bypassCert) {
+            logger.info("Installing truststore to bypass certificate check.")
+            X509TustManagerBypass.install()
+            return
+        }
+
+        var trustManagerList: Array[TrustManager] = null
+        if (this.trustStorePath != null) {
+            logger.info("Installing custom trust manager: {}", classOf[X509TrustManagerOverride].getName)
+            trustManagerList = X509TrustManagerOverride.newManagers(
+                this.trustStorePath,
+                this.trustStorePassword)
+        }
+
+        var keyManagerList: Array[KeyManager] = null
+        if (this.keyStorePath != null) {
+            logger.info("Installing custom key manager: {}", classOf[X509KeystoreOverride].getName)
+            keyManagerList = X509KeystoreOverride.newManagers(
+                this.keyStorePath,
+                this.keyStorePassword)
+        }
+
+        if (trustManagerList == null && keyManagerList == null) {
+            // nothing to install
+            return
+        }
+
+        val sslContext: SSLContext = SSLContext.getInstance("SSL")
+        sslContext.init(keyManagerList, trustManagerList, new java.security.SecureRandom())
+        //SSLContext.setDefault(sslContext);
+        HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory)
     }
 }

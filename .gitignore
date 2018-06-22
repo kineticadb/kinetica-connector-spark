@@ -16,19 +16,20 @@ spark-solr.iml
 spark-solr.ipr
 spark-solr.iws
 
-.idea/
+/.idea/
 
 # spark runtime file
 /metastore_db/
 *.log
-.cache-tests
-.cache-main
+/.cache-tests
+/.cache-main
+/certs/
 
 # Eclipse files
-.settings/
-.classpath
-target/
-.project
+/.settings/
+/.classpath
+/target/
+/.project
 
 .DS_Store
 /.pydevproject

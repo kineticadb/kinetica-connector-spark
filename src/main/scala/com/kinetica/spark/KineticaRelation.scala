@@ -46,7 +46,7 @@ class KineticaRelation(
     
     val properties = new Properties() 
     parameters.foreach { case (k, v) => properties.setProperty(k, v) }
-    val conf: LoaderParams = new LoaderParams(parameters)
+    val conf: LoaderParams = new LoaderParams(sparkSession.sparkContext, parameters)
 
     lazy val querySchema: StructType = {
         logger.debug("*********************** KR:querySchema")
@@ -63,7 +63,7 @@ class KineticaRelation(
         
         logger.debug("*********************** KR:BS ")
 
-        val conf: LoaderParams = new LoaderParams(parameters)
+        val conf: LoaderParams = new LoaderParams(sparkSession.sparkContext, parameters)
         val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'database.jdbc_url' not specified"))
         val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'table.name' not specified"))
         val numPartitions = parameters.getOrElse(CONNECTOR_NUMPARTITIONS_PARAM, "4").toInt
@@ -96,13 +96,14 @@ class KineticaRelation(
     }
     
     private def insertLoaderWay(df: DataFrame, dummy: Boolean): Unit = {
-        val loaderConfig = new LoaderConfiguration(parameters)
+        val loaderConfig = new LoaderConfiguration(sparkSession.sparkContext, parameters)
         val columnMap = setupSchema(loaderConfig, df.schema)
         val kineticaFunction = new KineticaLoaderFunction(loaderConfig, columnMap)
         df.foreachPartition(kineticaFunction)
     }
     
     private def setupSchema(loaderConfig: LoaderConfiguration, sparkSchema: StructType): java.util.HashMap[Integer, Integer] = {
+        
         val mapper: SchemaManager = new SchemaManager(loaderConfig)
         if (loaderConfig.hasTable()) {
             if (loaderConfig.truncateTable) {
@@ -117,7 +118,7 @@ class KineticaRelation(
         } else {
             throw new Exception(
                 String.format(
-                    "Table <%s> does not exist and <loader.create-table = false>.",
+                    "Table <%s> does not exist and <table.create = false>.",
                     loaderConfig.tablename)) 
         }
         loaderConfig.setType(mapper.getDestType)
@@ -196,7 +197,13 @@ class KineticaRelation(
         }
 
         logger.info("Map and Write to Kinetica");
-        KineticaSparkDFManager.KineticaMapWriter(conf);
+        KineticaSparkDFManager.KineticaMapWriter(sparkSession.sparkContext, conf);
+        
+        
+        // Lets try and print the accumulators
+        println(" Total rows = " + conf.totalRows.value)
+        println(" Converted rows = " + conf.convertedRows.value)
+        println(" Columns failed conevrsion = " + conf.failedConversion.value)
     }
 
     /**

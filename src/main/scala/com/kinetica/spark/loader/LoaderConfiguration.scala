@@ -7,10 +7,11 @@ import scala.collection.JavaConversions.asScalaBuffer
 import com.kinetica.spark.util.ConfigurationConstants._
 import com.typesafe.scalalogging.LazyLogging
 import com.kinetica.spark.LoaderParams
+import org.apache.spark.SparkContext
 
 
 @SerialVersionUID(-2502861044221136156L)
-class LoaderConfiguration(params: Map[String, String]) extends LoaderParams(params) with Serializable with LazyLogging {
+class LoaderConfiguration(sc:SparkContext, params: Map[String, String]) extends LoaderParams(sc, params) with Serializable with LazyLogging {
 
     @BeanProperty
     val sqlFileName: String = params.get(CONNECTOR_SQLFILE_PARAM).getOrElse(null)

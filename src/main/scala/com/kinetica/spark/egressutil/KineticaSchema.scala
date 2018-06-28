@@ -82,7 +82,7 @@ private[kinetica] object KineticaSchema {
             case java.sql.Types.DECIMAL if precision != 0 || scale != 0 => DecimalType(precision, scale)
             case java.sql.Types.DECIMAL => DecimalType(38, 18) // Spark 1.5.0 default
             case java.sql.Types.DOUBLE => DoubleType
-            case java.sql.Types.FLOAT => FloatType
+            case java.sql.Types.FLOAT => DoubleType
             case java.sql.Types.INTEGER => if (signed) {
                 IntegerType
             } else {

@@ -19,6 +19,9 @@ import javax.net.ssl.KeyManager
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 
+import org.apache.spark.SparkContext
+import org.apache.spark.util.LongAccumulator
+
 class LoaderParams extends Serializable with LazyLogging {
     
     @BeanProperty
@@ -102,8 +105,22 @@ class LoaderParams extends Serializable with LazyLogging {
     @BeanProperty
     var keyStorePassword: String = null
     
-    def this(params: Map[String, String]) = {
+    @BeanProperty
+    var totalRows: LongAccumulator = null
+    
+    @BeanProperty
+    var convertedRows: LongAccumulator = null
+    
+    @BeanProperty
+    var failedConversion: LongAccumulator = null
+    
+    def this(sc: SparkContext, params: Map[String, String]) = {
         this()
+        
+        totalRows = sc.longAccumulator("TotalRows")
+        convertedRows = sc.longAccumulator("ParsedRows")
+        failedConversion = sc.longAccumulator("UnparsedRows")
+        
         require(params != null, "Config cannot be null")
         require(params.nonEmpty, "Config cannot be empty")
 

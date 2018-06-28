@@ -8,6 +8,8 @@ object BuildStringDDL {
   def buildDDL(columnName: String, maxStringLen: Int): String =
     if (SubTypeDDL.isWKT(columnName)) {
       columnName + " STRING(WKT) "
+    } else if (SubTypeDDL.isIPV4(columnName)) {
+      columnName + " STRING(IPV4) "
     } else {
       val inLineSub: String = SubTypeDDL.buildInLineSubType(columnName)
       if (SubTypeDDL.isStringType(columnName)) {

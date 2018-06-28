@@ -22,8 +22,6 @@ import com.gpudb.avro.generic.GenericRecord
 import com.kinetica.spark.LoaderParams
 import com.typesafe.scalalogging.LazyLogging
 
-import com.kinetica.spark.PersonRecord
-
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.SaveMode
 
@@ -39,8 +37,8 @@ object StreamExample extends LazyLogging {
     def main(args: Array[String]): Unit = {
         System.setProperty("spark.sql.warehouse.dir", "file:///C:/1SPARK/spark-warehouse");
         System.setProperty("hadoop.home.dir", "c:/1SPARK/")
-        if (args.length != 4) {
-            throw new Exception("<host ip> <srcTableName> <destTableName> <insertBatchSize>")
+        if (args.length < 4) {
+            throw new Exception("<host ip> <srcTableName> <destTableName> <insertBatchSize> [<username> <password>]")
         }
         val example: StreamExample = new StreamExample(args)
         try example.runTest()
@@ -63,7 +61,7 @@ object StreamExample extends LazyLogging {
            schema = new StructType()
            val myType = Type.fromTable(lp.getGpudb(), lp.tablename)
            for( column <- myType.getColumns ) {
-               //println(" ############ name in struct column is " + column.getName + "/" + column.getType().toString())
+               logger.debug(" ############ name in struct column is {}/{}/{}", column.getName, column.getType().toString(), column.getProperties())
                if( column.getType().toString().contains("java.lang.Double") )
                    schema = schema.add(new StructField(column.getName, DataTypes.DoubleType, column.isNullable()))
                else if (column.getType().toString().contains("java.lang.Float")) 
@@ -122,7 +120,6 @@ object StreamExample extends LazyLogging {
 class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
 
     private var sparkAppName: String = getClass.getSimpleName
-    private var gpudbCollectionName: String = "SparkExamples"
 
     logger.debug(" ********** SparkKinetica Stream Example class main constructor ********** ")
     
@@ -131,6 +128,8 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
     val srcTableName = args(1)
     val destTableName = args(2)
     val ingestBatchSize = args(3)
+    val username = if (args.length > 4) args(4) else ""
+    val password = if (args.length > 5) args(5) else ""
     
     /**
      * Launches a background process that will supply the streaming data source
@@ -168,18 +167,19 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
         val streamingOptions = Map(
             "database.url" -> URL,
             "database.stream_url" -> STREAM_URL,
-            "database.username" -> "admin",
-            "database.password" -> "Kinetica1!",
+            "database.username" -> username,
+            "database.password" -> password,
             "ingester.batch_size" -> ingestBatchSize,
             "ingester.num_threads" -> "4",
             "table.name" -> srcTableName
-        )          
-        val lp = new LoaderParams(streamingOptions)
+        )
+        
+        val sc = new SparkConf().setAppName(sparkAppName)
+
+        val lp = new LoaderParams(SparkSessionSingleton.getInstance(sc).sparkContext, streamingOptions)
         // table monitor to queue to the data stream
         launchAdder(lp)
 
-        //val sc: SparkContext = new SparkContext()
-        val sc = new SparkConf().setAppName(sparkAppName).setMaster("local[*]")
         val ssc = new StreamingContext(sc, Durations.seconds(STREAM_POLL_INTERVAL_SECS))
 
         val receiver: GPUdbReceiver = new GPUdbReceiver(lp)
@@ -192,14 +192,14 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
         logger.info(" Destination table is = " + destTableName)
         val ingestOptions = Map(
             "database.url" -> URL,
-            "database.jdbc_url" -> s"jdbc:simba://${host}:9292;URL=${URL};ParentSet=MASTER",
-            "database.username" -> "admin",
-            "database.password" -> "Kinetica1!",
+            "database.jdbc_url" -> s"jdbc:simba://${host}:9292;URL=${URL}",
+            "database.username" -> username,
+            "database.password" -> password,
             "ingester.batch_size" -> ingestBatchSize,
             "ingester.num_threads" -> "4",
             "table.name" -> destTableName,
             "table.map_columns_by_name" -> "true",
-            "table.create" -> "false"
+            "table.create" -> "true"
         )          
           
         outStream.foreachRDD { 
@@ -213,7 +213,7 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
                 val df = spark.createDataFrame(rdd, schema)
                 //df.printSchema()
                 df.write.format("com.kinetica.spark").options(ingestOptions).save()
-                df.write.format("csv").mode(SaveMode.Append).save("/home/shouvik/rough/STREAMDATAOUT")
+                df.write.format("csv").mode(SaveMode.Append).save("StreamExample.out")
             }
         }
 

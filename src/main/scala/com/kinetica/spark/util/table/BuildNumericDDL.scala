@@ -48,10 +48,10 @@ object BuildNumericDDL {
       }
     } else if (intType.compareToIgnoreCase("float") == 0) {
       if (inLineSub.trim().length > 0) {
-        return columnName + " FLOAT( " + inLineSub + ")" + SubTypeDDL
+        return columnName + " REAL( " + inLineSub + ")" + SubTypeDDL
           .buildOutLineSubType(columnName)
       } else {
-        return columnName + " FLOAT " + SubTypeDDL.buildOutLineSubType(columnName)
+        return columnName + " REAL " + SubTypeDDL.buildOutLineSubType(columnName)
       }
     } else if (intType.compareToIgnoreCase("double") == 0) {
       if (inLineSub.trim().length > 0) {

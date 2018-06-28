@@ -45,6 +45,8 @@ object GPUdbUtil {
                     gr.put(column.getName(), "172.12.24.63");
                 else if ( column.getProperties.mkString.toLowerCase.contains("decimal") )
                     gr.put(column.getName(), "155.52");
+                else if ( column.getProperties.mkString.toLowerCase.contains("wkt") )
+                    gr.put(column.getName(), "POINT(20 30)");
                 else gr.put(column.getName(), scala.util.Random.alphanumeric.take(1).mkString);
             }
         }

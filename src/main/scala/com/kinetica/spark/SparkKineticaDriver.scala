@@ -48,6 +48,7 @@ object SparkKineticaDriver extends LazyLogging {
 }
 
 import com.kinetica.spark.util.ConfigurationConstants
+import org.apache.spark.SparkContext
 
 class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
 
@@ -71,9 +72,12 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
     params += (ConfigurationConstants.LOADERCODEPATH -> "true")
 
     val immutableParams = params.map(kv => (kv._1,kv._2)).toMap
-    val loaderConfig = new LoaderConfiguration(immutableParams)
+    var loaderConfig : LoaderConfiguration = _
 
     def start(sess: SparkSession): Unit = {
+        
+        loaderConfig = new LoaderConfiguration(sess.sparkContext,  immutableParams)
+        
         logger.info("Starting job: {}", sess.conf.get("spark.app.name"))
         val inputDs: DataFrame = getDataset(sess)
 

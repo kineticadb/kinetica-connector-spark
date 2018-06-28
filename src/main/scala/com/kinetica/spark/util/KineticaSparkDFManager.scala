@@ -8,7 +8,7 @@ import java.util.Iterator
 import scala.beans.BeanProperty
 import scala.collection.JavaConversions.asScalaBuffer
 
-import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.SparkContext
 import org.apache.spark.api.java.function.ForeachPartitionFunction
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.Row
@@ -28,11 +28,8 @@ object KineticaSparkDFManager extends LazyLogging {
 
     @BeanProperty
     var df: DataFrame = null
-    
+
     var myType: Type = null
-    
-    @BeanProperty
-    var sc: JavaSparkContext = _
 
     /**
      * Methods returns kinetica table type
@@ -71,240 +68,139 @@ object KineticaSparkDFManager extends LazyLogging {
      * Maps over dataframe using either matching columns or chronological ordering
      * @param lp LoaderParams
      */
-    def KineticaMapWriter(lp: LoaderParams): Unit = {
+    def KineticaMapWriter(sc: SparkContext, lp: LoaderParams): Unit = {
+
         logger.debug("KineticaMapWriter")
         val typef: Type = myType
         val bkp: LoaderParams = lp
-        if (lp.isMapToSchema) {
-            logger.debug("Mapping Dataset columns to Kinetica")
-            df.foreachPartition(new ForeachPartitionFunction[Row]() {
-                def call(t: Iterator[Row]): Unit = {
-                    val kbl: KineticaBulkLoader = new KineticaBulkLoader(bkp)
-                    val bi: BulkInserter[GenericRecord] = kbl.GetBulkInserter()
-                    var isARecord: Boolean = false
-                    while (t.hasNext) {
-                        val row: Row = t.next()
-                        val genericRecord: GenericRecord = new GenericRecord(typef)
-                        for (column <- typef.getColumns) {
-                            try {
-                                val rtemp: AnyRef = row.getAs(column.getName)
-                                if (rtemp != null) {
-                                    logger.debug("object not null")
-                                    if (rtemp.isInstanceOf[Timestamp]) {
-                                        logger.debug("Timestamp instance")
-                                        genericRecord.put(
-                                            column.getName,
-                                            classOf[Timestamp].cast(rtemp).getTime)
-                                        isARecord = true
-                                    } else if (rtemp.isInstanceOf[java.lang.Boolean]) {
-                                        logger.debug("Boolean instance")
-                                        if (classOf[Boolean].cast(rtemp).booleanValue()) {
-                                            logger.debug("Cast to 1")
-                                            genericRecord.put(column.getName, 1)
-                                            isARecord = true
-                                        } else {
-                                            logger.debug("Cast to 0")
-                                            genericRecord.put(column.getName, 0)
-                                            isARecord = true
-                                        }
-                                    } else if (rtemp.isInstanceOf[BigDecimal]) {
-                                        logger.debug("BigDecimal")
-                                        genericRecord.put(
-                                            column.getName,
-                                            classOf[BigDecimal].cast(rtemp).doubleValue())
-                                        isARecord = true
-                                    } else if (rtemp.isInstanceOf[java.lang.Short]) {
-                                        logger.debug("Short")
-                                        genericRecord.put(
-                                            column.getName,
-                                            classOf[Short].cast(rtemp).intValue())
-                                        isARecord = true
-                                    } else if (rtemp.isInstanceOf[java.lang.Byte]) {
-                                        logger.debug("Byte")
-                                        genericRecord.put(
-                                            column.getName,
-                                            classOf[Byte].cast(rtemp).intValue())
-                                        isARecord = true
-                                    } else if (rtemp.isInstanceOf[Date]) {
-                                        logger.debug("DateType")
-                                        genericRecord.put(
-                                            column.getName,
-                                            classOf[Date].cast(rtemp).toString)
-                                        isARecord = true
-                                    } else {
-                                        logger.debug("Spark type {} ", rtemp.getClass())
-                                        logger.debug("Kin instance type is {} {}", column.getType, column.getName)
-                                        genericRecord.put(
-                                            column.getName,
-                                            column.getType.cast(rtemp))
-                                        isARecord = true
-                                    }
-                                }
-                                /*
-                                else if (column.getType().isInstance(rtemp)) {
-                                    log.debug("other instance");
-                                    genericRecord.put(column.getName(), column.getType().cast(rtemp));
-                                    isARecord=true;
-                                }*/
-
-                                /*
-                                else if (column.getType().isInstance(rtemp)) {
-                                    log.debug("other instance");
-                                    genericRecord.put(column.getName(), column.getType().cast(rtemp));
-                                    isARecord=true;
-                                }*/
-                            } catch {
-                                case iae: IllegalArgumentException =>
-                                    iae.printStackTrace()
-                                    logger.warn("Found non-matching column DS.column --> KineticaTable.column, moving on", iae)
-                                    throw iae
-                                case e: Exception =>
-                                    e.printStackTrace()
-                                    throw e
-
+        logger.debug("Mapping Dataset columns to Kinetica")
+        df.foreachPartition(new ForeachPartitionFunction[Row]() {
+            def call(t: Iterator[Row]): Unit = {
+                val kbl: KineticaBulkLoader = new KineticaBulkLoader(bkp)
+                val bi: BulkInserter[GenericRecord] = kbl.GetBulkInserter()
+                while (t.hasNext) {
+                    
+                    lp.totalRows.add(1)
+                    val row: Row = t.next()
+                    val genericRecord: GenericRecord = new GenericRecord(typef)
+                    var i: Int = 0
+                    for (column <- typef.getColumns) {
+                        try {
+                            var rtemp: Any = row.get({ i += 1; i - 1 })
+                            if (lp.isMapToSchema) {
+                                rtemp = row.getAs(column.getName)
                             }
-                        }
-                        if (isARecord) {
-                            bi.insert(genericRecord)
-                            //reset for next record
-                            isARecord = false
+                            if (!putInGenericRecord(genericRecord, rtemp, column)) {
+                                lp.failedConversion.add(1)
+                            }
+                        } catch {
+                            case e: Exception =>
+                                //e.printStackTrace()
+                                lp.failedConversion.add(1)
+                                logger.warn("Found non-matching column DS.column --> KineticaTable.column, moving on", e)
+                                throw e
                         }
                     }
-                    try bi.flush()
-                    catch {
-                        case e: Exception => {
-                            logger.error("Flush error", e)
-                            e.printStackTrace()
-                        }
+                    lp.convertedRows.add(1)
+                    bi.insert(genericRecord)
+                }
+                try bi.flush()
+                catch {
+                    case e: Exception => {
+                        logger.error("Flush error", e)
+                        e.printStackTrace()
                     }
                 }
-            })
-        } else {
-            logger.debug("Mapping chronological column order Kinetica table")
-            df.foreachPartition(new ForeachPartitionFunction[Row]() {
-                def call(t: Iterator[Row]): Unit = {
-                    val kbl: KineticaBulkLoader = new KineticaBulkLoader(bkp)
-                    val bi: BulkInserter[GenericRecord] = kbl.GetBulkInserter()
-                    var isARecord: Boolean = false
-                    while (t.hasNext) {
-                        val row: Row = t.next()
-                        val genericRecord: GenericRecord = new GenericRecord(typef)
-                        var i: Int = 0
-                        for (column <- typef.getColumns) {
-                            val rtemp: Any = row.get({ i += 1; i - 1 })
-                            if (rtemp != null) {
-                                logger.debug("object not null " + rtemp)
-                                if (rtemp.isInstanceOf[java.sql.Timestamp]) {
-                                    logger.debug("Timestamp instance")
-                                    genericRecord.put(
-                                        column.getName,
-                                        classOf[java.sql.Timestamp].cast(rtemp).getTime)
-                                    isARecord = true
-                                } else if (rtemp.isInstanceOf[java.sql.Date]) {
-                                    logger.debug("Date instance")
-                                    genericRecord.put(column.getName, rtemp.toString)
-                                    isARecord = true
-                                } else if (rtemp.isInstanceOf[java.lang.Boolean]) {
-                                    logger.debug("Boolean instance")
-                                    if (classOf[Boolean].cast(rtemp).booleanValue()) {
-                                        logger.debug("Cast to 1")
-                                        genericRecord.put(column.getName, 1)
-                                        isARecord = true
-                                    } else {
-                                        logger.debug("Cast to 0")
-                                        genericRecord.put(column.getName, 0)
-                                        isARecord = true
-                                    }
-                                } else if (rtemp.isInstanceOf[BigDecimal]) {
-                                    logger.debug("BigDecimal")
-                                    genericRecord.put(
-                                        column.getName,
-                                        classOf[BigDecimal].cast(rtemp).doubleValue())
-                                    isARecord = true
-                                } else if (rtemp.isInstanceOf[java.lang.Short]) {
-                                    logger.debug("Short")
-                                    genericRecord.put(
-                                        column.getName,
-                                        classOf[Short].cast(rtemp).intValue())
-                                    isARecord = true
-                                } else if (rtemp.isInstanceOf[java.lang.Byte]) {
-                                    logger.debug("Byte")
-                                    genericRecord.put(
-                                        column.getName,
-                                        classOf[Byte].cast(rtemp).intValue())
-                                    isARecord = true
-                                } else if (rtemp.isInstanceOf[java.lang.Double]) {
-                                    logger.debug("Double and column cannon name = " + column.getType.getCanonicalName)
-                                    if (column.getType().getCanonicalName.equals("java.lang.Double")) {
-                                        logger.debug("Double handling - putting double")
-                                        genericRecord.put(column.getName, rtemp)
-                                    } else {
-                                        logger.debug("Double handling - putting float")
-                                        val f1 = toDouble(rtemp)
-                                        genericRecord.put(column.getName, f1.toFloat)
-                                    }
-                                    isARecord = true
-                                } else if (rtemp.isInstanceOf[java.lang.Long]) {
-                                    logger.debug("Long")
-                                    genericRecord.put(
-                                        column.getName,
-                                        rtemp)
-                                    isARecord = true
-                                } else if (rtemp.isInstanceOf[java.lang.String]) {
-                                    logger.debug("String found, column type is " + column.getType + " for name " + column.getName)
-                                    // This is the path most travelled....
-                                    if (column.getType().toString().contains("java.lang.Double")) {
-                                        genericRecord.put(column.getName, rtemp.toString().toDouble)
-                                    } else if (column.getType().toString().contains("java.lang.Float")) {
-                                        genericRecord.put(column.getName, rtemp.toString().toFloat)
-                                    } else if (column.getType().toString().contains("java.lang.Integer")) {
-                                        genericRecord.put(column.getName, rtemp.toString().toInt)
-                                    } else if (column.getType().toString().contains("java.lang.Long")) {
-                                        genericRecord.put(column.getName, rtemp.toString().toLong)
-                                    } else {
-                                        genericRecord.put(column.getName, rtemp.toString())
-                                    }
-                                    isARecord = true
-                                } else {
-                                    logger.debug("Spark type and value {} {}", rtemp.getClass(), rtemp)
-                                    logger.debug("Kin instance " + column.getType)
-                                    genericRecord.put(column.getName, rtemp)
-                                    isARecord = true
-                                }
-                            }
-                            /*
-                            else if (column.getType().isInstance(rtemp)) {
-                                log.debug("other instance");
-                                genericRecord.put(column.getName(), column.getType().cast(rtemp));
-                                isARecord=true;
-                            }*/
-            
-                                        /*
-                            else if (column.getType().isInstance(rtemp)) {
-                                log.debug("other instance");
-                                genericRecord.put(column.getName(), column.getType().cast(rtemp));
-                                isARecord=true;
-                            }*/
-                        }
-                        i = 0
-                        if (isARecord) {
-                            bi.insert(genericRecord)
-                            //reset for next record
-                            isARecord = false
-                        }
-                    }
-                    try bi.flush()
-                    catch {
-                        case e: Exception => {
-                            e.printStackTrace()
-                            logger.error("Flush error", e)
-                        }
-
-                    }
-                }
-            })
-        }
+            }
+        })
     }
+    
+    def putInGenericRecord(genericRecord : GenericRecord, rtemp : Any, column : Type.Column ) : Boolean = {
+        
+        //println(" Adding 1 record 1 field .........")
+        
+        var isARecord: Boolean = false
+        if (rtemp != null) {
+        	logger.debug("Spark type {} not null", rtemp.getClass())
+        	if (rtemp.isInstanceOf[java.lang.Long]) {
+        		logger.debug("Long")
+        		genericRecord.put(column.getName, rtemp)
+        		isARecord = true
+        	} else if (rtemp.isInstanceOf[Timestamp]) {
+        		logger.debug("Timestamp instance")
+        		genericRecord.put(column.getName, classOf[Timestamp].cast(rtemp).getTime)
+        		isARecord = true
+        	} else if (rtemp.isInstanceOf[java.sql.Date]) {
+        		logger.debug("Date instance")
+        		genericRecord.put(column.getName, rtemp.toString)
+        		isARecord = true
+        	} else if (rtemp.isInstanceOf[java.lang.Boolean]) {
+        		logger.debug("Boolean instance")
+        		if (classOf[Boolean].cast(rtemp).booleanValue()) {
+        			logger.debug("Cast to 1")
+        			genericRecord.put(column.getName, 1)
+        			isARecord = true
+        		} else {
+        			logger.debug("Cast to 0")
+        			genericRecord.put(column.getName, 0)
+        			isARecord = true
+        		}
+        	} else if (rtemp.isInstanceOf[BigDecimal]) {
+        		logger.debug("BigDecimal")
+        		genericRecord.put(column.getName, classOf[BigDecimal].cast(rtemp).doubleValue())
+        		isARecord = true
+        	} else if (rtemp.isInstanceOf[java.lang.Short]) {
+        		logger.debug("Short")
+        		genericRecord.put(column.getName, classOf[Short].cast(rtemp).intValue())
+        		isARecord = true
+        	} else if (rtemp.isInstanceOf[java.lang.Float]) {
+        		logger.debug("Float")
+        		if (column.getType().toString().contains("java.lang.Float")) {
+        		    genericRecord.put(column.getName, classOf[java.lang.Float].cast(rtemp).floatValue())
+	        		isARecord = true
+        		} else if (column.getType().toString().contains("java.lang.Double")) {
+        		    genericRecord.put(column.getName, toDouble(rtemp))
+	        		isARecord = true
+        		} else {
+        		   logger.debug("Kinetica column type is " + column.getType + " for name " + column.getName) 
+        		}
+        	} else if (rtemp.isInstanceOf[java.lang.Double]) {
+        		logger.debug("Double")
+        		genericRecord.put(column.getName, classOf[java.lang.Double].cast(rtemp).doubleValue())
+        		isARecord = true
+        	} else if (rtemp.isInstanceOf[java.lang.Byte]) {
+        		logger.debug("Byte")
+        		genericRecord.put(
+        			column.getName,
+        			classOf[Byte].cast(rtemp).intValue())
+        		isARecord = true
+        	} else if (rtemp.isInstanceOf[java.lang.String]) {
+        		logger.debug("String found, column type is " + column.getType + " for name " + column.getName)
+        		// This is the path most travelled....
+        		if (column.getType().toString().contains("java.lang.Double")) {
+        			genericRecord.put(column.getName, rtemp.toString().toDouble)
+        		} else if (column.getType().toString().contains("java.lang.Float")) {
+        			genericRecord.put(column.getName, rtemp.toString().toFloat)
+        		} else if (column.getType().toString().contains("java.lang.Integer")) {
+        			genericRecord.put(column.getName, rtemp.toString().toInt)
+        		} else if (column.getType().toString().contains("java.lang.Long")) {
+        			genericRecord.put(column.getName, rtemp.toString().toLong)
+        		} else {
+        			genericRecord.put(column.getName, rtemp.toString())
+        		}
+        		isARecord = true
+        	 } else {
+        		logger.debug("Spark type {} ", rtemp.getClass())
+        		logger.debug("Kin instance type is {} {}", column.getType, column.getName)
+        		genericRecord.put(
+        			column.getName,
+        			column.getType.cast(rtemp))
+        		isARecord = true
+        	}
+        }
+        isARecord
+    }
+        
 }
 /*
 if( maptoschem ) {

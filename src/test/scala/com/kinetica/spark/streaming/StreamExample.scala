@@ -35,11 +35,7 @@ import StreamExample.STREAM_POLL_INTERVAL_SECS
 object StreamExample extends LazyLogging {
 
     def main(args: Array[String]): Unit = {
-        System.setProperty("spark.sql.warehouse.dir", "file:///C:/1SPARK/spark-warehouse");
-        System.setProperty("hadoop.home.dir", "c:/1SPARK/")
-        if (args.length < 4) {
-            throw new Exception("<host ip> <srcTableName> <destTableName> <insertBatchSize> [<username> <password>]")
-        }
+
         val example: StreamExample = new StreamExample(args)
         try example.runTest()
         catch {
@@ -47,7 +43,6 @@ object StreamExample extends LazyLogging {
                 logger.error("Problem streaming data between GPUdb and Spark", e)
                 System.exit(-2)
             }
-
         }
     }
 
@@ -80,8 +75,6 @@ object StreamExample extends LazyLogging {
     
     def frow(t: AvroWrapper): Row = {
         
-        //println(" ############ Executing frow ########## ")
-        
         val inRecord: GenericRecord = t.getGenericRecord
         val myType = new Type(t.getSchemaString())
         var out = new ArrayList[Any](myType.getColumns.size)
@@ -97,8 +90,7 @@ object StreamExample extends LazyLogging {
                 out.add(inRecord.get(column.getName).asInstanceOf[Long])
             else if( column.getType.getCanonicalName.contains("java.lang.String") )
                 out.add(inRecord.get(column.getName).asInstanceOf[String])
-            ii = ii + 1;
-            //println(" ############ Executing frow 22 ########## ")
+            ii = ii + 1
         }
         val row = Row.fromSeq(out)
         row
@@ -123,7 +115,12 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
 
     logger.debug(" ********** SparkKinetica Stream Example class main constructor ********** ")
     
-    // Do more robust args checking if so desired.
+    if( args.length < 4 ) {
+        println("Parameters:  <KineticaHostName/IP> <SrcTableName> <DestTableName> <InsertBatchSize> [<Username> <Password>]")
+        println(" Aborting test")
+        System.exit(-1)
+    }
+
     val host = args(0)
     val srcTableName = args(1)
     val destTableName = args(2)
@@ -141,7 +138,7 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
         new Thread() {
             override def run(): Unit = {
                 val writer: GPUdbWriter[Record] = new GPUdbWriter[Record](lp)
-                val myType = Type.fromTable(lp.getGpudb(), lp.tablename);
+                val myType = Type.fromTable(lp.getGpudb(), lp.tablename)
                 while (true) {
                     Thread.sleep(NEW_DATA_INTERVAL_SECS * 1000)
                     // Add records to source table which we will monitor
@@ -162,11 +159,10 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
      */
     private def runTest(): Unit = {
 
-        val URL = s"http://${host}:9191"
-        val STREAM_URL = s"tcp://${host}:9002"
+        val url = s"http://${host}:9191"
         val streamingOptions = Map(
-            "database.url" -> URL,
-            "database.stream_url" -> STREAM_URL,
+            "database.url" -> url,
+            "database.stream_url" -> s"tcp://${host}:9002",
             "database.username" -> username,
             "database.password" -> password,
             "ingester.batch_size" -> ingestBatchSize,
@@ -175,12 +171,11 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
         )
         
         val sc = new SparkConf().setAppName(sparkAppName)
-
         val lp = new LoaderParams(SparkSessionSingleton.getInstance(sc).sparkContext, streamingOptions)
+        val ssc = new StreamingContext(SparkSessionSingleton.getInstance(sc).sparkContext, Durations.seconds(STREAM_POLL_INTERVAL_SECS))
+
         // table monitor to queue to the data stream
         launchAdder(lp)
-
-        val ssc = new StreamingContext(sc, Durations.seconds(STREAM_POLL_INTERVAL_SECS))
 
         val receiver: GPUdbReceiver = new GPUdbReceiver(lp)
         val inStream: ReceiverInputDStream[AvroWrapper] = ssc.receiverStream(receiver)
@@ -191,8 +186,8 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
         
         logger.info(" Destination table is = " + destTableName)
         val ingestOptions = Map(
-            "database.url" -> URL,
-            "database.jdbc_url" -> s"jdbc:simba://${host}:9292;URL=${URL}",
+            "database.url" -> url,
+            "database.jdbc_url" -> s"jdbc:simba://${host}:9292;URL=${url}",
             "database.username" -> username,
             "database.password" -> password,
             "ingester.batch_size" -> ingestBatchSize,
@@ -209,9 +204,10 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
             import spark.implicits._
 
             if(!rdd.isEmpty()) {
-                rdd.repartition(10);
+                rdd.repartition(10)
+
                 val df = spark.createDataFrame(rdd, schema)
-                //df.printSchema()
+
                 df.write.format("com.kinetica.spark").options(ingestOptions).save()
                 df.write.format("csv").mode(SaveMode.Append).save("StreamExample.out")
             }
@@ -227,7 +223,7 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
         val propFile: File = new File(propPath)
         logger.info("Reading properties from file: {}", propFile)
 
-        val conf = new PropertiesConfiguration(propPath);
+        val conf = new PropertiesConfiguration(propPath)
         conf
     }
 }

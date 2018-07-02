@@ -1,49 +1,52 @@
 package com.kinetica.spark
 
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.{ SaveMode, SparkSession }
+import org.apache.spark.sql.{ SaveMode, SparkSession, functions }
 
 object KineticaEgressTest extends App {
 
-    println("Application Kinetica to Spark started...")
+    println("Kinetica egress to Spark test started...")
     
-    if( args.length != 1 ) {
-        println(" 1 params needed - <KineticaHostName/IP>")
+    if( args.length < 1 ) {
+        println("Parameters:  <KineticaHostName/IP> [<Username> <Password>]")
         println(" Aborting test")
-        System.exit(-1);
+        System.exit(-1)
     }
 
-    System.setProperty("spark.sql.warehouse.dir", "file:///C:/1SPARK/spark-warehouse");
-    System.setProperty("hadoop.home.dir", "c:/1SPARK/")
+    val host = args(0)
+    val username = if (args.length > 1) args(1) else ""
+    val password = if (args.length > 2) args(2) else ""
+
+    val url = s"http://${host}:9191"
 
     val conf = new SparkConf().setAppName("spark-custom-datasource")
-    println("Conf created...")
     val spark = SparkSession.builder().config(conf).master("local").getOrCreate()
+    val sqlContext = spark.sqlContext
 
-    val host = args(0)
-    val URL = s"http://${host}:9191"
     
     val kineticaOptions = Map(
-        "database.jdbc_url" -> s"jdbc:simba://${host}:9292;URL=${URL};ParentSet=MASTER",
-        "database.username" -> "",
-        "database.password" -> "",
+        "database.jdbc_url" -> s"jdbc:simba://${host}:9292;URL=${url};ParentSet=MASTER",
+        "database.username" -> username,
+        "database.password" -> password,
         "table.name" -> "airline",
-        "spark.num_partitions" -> "80")
+        "spark.num_partitions" -> "80"
+    )
         
-    val sqlContext = spark.sqlContext
-    val productdf = sqlContext.read.format("com.kinetica.spark").options(kineticaOptions).load()
+    val df = sqlContext.read.format("com.kinetica.spark").options(kineticaOptions).load().filter("Month = 7")
     
-    productdf.printSchema
-    
-    val df = productdf.filter("DayOfMonth >= 12")
-    
-    //println(df.count())
+    df.write.format("csv").mode("overwrite").save("2008.july")
 
-    println(df.groupBy("FlightNum").sum("DayOfWeek").orderBy("FlightNum").show(20000))
-    
-    //df.write.format("csv").save("c:/1SPARK/data/dom12/")
+    df.
+        groupBy("DayOfWeek").
+        agg(
+            functions.count("*").as("TotalFlights"),
+            functions.sum("Diverted").as("TotalDiverted"),
+            functions.sum("Cancelled").as("TotalCancelled")
+        ).
+        orderBy("DayOfWeek").
+        show()
 
-    println("Egress completed....")
-    System.exit(0);
+    println("Kinetica egress to Spark test finished.")
 
+    System.exit(0)
 }

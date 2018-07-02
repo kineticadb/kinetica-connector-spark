@@ -203,7 +203,7 @@ class KineticaRelation(
         // Lets try and print the accumulators
         println(" Total rows = " + conf.totalRows.value)
         println(" Converted rows = " + conf.convertedRows.value)
-        println(" Columns failed conevrsion = " + conf.failedConversion.value)
+        println(" Columns failed conversion = " + conf.failedConversion.value)
     }
 
     /**

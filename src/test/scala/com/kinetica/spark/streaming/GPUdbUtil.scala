@@ -13,12 +13,11 @@ import scala.collection.JavaConversions._
 
 object GPUdbUtil {
     def getData(myType:Type) : Record = {
-        val gr = myType.newInstance();
+        val gr = myType.newInstance()
         val columnCount = myType.getColumnCount
         val r = scala.util.Random
         for (column <- myType.getColumns) { 
             
-            //println(" &&&&&&& " + column.getProperties.mkString)
             if (column.getType().toString().contains("java.lang.Double")) {
                 gr.put(column.getName(), r.nextDouble())
             } else if (column.getType().toString().contains("java.lang.Float")) {
@@ -34,20 +33,20 @@ object GPUdbUtil {
                     var ts = r.nextLong()
                     ts = if (ts < -30610224000000L) -30610224000000L else ts
                     ts = if (ts > 29379542399999L) 29379542399999L else ts
-                    gr.put(column.getName(), ts);
+                    gr.put(column.getName(), ts)
                 } else {
                     gr.put(column.getName(), r.nextLong())
                 }
             } else {
                 if ( column.getProperties.mkString.toLowerCase.contains("date") )
-                    gr.put(column.getName(), "1963-12-25");
+                    gr.put(column.getName(), "1963-12-25")
                 else if ( column.getProperties.mkString.toLowerCase.contains("ipv4") )
-                    gr.put(column.getName(), "172.12.24.63");
+                    gr.put(column.getName(), "172.12.24.63")
                 else if ( column.getProperties.mkString.toLowerCase.contains("decimal") )
-                    gr.put(column.getName(), "155.52");
+                    gr.put(column.getName(), "155.52")
                 else if ( column.getProperties.mkString.toLowerCase.contains("wkt") )
-                    gr.put(column.getName(), "POINT(20 30)");
-                else gr.put(column.getName(), scala.util.Random.alphanumeric.take(1).mkString);
+                    gr.put(column.getName(), "POINT(20 30)")
+                else gr.put(column.getName(), scala.util.Random.alphanumeric.take(1).mkString)
             }
         }
         gr

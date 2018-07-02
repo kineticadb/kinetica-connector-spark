@@ -5,67 +5,56 @@ import org.apache.spark.sql.{ SaveMode, SparkSession }
 
 object KineticaIngestTest extends App {
 
-    println("Application Kinetica Spark started...")
+    println("Spark ingest to Kinetica test started...")
 
-    //System.setProperty("spark.sql.warehouse.dir", "file:///C:/1SPARK/spark-warehouse");
-    //System.setProperty("hadoop.home.dir", "c:/1SPARK/")
-
-    val conf = new SparkConf().setAppName("spark-custom-datasource")
-    conf.set("spark.driver.userClassPathFirst" , "true");
-    println("Conf created...")
-    val spark = SparkSession.builder().config(conf).getOrCreate()
-    
-    if( args.length != 3 ) {
-        println(" 3 params needed - InputFile KineticaTableName kineticaIp")
+    if( args.length < 2 ) {
+        println("Parameters:  <CSVFile> <KineticaHostName/IP> [<Username> <Password>]")
         println(" Aborting test")
-        System.exit(-1);
+        System.exit(-1)
     }
 
     val file = args(0)
-    val tableName = args(1)
-    val kineticaIp = args(2)
+    val host = args(1)
+    val username = if (args.length > 2) args(2) else ""
+    val password = if (args.length > 3) args(3) else ""
 
-    println("Conf values set...")
+    val url = s"http://${host}:9191"
 
-    
-    /*
-    val sqlContext = spark.sqlContext
-    sqlContext.udf.register("toInt", (str: String) => str.toInt)
-    println("Udf toInt set...")
-    var userDF = sqlContext.read.format("com.databricks.spark.csv")
-        .option("delimiter", "|").option("header", "false").load(s"${dataDir}/u.user")
-    userDF.registerTempTable("user")
-    userDF = sqlContext.sql("select _c0 as user_id,toInt(_c1) as age, _c2 as gender, _c3 as occupation, _c4 as zip_code from user")
-    println("UserDF done...")
-    */
-    
-    val userDF = spark.read
+    val conf = new SparkConf().setAppName("spark-custom-datasource")
+    conf.set("spark.driver.userClassPathFirst" , "true")
+    val spark = SparkSession.builder().config(conf).getOrCreate()
+
+
+    val df = spark.read
             .format("csv")
             .option("header", "true")
             .option("inferSchema", "true")
             .option("delimiter", ",")
-            .csv(file);
+            .csv(file)
     
     println("printing schema...")
-    userDF.printSchema()
+    df.printSchema()
     
-    // Tested with createtable true and false......createtable=true will take way more time since all the data 
-    // will be inspected.
-    var writeToKineticaOpts = Map("database.url" -> s"http://${kineticaIp}:9191", "table.name" -> tableName,
-            "table.is_replicated" -> "false", "ingester.ip_regex" -> "", "ingester.batch_size" -> "10000", "table.update_on_existing_pk" -> "true",
-            "table.map_columns_by_name" -> "false", "ingester.num_threads" -> "4", "table.create" -> "true",
-            "database.jdbc_url" -> s"jdbc:simba://${kineticaIp}:9292;URL=http://${kineticaIp}:9191;ParentSet=MASTER",
-            "database.username" -> "admin", "database.password" -> "Kinetica1!");
-    println("writeToKineticaOpts set...")
+    var kineticaOptions = Map(
+        "database.url" -> url,
+        "database.jdbc_url" -> s"jdbc:simba://${host}:9292;URL=${url};ParentSet=MASTER",
+        "database.username" -> username,
+        "database.password" -> password,
+        "table.name" -> "airline",
+        "table.create" -> "true",
+        "table.truncate" -> "true",
+        "table.is_replicated" -> "false",
+        "table.update_on_existing_pk" -> "true",
+        "table.map_columns_by_name" -> "false",
+        "ingester.ip_regex" -> "",
+        "ingester.batch_size" -> "10000",
+        "ingester.num_threads" -> "4"
+    )
     
-    println("Starting Kinetica write...")
-    userDF.write.format("com.kinetica.spark").options(writeToKineticaOpts).save()
+    df.write.format("com.kinetica.spark").options(kineticaOptions).save()
 
-    println("Ingest done....")
+    println("Spark ingest to Kinetica test finished.")
     
     spark.close()
     spark.stop()
-    
-    //System.exit(0);
-
 }

@@ -467,7 +467,7 @@ Read filtered data from *Kinetica* into ``DataFrame`` (July 2008 data only):
 ```scala
 val df = sqlContext.read.format("com.kinetica.spark").options(options).load().filter("Month = 7")
 ```
-         
+
 Write data from ``DataFrame`` to CSV:
 
 ```scala
@@ -705,7 +705,7 @@ val options = Map(
 
 val loaderConfig = new LoaderParams(spark.sparkContext, options)
 ```
-   
+
 Initialize the streaming source table:
 
 ```scala
@@ -739,7 +739,7 @@ Once the *table monitor* & *DStream* are established, streaming inserts will
    continuously be routed to *Spark* for processing and new records will be
    output to the *Spark* console.  Verify that polling of the stream is
    occurring at regular intervals and printing out similar text to this:
-   
+
     -------------------------------------------
     Time: 1530503165000 ms
     -------------------------------------------
@@ -747,21 +747,21 @@ Once the *table monitor* & *DStream* are established, streaming inserts will
 At this point, records can be inserted into the ``airline_in`` table at any
    time with the following command (press ``ENTER`` at any time to get a
    ``scala>`` prompt):
-   
+
 ```scala
 df.limit(10).write.format("com.kinetica.spark").options(options).save()
 ```
 
 Each time this command is given, a short loading sequence should occur,
    followed by a write summary that can be verified to look like this:
-   
+
     Total rows = 10
     Converted rows = 10
     Columns failed conversion = 10
-       
+
 After each data load, the stream will receive the inserted records and write
     them to the *Spark* console:
-    
+
     {"Year": 2008, "Month": 1, "DayofMonth": 3, "DayOfWeek": 4, "DepTime": "2003", "CRSDepTime": 1955, "ArrTime": "2211", "CRSArrTime": 2225, "UniqueCarrier": "WN", "FlightNum": 335, "TailNum": "N712SW", "ActualElapsedTime": "128", "CRSElapsedTime": "150", "AirTime": "116", "ArrDelay": "-14", "DepDelay": "8", "Origin": "IAD", "Dest": "TPA", "Distance": 810, "TaxiIn": "4", "TaxiOut": "8", "Cancelled": 0, "CancellationCode": null, "Diverted": 0, "CarrierDelay": "NA", "WeatherDelay": "NA", "NASDelay": "NA", "SecurityDelay": "NA", "LateAircraftDelay": "NA"}
     {"Year": 2008, "Month": 1, "DayofMonth": 3, "DayOfWeek": 4, "DepTime": "754", "CRSDepTime": 735, "ArrTime": "1002", "CRSArrTime": 1000, "UniqueCarrier": "WN", "FlightNum": 3231, "TailNum": "N772SW", "ActualElapsedTime": "128", "CRSElapsedTime": "145", "AirTime": "113", "ArrDelay": "2", "DepDelay": "19", "Origin": "IAD", "Dest": "TPA", "Distance": 810, "TaxiIn": "5", "TaxiOut": "10", "Cancelled": 0, "CancellationCode": null, "Diverted": 0, "CarrierDelay": "NA", "WeatherDelay": "NA", "NASDelay": "NA", "SecurityDelay": "NA", "LateAircraftDelay": "NA"}
     {"Year": 2008, "Month": 1, "DayofMonth": 3, "DayOfWeek": 4, "DepTime": "628", "CRSDepTime": 620, "ArrTime": "804", "CRSArrTime": 750, "UniqueCarrier": "WN", "FlightNum": 448, "TailNum": "N428WN", "ActualElapsedTime": "96", "CRSElapsedTime": "90", "AirTime": "76", "ArrDelay": "14", "DepDelay": "8", "Origin": "IND", "Dest": "BWI", "Distance": 515, "TaxiIn": "3", "TaxiOut": "17", "Cancelled": 0, "CancellationCode": null, "Diverted": 0, "CarrierDelay": "NA", "WeatherDelay": "NA", "NASDelay": "NA", "SecurityDelay": "NA", "LateAircraftDelay": "NA"}
@@ -861,7 +861,7 @@ val options = Map(
    )"""
 )
 ```
-   
+
 Get *Spark* SQL context:
 
 ```scala
@@ -1143,11 +1143,12 @@ the access mechanism.
 For the *Data Loader*, the following properties specify the data source &
 format.
 
-| Property Name          | Default  | Description
-| :---                   | :---     | :---
-| ``source.sql_file``    | *<none>* | File containing a SQL-compliant query to use to retrieve data from *Hive* or *Spark-SQL*
-| ``source.data_path``   | *<none>* | File or directory in Hadoop or the local filesystem containing source data
-| ``source.data_format`` | *<none>* | Indicates the format of the file(s) in ``source.data_path``
+| Property Name          | Default   | Description
+| :---                   | :---      | :---
+| ``source.sql_file``    | *<none>*  | File containing a SQL-compliant query to use to retrieve data from *Hive* or *Spark-SQL*
+| ``source.data_path``   | *<none>*  | File or directory in Hadoop or the local filesystem containing source data
+| ``source.data_format`` | *<none>*  | Indicates the format of the file(s) in ``source.data_path``
+| ``source.csv_header``  | ``false`` | If format is CSV, whether the file has column headers or not; if ``true``, the column headers will be used as column names in creating the target table if it doesn't exist and mapping source fields to target columns if the table does exist.  If ``false``, columns will be mapped by position.
 
 **NOTE:**  Supported formats include:
 

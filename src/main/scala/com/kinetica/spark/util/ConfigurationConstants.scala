@@ -9,16 +9,16 @@ object ConfigurationConstants {
     val KINETICA_PASSWORD_PARAM: String = "database.password"
     val KINETICA_RETRYCOUNT_PARAM: String = "database.retry_count"
     val KINETICA_TIMEOUT_PARAM: String = "database.timeout_ms"
-    
+
     val KINETICA_MULTIHEAD_PARAM: String = "ingester.multi_head"
     val KINETICA_IPREGEX_PARAM: String = "ingester.ip_regex"
     val KINETICA_NUMTHREADS_PARAM: String = "ingester.num_threads"
     val KINETICA_BATCHSIZE_PARAM: String = "ingester.batch_size"
     val KINETICA_USESNAPPY_PARAM: String = "ingester.use_snappy"
-    
+
     val CONNECTOR_NUMPARTITIONS_PARAM: String = "spark.num_partitions"
     val CONNECTOR_ROWSPERPARTITION_PARAM: String = "spark.rows_per_partition"
-    
+
     val KINETICA_SSLBYPASSCERTCJECK_PARAM: String = "ssl.bypass_cert_check"
     val KINETICA_TRUSTSTOREJKS_PARAM: String = "ssl.truststore_jks"
     val KINETICA_TRUSTSTOREPASSWORD_PARAM: String = "ssl.truststore_password"
@@ -28,7 +28,7 @@ object ConfigurationConstants {
     val KINETICA_UPDATEONEXISTINGPK_PARAM: String = "table.update_on_existing_pk"
     val KINETICA_REPLICATEDTABLE_PARAM: String = "table.is_replicated"
     val KINETICA_PARTROWS_PARAM: String = "kinetica.partitionrows"
-    
+
     val KINETICA_TABLENAME_PARAM: String = "table.name"
     val KINETICA_CREATETABLE_PARAM: String = "table.create"
     val KINETICA_TRUNCATETABLE_PARAM: String = "table.truncate"
@@ -39,8 +39,9 @@ object ConfigurationConstants {
     val CONNECTOR_DATAPATH_PARAM: String = "source.data_path"
     val CONNECTOR_SQLFILE_PARAM: String = "source.sql_file"
     val CONNECTOR_DATAFORMAT_PARAM: String = "source.data_format"
-    
-    
+    val KINETICA_CSV_HEADER: String = "source.csv_header"
+
+
     val ACCUMULATOR_NAME: String = "acc_name"
 
     val LOADERCODEPATH: String = "loadercodepath"

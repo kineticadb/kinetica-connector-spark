@@ -9,7 +9,6 @@ import com.typesafe.scalalogging.LazyLogging
 import com.kinetica.spark.LoaderParams
 import org.apache.spark.SparkContext
 
-
 @SerialVersionUID(-2502861044221136156L)
 class LoaderConfiguration(sc:SparkContext, params: Map[String, String]) extends LoaderParams(sc, params) with Serializable with LazyLogging {
 
@@ -28,6 +27,6 @@ class LoaderConfiguration(sc:SparkContext, params: Map[String, String]) extends 
     @BeanProperty
     val partitionRows: Int = params.get(KINETICA_PARTROWS_PARAM).getOrElse("-1").toInt
 
-    
-
+    @BeanProperty
+    val csvHeader: Boolean = params.get(KINETICA_CSV_HEADER).getOrElse("false").toBoolean
 }

@@ -13,6 +13,7 @@ import org.apache.commons.configuration.PropertiesConfiguration
 import org.apache.commons.io.FileUtils
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.DataFrameReader
 
 import com.kinetica.spark.loader.LoaderConfiguration
 import com.typesafe.scalalogging.LazyLogging
@@ -28,13 +29,13 @@ object SparkKineticaDriver extends LazyLogging {
             throw new Exception("First argument must be a properties file.")
         }
         val loaderJob: SparkKineticaDriver = new SparkKineticaDriver(args)
-        
+
         val sess = SparkSession.builder()
             .appName(classOf[SparkKineticaDriver].getSimpleName)
             .enableHiveSupport()
             .getOrCreate
         loaderJob.start(sess)
-        
+
         sess.close()
         sess.stop()
     }
@@ -66,7 +67,7 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
         logger.debug("config: {} = {}", key, param)
         params += (key -> param)
     }
-    
+
     // Dataframe is ready. Lets put a flag in the params so the datasource API can take
     // one of the 2 different paths from 2 original connectors.
     params += (ConfigurationConstants.LOADERCODEPATH -> "true")
@@ -75,9 +76,9 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
     var loaderConfig : LoaderConfiguration = _
 
     def start(sess: SparkSession): Unit = {
-        
+
         loaderConfig = new LoaderConfiguration(sess.sparkContext,  immutableParams)
-        
+
         logger.info("Starting job: {}", sess.conf.get("spark.app.name"))
         val inputDs: DataFrame = getDataset(sess)
 
@@ -89,7 +90,7 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
 
         val sqlFileName: String = loaderConfig.sqlFileName
         val dataPath: String = loaderConfig.dataPath
-        val dataFormat: String = loaderConfig.dataFormat
+        var dataFormat: String = loaderConfig.dataFormat
 
         var inputDs: DataFrame = null
         val parentDir: String = this.propertyConf.getFile.getParent
@@ -104,13 +105,19 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
                 throw new Exception("You must specify parameter 'source.data_format'")
             }
 
-            var finalDataFormat: String = dataFormat
             if (dataFormat.equalsIgnoreCase("avro")) {
-                finalDataFormat = "com.databricks.spark.avro"
+                dataFormat = "com.databricks.spark.avro"
             }
 
-            logger.info("Attempting to load file as {}: {}", finalDataFormat, dataPath)
-            inputDs = sess.read.format(finalDataFormat).load(dataPath)
+            logger.info("Attempting to load file as {}: {}", dataFormat, dataPath)
+            val dfReader: DataFrameReader = sess.read.format(dataFormat)
+
+            if(dataFormat.equalsIgnoreCase("csv") && loaderConfig.csvHeader == true) {
+                dfReader.option("header", "true")
+                dfReader.option("inferSchema", "true")
+            }
+
+            inputDs = dfReader.load(dataPath)
         } else {
             throw new Exception("You must set loader.sql-file or loader.data-file.")
         }

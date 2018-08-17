@@ -1,7 +1,8 @@
 package com.kinetica.spark
 
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.{ SaveMode, SparkSession, functions }
+import org.apache.spark.sql.{ SaveMode, SparkSession }
+import org.apache.spark.sql.functions.{ column, count, sum, when }
 
 object KineticaEgressTest extends App {
 
@@ -39,11 +40,23 @@ object KineticaEgressTest extends App {
     df.
         groupBy("DayOfWeek").
         agg(
-            functions.count("*").as("TotalFlights"),
-            functions.sum("Diverted").as("TotalDiverted"),
-            functions.sum("Cancelled").as("TotalCancelled")
+            count("*").as("TotalFlights"),
+            sum("Diverted").as("TotalDiverted"),
+            sum("Cancelled").as("TotalCancelled")
         ).
         orderBy("DayOfWeek").
+        select(
+           when(df("DayOfWeek") === 1, "Monday").
+           when(df("DayOfWeek") === 2, "Tuesday").
+           when(df("DayOfWeek") === 3, "Wednesday").
+           when(df("DayOfWeek") === 4, "Thursday").
+           when(df("DayOfWeek") === 5, "Friday").
+           when(df("DayOfWeek") === 6, "Saturday").
+           when(df("DayOfWeek") === 7, "Sunday").alias("DayOfWeek"),
+           column("TotalFlights"),
+           column("TotalDiverted"),
+           column("TotalCancelled")
+        ).
         show()
 
     println("Kinetica egress to Spark test finished.")

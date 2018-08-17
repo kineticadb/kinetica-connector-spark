@@ -63,6 +63,7 @@ object KineticaSparkDFManager extends LazyLogging {
     def getType(): Type = myType
 
     def toDouble: (Any) => Double = { case i: Int => i case f: Float => f case d: Double => d }
+    def toLong: (Any) => Long = { case i: Int => i }
 
     /**
      * Maps over dataframe using either matching columns or chronological ordering
@@ -121,11 +122,22 @@ object KineticaSparkDFManager extends LazyLogging {
         
         var isARecord: Boolean = false
         if (rtemp != null) {
-        	logger.debug("Spark type {} not null", rtemp.getClass())
+        	logger.debug("Spark data type {} not null", rtemp.getClass())
         	if (rtemp.isInstanceOf[java.lang.Long]) {
         		logger.debug("Long")
         		genericRecord.put(column.getName, rtemp)
         		isARecord = true
+        	} else if (rtemp.isInstanceOf[java.lang.Integer]) {
+        		logger.debug("handling Integer")
+        		if (column.getType().toString().contains("java.lang.Integer")) {
+        		    genericRecord.put(column.getName, rtemp)
+	        		isARecord = true
+        		} else if (column.getType().toString().contains("java.lang.Long")) {
+        		    genericRecord.put(column.getName, toLong(rtemp))
+	        		isARecord = true
+        		} else {
+        		   logger.debug("Kinetica column type is " + column.getType + " for name " + column.getName) 
+        		}
         	} else if (rtemp.isInstanceOf[Timestamp]) {
         		logger.debug("Timestamp instance")
         		genericRecord.put(column.getName, classOf[Timestamp].cast(rtemp).getTime)

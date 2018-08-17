@@ -40,7 +40,43 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
 
     private var destTypeId: String = _
 
-    def createTable(): Unit = {
+    def setupSchema(loaderConfig: LoaderConfiguration, sparkSchema: StructType): java.util.HashMap[Integer, Integer] = {
+
+        if(this.useTemplates) {
+            // lookup schema from template
+            this.resolveTemplate()
+            if (loaderConfig.truncateTable) {
+                this.gpudb.clearTable(this.tableName, null, null)
+            }
+            this.createTable()
+        }
+        if (loaderConfig.hasTable()) {
+            // use existing schema from table
+            val response: ShowTableResponse = this.gpudb.showTable(this.tableName, null)
+            this.setTypeFromResponse(response, 0)
+
+            if (loaderConfig.truncateTable) {
+                this.gpudb.clearTable(this.tableName, null, null)
+                this.createTable()
+            }
+        }
+        else if (loaderConfig.createTable) {
+            // convert schema from Spark
+            this.destType = convertType(sparkSchema)
+            this.destTypeId = this.destType.create(this.gpudb)
+            this.createTable()
+        }
+        else {
+            throw new Exception(
+                String.format(
+                    "Table <%s> does not exist and <table.create = false>.",
+                    loaderConfig.tablename))
+        }
+        loaderConfig.setType(this.getDestType)
+        this.getColumnMap(sparkSchema)
+    }
+
+    private def createTable(): Unit = {
         logger.info( "Creating table <{}.{}> (type={})", this.schemaName, this.tableName, this.destTypeId)
 
         var options : java.util.Map[String, String] = null
@@ -57,22 +93,7 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
             options)
     }
 
-    def truncateTable(): Unit = {
-        this.gpudb.clearTable(this.tableName, null, null)
-        createTable()
-    }
-
-    def setTypeFromTable(): Unit = {
-
-        if(this.useTemplates) {
-            throw new Exception("Templates must be used in combination with truncate or create.")
-        }
-
-        val response: ShowTableResponse = this.gpudb.showTable(this.tableName, null)
-        setTypeFromResponse(response, 0)
-    }
-
-    def setTypeFromResponse(response: ShowTableResponse, index: Int): Unit = {
+    private def setTypeFromResponse(response: ShowTableResponse, index: Int): Unit = {
         this.destTypeId = response.getTypeIds().get(index)
 
         val typeSchema: String = response.getTypeSchemas.get(index)
@@ -84,17 +105,6 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
         val tableDesc: List[String] = response.getTableDescriptions().get(index)
         if(tableDesc.contains("REPLICATED")) {
             this.isReplicated = tableDesc.contains("REPLICATED")
-        }
-    }
-
-    def mapSchema(sparkSchema: StructType): Unit = {
-        if (this.useTemplates) {
-            // lookup schema from template
-            resolveTemplate()
-        } else {
-            // convert schema
-            this.destType = convertType(sparkSchema)
-            this.destTypeId = this.destType.create(this.gpudb)
         }
     }
 
@@ -123,7 +133,7 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
         logger.info("Found template table: {} (ID={}) ", templateName, this.destTypeId)
     }
 
-    def getColumnMap(sparkSchema: StructType): HashMap[Integer, Integer] = {
+    private def getColumnMap(sparkSchema: StructType): HashMap[Integer, Integer] = {
         val sourceType: Type = convertType(sparkSchema)
         val sourceCols = sourceType.getColumns
         val destCols = this.destType.getColumns

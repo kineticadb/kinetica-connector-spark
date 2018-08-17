@@ -23,10 +23,10 @@ import org.apache.spark.SparkContext
 import org.apache.spark.util.LongAccumulator
 
 class LoaderParams extends Serializable with LazyLogging {
-    
+
     @BeanProperty
     var timeoutMs: Int = 10000
-    
+
     @BeanProperty
     var kineticaURL: String = null
 
@@ -80,13 +80,13 @@ class LoaderParams extends Serializable with LazyLogging {
 
     @BooleanBeanProperty
     var alterTable: Boolean = false
-    
+
     @BeanProperty
     var multiHead: Boolean = false
-    
+
     @BeanProperty
     var truncateTable: Boolean = false
-    
+
     @BeanProperty
     var loaderPath: Boolean = false
 
@@ -95,7 +95,7 @@ class LoaderParams extends Serializable with LazyLogging {
 
     @BeanProperty
     var trustStorePath: String = null
-    
+
     @BeanProperty
     var trustStorePassword: String = null
 
@@ -104,50 +104,54 @@ class LoaderParams extends Serializable with LazyLogging {
 
     @BeanProperty
     var keyStorePassword: String = null
-    
+
     @BeanProperty
     var totalRows: LongAccumulator = null
-    
+
     @BeanProperty
     var convertedRows: LongAccumulator = null
-    
+
     @BeanProperty
     var failedConversion: LongAccumulator = null
-    
+
+    @BeanProperty
+    var truncateToSize: Boolean = false
+
     def this(sc: SparkContext, params: Map[String, String]) = {
         this()
-        
+
         totalRows = sc.longAccumulator("TotalRows")
         convertedRows = sc.longAccumulator("ParsedRows")
         failedConversion = sc.longAccumulator("UnparsedRows")
-        
+
         require(params != null, "Config cannot be null")
         require(params.nonEmpty, "Config cannot be empty")
 
-        kineticaURL = params.get(KINETICA_URL_PARAM).getOrElse(null) 
-        streamURL = params.get(KINETICA_STREAMURL_PARAM).getOrElse(null) 
+        kineticaURL = params.get(KINETICA_URL_PARAM).getOrElse(null)
+        streamURL = params.get(KINETICA_STREAMURL_PARAM).getOrElse(null)
         kusername = params.get(KINETICA_USERNAME_PARAM).getOrElse("")
         kpassword = params.get(KINETICA_PASSWORD_PARAM).getOrElse("")
-        threads =   params.get(KINETICA_NUMTHREADS_PARAM).getOrElse("4").toInt      
+        threads =   params.get(KINETICA_NUMTHREADS_PARAM).getOrElse("4").toInt
 
         insertSize = params.get(KINETICA_BATCHSIZE_PARAM).getOrElse("10000").toInt
         updateOnExistingPk = params.get(KINETICA_UPDATEONEXISTINGPK_PARAM).getOrElse("false").toBoolean
         tableReplicated = params.get(KINETICA_REPLICATEDTABLE_PARAM).getOrElse("false").toBoolean
         KdbIpRegex = params.get(KINETICA_IPREGEX_PARAM).getOrElse("")
-        useSnappy = params.get(KINETICA_USESNAPPY_PARAM).getOrElse("false").toBoolean   
-        
-        retryCount = params.get(KINETICA_RETRYCOUNT_PARAM).getOrElse("5").toInt    
+        useSnappy = params.get(KINETICA_USESNAPPY_PARAM).getOrElse("false").toBoolean
+
+        retryCount = params.get(KINETICA_RETRYCOUNT_PARAM).getOrElse("5").toInt
         jdbcURL = params.get(KINETICA_JDBCURL_PARAM).getOrElse(null)
         createTable = params.get(KINETICA_CREATETABLE_PARAM).getOrElse("false").toBoolean
-        
+
         alterTable = params.get(KINETICA_ALTERTABLE_PARAM).getOrElse("false").toBoolean
         mapToSchema = params.get(KINETICA_MAPTOSCHEMA_PARAM).getOrElse("false").toBoolean
+        truncateToSize = params.get(KINETICA_TRUNCATE_TO_SIZE).getOrElse("false").toBoolean
 
         timeoutMs = params.get(KINETICA_TIMEOUT_PARAM).getOrElse("10000").toInt
         multiHead = params.get(KINETICA_MULTIHEAD_PARAM).getOrElse("false").toBoolean
-        
+
         truncateTable = params.get(KINETICA_TRUNCATETABLE_PARAM).getOrElse("false").toBoolean
-        
+
         loaderPath = params.get(LOADERCODEPATH).getOrElse("false").toBoolean
 
         tablename = params.get(KINETICA_TABLENAME_PARAM).getOrElse(null)
@@ -159,11 +163,11 @@ class LoaderParams extends Serializable with LazyLogging {
             val tableParams: Array[String] = tablename.split("\\.")
             if (tableParams.length != 2) {
                 throw new Exception( "tablename is needed in the form [schema].[table] " + tablename)
-            }                 
+            }
             tablename = tableParams(1)
             schemaname = tableParams(0)
         }
-        
+
         // SSL
         bypassCert = params.get(KINETICA_SSLBYPASSCERTCJECK_PARAM).getOrElse("false").toBoolean
         trustStorePath =  params.get(KINETICA_TRUSTSTOREJKS_PARAM).getOrElse(null)
@@ -171,7 +175,7 @@ class LoaderParams extends Serializable with LazyLogging {
         keyStorePath = params.get(KINETICA_KEYSTOREP12_PARAM).getOrElse(null)
         keyStorePassword = params.get(KINETICA_KEYSTOREPASSWORD_PARAM).getOrElse(null)
     }
-    
+
     // below are not serializable so they are created on demand
     @transient
     private var cachedGpudb: GPUdb = null

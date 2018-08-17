@@ -9,6 +9,7 @@ import java.util.List
 
 //remove if not needed
 import scala.collection.JavaConversions.mapAsScalaMap
+import scala.collection.JavaConversions.asScalaBuffer
 
 import org.apache.spark.api.java.function.ForeachPartitionFunction
 import org.apache.spark.sql.Row
@@ -24,7 +25,7 @@ import com.typesafe.scalalogging.LazyLogging
 class KineticaLoaderFunction (
     private val loaderConfig: LoaderConfiguration,
     private val columnMap: HashMap[Integer, Integer])
-    extends ForeachPartitionFunction[Row] with LazyLogging {
+        extends ForeachPartitionFunction[Row] with LazyLogging {
 
     private val tableType: Type = this.loaderConfig.getType
 
@@ -114,6 +115,20 @@ class KineticaLoaderFunction (
             throw new Exception(
                 String.format("Could not convert from type: %s", destType.getName))
         }
+
+        if(loaderConfig.truncateToSize && destType == classOf[java.lang.String]) {
+            // truncate string if length exceeds charN max
+            val outStr: String = outValue.asInstanceOf[java.lang.String]
+            val charNParam: Option[String] = colProps.filter(x => x.startsWith("char")).headOption
+
+            if(!charNParam.isEmpty) {
+                val charMax: Int = charNParam.get.stripPrefix("char").toInt
+                if(outStr.size > charMax) {
+                    outValue = outStr.substring(0, charMax)
+                }
+            }
+        }
+
         outValue
     }
 

@@ -199,13 +199,12 @@ contain the following files.
 
 | File Name                                                       | Description
 | :---                                                            | :---
-| ``scripts/loader/gpudb.properties``                             | Common parameter file
 | ``scripts/loader/run-spark-loader.sh``                          | Launcher script
+| ``scripts/loader/gpudb.properties``                             | Common parameter file
 | ``scripts/loader/csv-test.properties``                          | Top-level parameter file
 | ``scripts/loader/csv-test``                                     | CSV data file containing 50 test records
 | ``scripts/loader/avro-test.properties``                         | Top-level parameter file
 | ``scripts/loader/avro-test``                                    | *Avro* data containing 1000 test records
-| ``scripts/loader/run-spark-loader.sh``                          | Launcher script
 | ``src/test/scala/com/kinetica/spark/SparkKineticaDriver.scala`` | Loader scripting example
 
 To run an example, configure the ``gpudb.properties`` for the target
@@ -480,11 +479,23 @@ Aggregate data and output statistics:
 df.
    groupBy("DayOfWeek").
    agg(
-      functions.count("*").as("TotalFlights"),
-      functions.sum("Diverted").as("TotalDiverted"),
-      functions.sum("Cancelled").as("TotalCancelled")
+      count("*").as("TotalFlights"),
+      sum("Diverted").as("TotalDiverted"),
+      sum("Cancelled").as("TotalCancelled")
    ).
    orderBy("DayOfWeek").
+   select(
+      when(df("DayOfWeek") === 1, "Monday").
+      when(df("DayOfWeek") === 2, "Tuesday").
+      when(df("DayOfWeek") === 3, "Wednesday").
+      when(df("DayOfWeek") === 4, "Thursday").
+      when(df("DayOfWeek") === 5, "Friday").
+      when(df("DayOfWeek") === 6, "Saturday").
+      when(df("DayOfWeek") === 7, "Sunday").alias("DayOfWeek"),
+      column("TotalFlights"),
+      column("TotalDiverted"),
+      column("TotalCancelled")
+   ).
    show()
 ```
 
@@ -493,13 +504,13 @@ Verify output:
     +---------+------------+-------------+--------------+
     |DayOfWeek|TotalFlights|TotalDiverted|TotalCancelled|
     +---------+------------+-------------+--------------+
-    |        1|       84095|          120|          1289|
-    |        2|      103429|          417|          1234|
-    |        3|      103315|          367|          2313|
-    |        4|      105035|          298|          1936|
-    |        5|       79349|          120|           903|
-    |        6|       72219|          174|           570|
-    |        7|       80489|          414|          2353|
+    |   Monday|       84095|          120|          1289|
+    |  Tuesday|      103429|          417|          1234|
+    |Wednesday|      103315|          367|          2313|
+    | Thursday|      105035|          298|          1936|
+    |   Friday|       79349|          120|           903|
+    | Saturday|       72219|          174|           570|
+    |   Sunday|       80489|          414|          2353|
     +---------+------------+-------------+--------------+
 
 
@@ -1139,6 +1150,7 @@ the access mechanism.
 | ``table.is_replicated``         | ``false`` | Whether the target table is replicated or not  **Ingest Processor Only**
 | ``table.update_on_existing_pk`` | ``false`` | If the target table, ``table.name``, has a primary key, update records in it with matching primary key values from records being ingested
 | ``table.use_templates``         | ``false`` | Enable *template tables*; see [Template Tables](#template-tables) section for details  **Data Loader Only**
+| ``table.truncate_to_size``      | ``false`` | Truncate charN strings to size.
 
 For the *Data Loader*, the following properties specify the data source &
 format.

@@ -36,15 +36,15 @@ class KineticaRelation(
     with LazyLogging {
 
     logger.debug("*********************** KR:Constructor1")
-    
+
     override val sqlContext: SQLContext = sparkSession.sqlContext
 
     def this(parameters: Map[String, String], sparkSession: SparkSession) {
         this(parameters, None, sparkSession)
         logger.debug("*********************** KR:Constructor2")
     }
-    
-    val properties = new Properties() 
+
+    val properties = new Properties()
     parameters.foreach { case (k, v) => properties.setProperty(k, v) }
     val conf: LoaderParams = new LoaderParams(sparkSession.sparkContext, parameters)
 
@@ -60,14 +60,14 @@ class KineticaRelation(
     override def buildScan(): RDD[Row] = buildScan(Array.empty, Array.empty)
 
     override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
-        
+
         logger.debug("*********************** KR:BS ")
 
         val conf: LoaderParams = new LoaderParams(sparkSession.sparkContext, parameters)
         val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'database.jdbc_url' not specified"))
         val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'table.name' not specified"))
         val numPartitions = parameters.getOrElse(CONNECTOR_NUMPARTITIONS_PARAM, "4").toInt
-        
+
         if (requiredColumns.isEmpty) {
             emptyRowRDD(filters, url, table, numPartitions)
         } else {
@@ -89,45 +89,22 @@ class KineticaRelation(
         logger.debug("*********************** KR:insert")
         val loaderPath: Boolean = parameters.get(ConfigurationConstants.LOADERCODEPATH).getOrElse("false").toBoolean
         if (loaderPath) {
-            insertLoaderWay(df, dummy) 
+            insertLoaderWay(df, dummy)
         } else {
             insertConnectorWay(df, dummy)
         }
     }
-    
+
     private def insertLoaderWay(df: DataFrame, dummy: Boolean): Unit = {
         val loaderConfig = new LoaderConfiguration(sparkSession.sparkContext, parameters)
-        val columnMap = setupSchema(loaderConfig, df.schema)
+        val mapper: SchemaManager = new SchemaManager(loaderConfig)
+        val columnMap: java.util.HashMap[Integer, Integer] = mapper.setupSchema(loaderConfig, df.schema)
         val kineticaFunction = new KineticaLoaderFunction(loaderConfig, columnMap)
         df.foreachPartition(kineticaFunction)
     }
-    
-    private def setupSchema(loaderConfig: LoaderConfiguration, sparkSchema: StructType): java.util.HashMap[Integer, Integer] = {
-        
-        val mapper: SchemaManager = new SchemaManager(loaderConfig)
-        if (loaderConfig.hasTable()) {
-            if (loaderConfig.truncateTable) {
-                mapper.mapSchema(sparkSchema)
-                mapper.truncateTable()
-            } else {
-                mapper.setTypeFromTable()
-            }
-        } else if (loaderConfig.createTable) {
-            mapper.mapSchema(sparkSchema)
-            mapper.createTable()
-        } else {
-            throw new Exception(
-                String.format(
-                    "Table <%s> does not exist and <table.create = false>.",
-                    loaderConfig.tablename)) 
-        }
-        loaderConfig.setType(mapper.getDestType)
-        mapper.getColumnMap(sparkSchema)
-    }
 
-    
     private def insertConnectorWay(df: DataFrame, dummy: Boolean): Unit = {
-              
+
         /* FOR DEBUGGING - KEEP COMMENTED OUT
         val kineticaUrl = conf.getKineticaURL();
         val dfSchema = df.schema
@@ -145,7 +122,7 @@ class KineticaRelation(
         if (conf.isCreateTable && conf.isAlterTable) {
             throw new KineticaException("Create table and alter table option set to true. Only one must be set to true ");
         }
-        
+
         if( SparkKineticaTableUtil.tableExists(conf) ) {
           if( conf.truncateTable ) {
               logger.info("Truncating/Creating table " + conf.getTablename);
@@ -198,8 +175,8 @@ class KineticaRelation(
 
         logger.info("Map and Write to Kinetica");
         KineticaSparkDFManager.KineticaMapWriter(sparkSession.sparkContext, conf);
-        
-        
+
+
         // Lets try and print the accumulators
         println(" Total rows = " + conf.totalRows.value)
         println(" Converted rows = " + conf.convertedRows.value)

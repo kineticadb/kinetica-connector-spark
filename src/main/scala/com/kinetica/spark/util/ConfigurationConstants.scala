@@ -28,6 +28,7 @@ object ConfigurationConstants {
     val KINETICA_UPDATEONEXISTINGPK_PARAM: String = "table.update_on_existing_pk"
     val KINETICA_REPLICATEDTABLE_PARAM: String = "table.is_replicated"
     val KINETICA_PARTROWS_PARAM: String = "kinetica.partitionrows"
+    val KINETICA_TRUNCATE_TO_SIZE: String = "table.truncate_to_size"
 
     val KINETICA_TABLENAME_PARAM: String = "table.name"
     val KINETICA_CREATETABLE_PARAM: String = "table.create"

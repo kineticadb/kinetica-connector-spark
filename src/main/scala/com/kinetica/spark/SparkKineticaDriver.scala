@@ -115,6 +115,8 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
             if(dataFormat.equalsIgnoreCase("csv") && loaderConfig.csvHeader == true) {
                 dfReader.option("header", "true")
                 dfReader.option("inferSchema", "true")
+            } else if(dataFormat.equalsIgnoreCase("csv")) {
+                dfReader.option("inferSchema", "true")
             }
 
             inputDs = dfReader.load(dataPath)

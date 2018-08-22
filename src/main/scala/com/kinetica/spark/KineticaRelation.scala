@@ -88,9 +88,15 @@ class KineticaRelation(
     override def insert(df: DataFrame, dummy: Boolean): Unit = {
         logger.debug("*********************** KR:insert")
         val loaderPath: Boolean = parameters.get(ConfigurationConstants.LOADERCODEPATH).getOrElse("false").toBoolean
-        if (loaderPath) {
+        logger.debug("*********************** loaderPath var is " + loaderPath)
+        val jdbcurl: Option[String] = parameters.get(ConfigurationConstants.KINETICA_JDBCURL_PARAM)
+        logger.debug("*********************** jdbcurlPresent var is " + jdbcurl)
+        
+        if (loaderPath && jdbcurl.isEmpty) {
+            logger.debug("*********************** loading loader way with config file....")
             insertLoaderWay(df, dummy)
         } else {
+            logger.debug("*********************** loading connector way....")
             insertConnectorWay(df, dummy)
         }
     }
@@ -98,6 +104,8 @@ class KineticaRelation(
     private def insertLoaderWay(df: DataFrame, dummy: Boolean): Unit = {
         val loaderConfig = new LoaderConfiguration(sparkSession.sparkContext, parameters)
         val mapper: SchemaManager = new SchemaManager(loaderConfig)
+        //val dfRenamed = mapper.adjustSourceSchema(df)
+        //val columnMap: java.util.HashMap[Integer, Integer] = mapper.setupSchema(loaderConfig, dfRenamed.schema)
         val columnMap: java.util.HashMap[Integer, Integer] = mapper.setupSchema(loaderConfig, df.schema)
         val kineticaFunction = new KineticaLoaderFunction(loaderConfig, columnMap)
         df.foreachPartition(kineticaFunction)
@@ -113,7 +121,7 @@ class KineticaRelation(
             println("Schema field is " + f.name)
             println("Schema field dataType is " + f.dataType.typeName)
         })
-				*/
+		*/
 
         if (df.rdd.isEmpty()) {
             throw new KineticaException("Dataframe/Dataset is empty, try again");

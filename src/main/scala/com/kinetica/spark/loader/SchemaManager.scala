@@ -132,6 +132,18 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
         setTypeFromResponse(response, tableIndex)
         logger.info("Found template table: {} (ID={}) ", templateName, this.destTypeId)
     }
+    
+    def adjustSourceSchema(df: org.apache.spark.sql.DataFrame): org.apache.spark.sql.DataFrame = {
+        if( conf.csvHeader == false && conf.hasTable) {
+            val response: ShowTableResponse = this.gpudb.showTable(this.tableName, null)
+            setTypeFromResponse(response, 0)
+            val destCols = this.destType.getColumns
+            val colNames = destCols.map(t => (t.getName.toUpperCase)).toArray
+            val dfRenamed = df.toDF(colNames: _*)
+            return dfRenamed
+        } 
+        return df
+    }
 
     private def getColumnMap(sparkSchema: StructType): HashMap[Integer, Integer] = {
         val sourceType: Type = convertType(sparkSchema)

@@ -3,12 +3,12 @@ package com.kinetica.spark.util.table
 import java.util.{ArrayList, List}
 
 import com.kinetica.spark.LoaderParams
-import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.Logging
 
 
 //remove if not needed
 
-object KineticaDDLBuilder extends LazyLogging {
+object KineticaDDLBuilder extends Logging {
 
   private var createTableDDL: StringBuffer = null
 
@@ -57,7 +57,7 @@ object KineticaDDLBuilder extends LazyLogging {
   def closeDDL(): Unit = {
     createTableDDL.append(SubTypeDDL.getPrimaryKeyDDL)
     createTableDDL.append(" )")
-    logger.debug(createTableDDL.toString)
+    logDebug(createTableDDL.toString)
     firstColumn = true
   }
 

@@ -15,12 +15,12 @@ import org.apache.spark.util.CompletionIterator
 
 import scala.util.control.NonFatal
 
-import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.Logging
 
 /**
  * Data corresponding to one partition of a Kinetica RDD.
  */
-private[kinetica] case class KineticaPartition(startRow: Int, numRows: Int, idx: Int) extends Partition with LazyLogging {
+private[kinetica] case class KineticaPartition(startRow: Int, numRows: Int, idx: Int) extends Partition with Logging {
     override def index: Int = idx
 }
 
@@ -38,7 +38,7 @@ private[kinetica] class KineticaRDD(
     filters: Array[Filter],
     partitions: Array[Partition],
     properties: Properties)
-    extends RDD[Row](sc, Nil) with LazyLogging {
+    extends RDD[Row](sc, Nil) with Logging {
 
     /**
      * Retrieve the list of partitions corresponding to this RDD.
@@ -46,6 +46,9 @@ private[kinetica] class KineticaRDD(
     override def getPartitions: Array[Partition] = partitions
 
     override def compute(thePart: Partition, context: TaskContext): Iterator[Row] = {
+        
+        
+        /*
         var closed = false
         var rs: ResultSet = null
         var conn: Connection = null
@@ -54,7 +57,7 @@ private[kinetica] class KineticaRDD(
 
         val part = thePart.asInstanceOf[KineticaPartition]
         val query = buildTableQuery(conn, table, columns, filters, part, schema)
-        logger.debug("Query is {}", query)
+        logDebug("Query is " + query)
         val stmt = conn.prepareStatement(query)
         rs = stmt.executeQuery
 
@@ -114,8 +117,11 @@ private[kinetica] class KineticaRDD(
             context.addTaskCompletionListener { context => close() }
             closed = true
         }
-
+		
         myrows
+        * 
+        */
+        throw new RuntimeException("Not implemented.....")     
     }
 
     def buildTableQuery(

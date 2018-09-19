@@ -10,7 +10,7 @@ import java.util.Iterator
 import java.util.List
 
 import scala.beans.{BeanProperty, BooleanBeanProperty}
-import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.Logging
 
 import com.kinetica.spark.LoaderParams
 import com.kinetica.spark.util.JDBCConnectionUtils
@@ -18,7 +18,7 @@ import com.kinetica.spark.util.KineticaSparkDFManager
 
 import scala.collection.JavaConversions._
 
-object SparkKineticaTableUtil extends LazyLogging {
+object SparkKineticaTableUtil extends Logging {
 
   var shardkeys: List[String] = new ArrayList[String]()
 
@@ -77,7 +77,7 @@ object SparkKineticaTableUtil extends LazyLogging {
         throw new RuntimeException("Missing JDBC URL or invalid")
       catch {
         case e: Exception => {
-          logger.error("JDBC url missing")
+          logError("JDBC url missing")
           throw new RuntimeException("Missing JDBC URL or invalid")
         }
     }
@@ -90,12 +90,12 @@ object SparkKineticaTableUtil extends LazyLogging {
     * @throws KineticaException
     */
   def createTable(ds: DataFrame, lp: LoaderParams): Unit = {
-    logger.info("Creating table from DataFrame")
+    logInfo("Creating table from DataFrame")
     verifyJdbcUrl(lp)
     SparkKineticaTableUtil.buildCreateTableDDL(ds, lp)
     JDBCConnectionUtils.Init(lp)
     //execute create table
-    logger.debug("Create table DDL:  {}", KineticaDDLBuilder.getCreateTableDDL)
+    logDebug("Create table DDL: " + KineticaDDLBuilder.getCreateTableDDL)
     JDBCConnectionUtils.executeSQL(KineticaDDLBuilder.getCreateTableDDL)
 
     
@@ -108,7 +108,7 @@ object SparkKineticaTableUtil extends LazyLogging {
   }
   
   def truncateTable(ds: DataFrame, lp: LoaderParams): Unit = {
-    logger.debug("truncateTable")
+    logDebug("truncateTable")
     verifyJdbcUrl(lp)
     JDBCConnectionUtils.Init(lp)
     //execute truncate table
@@ -117,7 +117,7 @@ object SparkKineticaTableUtil extends LazyLogging {
   }
   
   def tableExists(lp: LoaderParams): Boolean = {
-    logger.debug("tableExists")
+    logDebug("tableExists")
     verifyJdbcUrl(lp)
     JDBCConnectionUtils.Init(lp)
     val te = JDBCConnectionUtils.tableExists(lp.tablename)
@@ -138,13 +138,13 @@ object SparkKineticaTableUtil extends LazyLogging {
     * @throws KineticaException
     */
   def AlterTable(ds: DataFrame, lp: LoaderParams): Unit = {
-    logger.info("KineticaMapWriter")
-    logger.debug("Mapping DataFrame columns to Kinetica")
+    logInfo("KineticaMapWriter")
+    logDebug("Mapping DataFrame columns to Kinetica")
     try if (lp.getJdbcURL.trim().isEmpty)
       throw new RuntimeException("Missing JDBC URL or invalid")
     catch {
       case e: Exception => {
-        logger.error("JDBC url missing")
+        logError("JDBC url missing")
         throw new RuntimeException("Missing JDBC URL or invalid")
       }
 
@@ -156,7 +156,7 @@ object SparkKineticaTableUtil extends LazyLogging {
     iterator = SparkKineticaTableUtil.getAlterStatements.iterator()
     while (iterator.hasNext) {
       val alterStatement: String = iterator.next()
-      logger.info("Executing alter Statement: " + alterStatement)
+      logInfo("Executing alter Statement: " + alterStatement)
       JDBCConnectionUtils.executeSQL(alterStatement)
     }
     /*Execute alter compress statements JAZZ 
@@ -181,26 +181,28 @@ object SparkKineticaTableUtil extends LazyLogging {
       val sf2: StructField = sField.next()
       val dt: DataType = sf2.dataType
       if (dt.isInstanceOf[NumericType]) {
-        logger.debug("Found NumericType")
+        logDebug("Found NumericType")
         ColumnProcessor.processNumeric(dt,
                                        sf2.name,
                                        sf2.nullable,
                                        alterDDL)
       } else if (dt.isInstanceOf[StringType]) {
-        logger.debug("Found StringType")
+        logDebug("Found StringType")
+        val dryRun = lp.dryRun
         ColumnProcessor.processString(ds,
                                       sf2.name,
                                       sf2.nullable,
                                       alterDDL,
-                                      false)
+                                      false,
+                                      dryRun)
       } else if (dt.isInstanceOf[TimestampType]) {
-        logger.debug("Found TimestampType")
+        logDebug("Found TimestampType")
         ColumnProcessor.processTS(ds, sf2.name, sf2.nullable, alterDDL)
       } else if (dt.isInstanceOf[DateType]) {
-        logger.debug("Found DateType")
+        logDebug("Found DateType")
         ColumnProcessor.processDate(ds, sf2.name, sf2.nullable, alterDDL)
       } else if (dt.isInstanceOf[BooleanType]) {
-        logger.debug("Found BooleanType")
+        logDebug("Found BooleanType")
         ColumnProcessor.processBoolean(ds,
                                        sf2.name,
                                        sf2.nullable,
@@ -226,44 +228,45 @@ object SparkKineticaTableUtil extends LazyLogging {
       
       var myColumns = mytype.getColumns
       for ( column <- myColumns) {
-        logger.debug(
+        logDebug(
           "Eval if " + sf2.name + "equals Kinetica column: " +
             column.getName)
         if (sf2.name.compareToIgnoreCase(column.getName) == 0) {
           columnFound = true
-          logger.debug(column.getName + " column found")
+          logDebug(column.getName + " column found")
         }
       }
       
       //column not found, add column to table
       if (!columnFound) {
-        logger.debug(sf2.name + " column not found, processing")
+        logDebug(sf2.name + " column not found, processing")
         AlterTableAddColumnDDL.init(lp)
         if (dt.isInstanceOf[NumericType]) {
-          logger.debug("Found NumericType")
+          logDebug("Found NumericType")
           ColumnProcessor.processNumeric(dt,
                                          sf2.name,
                                          sf2.nullable,
                                          alterDDL)
           closeAddAlter(sf2.name, lp.getTablename)
         } else if (dt.isInstanceOf[StringType]) {
-          logger.debug("Found StringType")
+          logDebug("Found StringType")
           ColumnProcessor.processString(ds,
                                         sf2.name,
                                         sf2.nullable,
                                         alterDDL,
-                                        columnFound)
+                                        columnFound,
+                                        false)
           closeAddAlter(sf2.name, lp.getTablename)
         } else if (dt.isInstanceOf[TimestampType]) {
-          logger.debug("Found TimestampType")
+          logDebug("Found TimestampType")
           ColumnProcessor.processTS(ds, sf2.name, sf2.nullable, alterDDL)
           closeAddAlter(sf2.name, lp.getTablename)
         } else if (dt.isInstanceOf[DateType]) {
-          logger.debug("Found DateType")
+          logDebug("Found DateType")
           ColumnProcessor.processDate(ds, sf2.name, sf2.nullable, alterDDL)
           closeAddAlter(sf2.name, lp.getTablename)
         } else if (dt.isInstanceOf[BooleanType]) {
-          logger.debug("Found BooleanType")
+          logDebug("Found BooleanType")
           ColumnProcessor.processBoolean(ds,
                                          sf2.name,
                                          sf2.nullable,
@@ -273,12 +276,13 @@ object SparkKineticaTableUtil extends LazyLogging {
       } else {
         AlterTableModifyColumnDDL.init(lp)
         if (dt.isInstanceOf[StringType]) {
-          logger.debug("Found StringType")
+          logDebug("Found StringType")
           ColumnProcessor.processString(ds,
                                         sf2.name,
                                         sf2.nullable,
                                         alterDDL,
-                                        columnFound)
+                                        columnFound,
+                                        false)
           closeModAlter(sf2.name, lp.getTablename)
         }
       }
@@ -291,7 +295,7 @@ object SparkKineticaTableUtil extends LazyLogging {
     * @param tableName table to be altered
     */
   private def closeAddAlter(columnName: String, tableName: String): Unit = {
-    logger.debug("closing")
+    logDebug("closing")
     // JAZZ BuildCompressDDL.buildDDL(columnName, tableName)
     setAlterStatements(AlterTableAddColumnDDL.getAlterTableDDL)
   }
@@ -302,7 +306,7 @@ object SparkKineticaTableUtil extends LazyLogging {
     * @param tableName table to be altered
     */
   private def closeModAlter(columnName: String, tableName: String): Unit = {
-    logger.debug("closing")
+    logDebug("closing")
     if (AlterTableModifyColumnDDL.columnAlterDetected()) {
       SparkKineticaTableUtil.setAlterStatements(
         AlterTableModifyColumnDDL.getAlterTableDDL)
@@ -336,8 +340,8 @@ object SparkKineticaTableUtil extends LazyLogging {
             .retainFrom(metaValue)
             .toLowerCase()
             .matches(".*char.*")) {
-        logger.debug("Field is char")
-        logger.debug(
+        logDebug("Field is char")
+        logDebug(
           "Char Length: " + CharMatcher.JAVA_DIGIT.retainFrom(metaValue))
         charValue = java.lang.Integer
           .parseInt(CharMatcher.JAVA_DIGIT.retainFrom(metaValue))

@@ -9,11 +9,10 @@ import java.util.regex.Pattern
 //import KineticaBulkLoader._
 import scala.beans.{ BeanProperty, BooleanBeanProperty }
 import scala.collection.JavaConversions._
-import com.typesafe.scalalogging.LazyLogging
 import com.kinetica.spark.LoaderParams
+import org.apache.spark.Logging
 
-
-class KineticaBulkLoader(lp: LoaderParams) extends LazyLogging {
+class KineticaBulkLoader(lp: LoaderParams) extends Logging {
 
     def GetBulkInserter(): BulkInserter[GenericRecord] = {
         var bulkInserter: BulkInserter[GenericRecord] = null
@@ -47,20 +46,20 @@ class KineticaBulkLoader(lp: LoaderParams) extends LazyLogging {
         // Scala purists can sue me :-)
 
         if(lp.isTableReplicated) {
-            logger.info("Table is set to Is Replication: True")
+            logInfo("Table is set to Is Replication: True")
             return null
         }
 
         if (!lp.multiHead) {
-            logger.info("Multi-head ingest is turned off")
+            logInfo("Multi-head ingest is turned off")
             return null
         }
 
-        logger.info("multi-head ingest turned on")
+        logInfo("multi-head ingest turned on")
 
         val pattern: Pattern = null
         if ((lp.KdbIpRegex != null) && !(lp.KdbIpRegex.trim().equalsIgnoreCase(""))) {
-            logger.info("gpudbIpRegex not null: " + lp.KdbIpRegex)
+            logInfo("gpudbIpRegex not null: " + lp.KdbIpRegex)
             val pattern: Pattern = Pattern.compile(lp.KdbIpRegex)
         }
 
@@ -71,7 +70,7 @@ class KineticaBulkLoader(lp: LoaderParams) extends LazyLogging {
 
         var iter: Iterator[URL] = workers.iterator()
         for (url: URL <- workers) {
-            logger.info("Worker: {}", url)
+            logInfo("Worker:" + url)
         }
 
         workers

@@ -7,9 +7,9 @@ import org.apache.spark.sql.types._
 //remove if not needed
 import scala.collection.JavaConversions._
 
-import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.Logging
 
-object ColumnProcessor extends LazyLogging {
+object ColumnProcessor extends Logging {
 
     def processNumeric(
         dt: DataType,
@@ -52,7 +52,8 @@ object ColumnProcessor extends LazyLogging {
         columnName: String,
         nullable: Boolean,
         alterDDL: Boolean,
-        existingColumn: Boolean): Unit = {
+        existingColumn: Boolean,
+        dryRun : Boolean): Unit = {
         var maxIntDs: DataFrame = null
         maxIntDs = TypeStringProcessor.getMaxStringLen(ds, columnName)
         //set to 0 for new columns
@@ -63,11 +64,11 @@ object ColumnProcessor extends LazyLogging {
             maxInt = maxIntDs.first.getInt(0)
         } catch {
             case e: Exception => {
-                logger.info("Could not determine max length for column, setting to 1 " + columnName)
+                logInfo("Could not determine max length for column, setting to 1 " + columnName)
             }
         }
         
-        logger.debug(" @@@@@@@@@@@@ column name and max length is " + columnName + "/" + maxInt)
+        logInfo(" @@@@@@@@@@@@ column name and max length is " + columnName + "/" + maxInt)
 
         try if (alterDDL && existingColumn) {
             existingColumnMaxLength =
@@ -76,7 +77,7 @@ object ColumnProcessor extends LazyLogging {
             case e: KineticaException => existingColumnMaxLength = -1
 
             case e: Exception => {
-                logger.debug("Parse error, skipping column")
+                logDebug("Parse error, skipping column")
                 existingColumnMaxLength = -1
             }
 

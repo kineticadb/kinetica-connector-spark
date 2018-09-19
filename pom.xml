@@ -4,12 +4,12 @@
 
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.kinetica</groupId>
-    <artifactId>kinetica-spark</artifactId>
+    <artifactId>kinetica-spark163</artifactId>
     <version>6.2.1</version>
     <packaging>jar</packaging>
     <name>spark-kinetica</name>
     <description>Tools for reading/writing data from/to Spark into Kinetica</description>
-    <url>https://github.com/kineticadb/kinetica-connector-spark</url>
+    <url>https://github.com/kineticadb/kinetica-connector-spark1.6</url>
     <organization>
         <name>Kinetica</name>
         <url>http://www.kinetica.com</url>
@@ -20,16 +20,16 @@
         <gpudb-api.version>${project.version}</gpudb-api.version>
         <simba.version>10.1.4</simba.version>
         <java.version>1.8</java.version>
-        <spark.version>2.2.1</spark.version>
+        <spark.version>1.6.3</spark.version>
         <spark-avro.version>4.0.0</spark-avro.version>
-        <scala.version>2.11.11</scala.version>
-        <scala.binary.version>2.11</scala.binary.version>
+        <scala.version>2.10.3</scala.version>
+        <scala.binary.version>2.10</scala.binary.version>
         <zeromq.version>0.3.5</zeromq.version>
         <joda-convert.version>1.2</joda-convert.version>
         <MaxPermSize>128m</MaxPermSize>
         <slf4j.version>1.7.12</slf4j.version>
         <scala-logging.version>3.8.0</scala-logging.version>
-        <scalatest.version>3.0.3</scalatest.version>
+        <scalatest.version>2.2.6</scalatest.version>
         <maven-javadoc-plugin.version>2.10.3</maven-javadoc-plugin.version>
         <maven-compiler-plugin.version>3.0</maven-compiler-plugin.version>
         <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
@@ -92,16 +92,16 @@
         </resources>
 
         <pluginManagement>
-            <plugins>
-                <plugin>
+        <plugins>
+            <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-compiler-plugin</artifactId>
+                <artifactId>maven-compiler-plugin</artifactId>
                     <version>${maven-compiler-plugin.version}</version>
-                    <configuration>
-                        <source>${java.version}</source>
-                        <target>${java.version}</target>
-                    </configuration>
-                </plugin>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                </configuration>
+            </plugin>
             </plugins>
         </pluginManagement>
 
@@ -150,25 +150,6 @@
                         <javacArg>-target</javacArg>
                         <javacArg>${java.version}</javacArg>
                     </javacArgs>
-                </configuration>
-            </plugin>
-
-            <plugin>
-                <groupId>pl.project13.maven</groupId>
-                <artifactId>git-commit-id-plugin</artifactId>
-                <version>${git-commit-id-plugin.version}</version>
-                <executions>
-                    <execution>
-                        <phase>validate</phase>
-                        <goals>
-                            <goal>revision</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <dateFormat>YYYYMMDDHHmmSS</dateFormat>
-                    <dotGitDirectory>${project.basedir}/.git</dotGitDirectory>
-                    <generateGitPropertiesFile>false</generateGitPropertiesFile>
                 </configuration>
             </plugin>
 
@@ -282,11 +263,13 @@
             <artifactId>joda-convert</artifactId>
             <version>${joda-convert.version}</version>
         </dependency>
+        <!--
         <dependency>
             <groupId>com.typesafe.scala-logging</groupId>
             <artifactId>scala-logging_${scala.binary.version}</artifactId>
             <version>${scala-logging.version}</version>
         </dependency>
+        -->
         <dependency>
             <groupId>org.zeromq</groupId>
             <artifactId>jeromq</artifactId>

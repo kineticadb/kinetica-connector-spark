@@ -17,7 +17,7 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider with
 
     override def createRelation(sqlContext: SQLContext, parameters: Map[String, String]): BaseRelation = {
         try {
-            new KineticaRelation(parameters, sqlContext.sparkSession)
+            new KineticaRelation(parameters, sqlContext)
         } catch {
             case re: RuntimeException => throw re
             case e: Exception => throw new RuntimeException(e)
@@ -27,7 +27,7 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider with
     override def createRelation(sqlContext: SQLContext, mode: SaveMode, parameters: Map[String, String], df: DataFrame): BaseRelation = {
         try {
             // TODO: What to do with the saveMode?
-            val kineticaRelation: KineticaRelation = new KineticaRelation(parameters, Some(df), sqlContext.sparkSession)
+            val kineticaRelation: KineticaRelation = new KineticaRelation(parameters, Some(df), sqlContext)
             kineticaRelation.insert(df, true)
             kineticaRelation
         } catch {

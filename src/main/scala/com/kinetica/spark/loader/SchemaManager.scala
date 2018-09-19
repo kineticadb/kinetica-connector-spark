@@ -24,9 +24,9 @@ import com.gpudb.Type.Column
 import com.gpudb.protocol.CreateTableRequest
 import com.gpudb.protocol.ShowTableRequest
 import com.gpudb.protocol.ShowTableResponse
-import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.Logging
 
-class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
+class SchemaManager (conf: LoaderConfiguration) extends Logging {
 
     private val gpudb: GPUdb = conf.getGpudb
     private val tableName: String = conf.tablename
@@ -77,7 +77,7 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
     }
 
     private def createTable(): Unit = {
-        logger.info( "Creating table <{}.{}> (type={})", this.schemaName, this.tableName, this.destTypeId)
+        logInfo( "Creating table schema/tablename/type=" + this.schemaName + "/" + this.tableName + "/" + this.destTypeId)
 
         var options : java.util.Map[String, String] = null
         if( conf.tableReplicated ) {
@@ -130,7 +130,7 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
 
         val tableIndex: Int = tableNames.indexOf(templateName)
         setTypeFromResponse(response, tableIndex)
-        logger.info("Found template table: {} (ID={}) ", templateName, this.destTypeId)
+        logInfo("Found template table/ID " + templateName + "/" + this.destTypeId)
     }
     
     def adjustSourceSchema(df: org.apache.spark.sql.DataFrame): org.apache.spark.sql.DataFrame = {
@@ -185,7 +185,7 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
                 }
 
                 // add the mapping
-                logger.info("Mapping column <{}>: {} => {}", sourceCol.getName, sourceIdx, destIdx)
+                logInfo("Mapping column colName/srcIdx/destIdx" + sourceCol.getName + "/" + sourceIdx + "/" + destIdx)
                 columnMap.put(sourceIdx, destIdx)
 
                 // keep track of columns not mapped
@@ -196,8 +196,8 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
 
         if (unMappedSource.size > 0) {
             val unMappedCols: String = unMappedSource.keySet.mkString(",")
-            logger.info("The following columns in the dataframe were not mapped to table <{}.{}>: [{}]",
-                this.schemaName, this.tableName, unMappedCols)
+            logInfo("The following columns in the dataframe were not mapped to table schemaName/tableName/unmappedCols" +
+                this.schemaName + "/" + this.tableName + "/" + unMappedCols)
         }
         if (unMappedDest.size > 0) {
             val nullColumnList = unMappedDest.values.filter(x => !x.isNullable()).map(_.getName)
@@ -210,8 +210,8 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
             }
 
             val unMappedCols: String = String.join(", ", unMappedDest.keySet)
-            logger.info("The following columns in table <{}.{}> were not mapped from the dataframe: [{}]",
-                this.schemaName, this.tableName, unMappedCols)
+            logInfo("The following columns in table schemaName/tableName/unmappedCols" +
+                this.schemaName + "/" + this.tableName + "/" + unMappedCols)
         }
         columnMap
     }

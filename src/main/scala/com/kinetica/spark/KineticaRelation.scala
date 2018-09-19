@@ -6,14 +6,14 @@ import java.util.regex.Pattern
 import com.kinetica.spark.util.ConfigurationConstants._
 import com.kinetica.spark.util._
 import com.kinetica.spark.util.table._
-import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.Logging
 import org.apache.spark.SparkFirehoseListener
 import org.apache.spark.rdd.RDD
 import org.apache.spark.scheduler.{ SparkListenerApplicationEnd, SparkListenerEvent }
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{ DataFrame, Row, SQLContext, SparkSession }
+import org.apache.spark.sql.{ DataFrame, Row, SQLContext }
 import scala.collection.JavaConverters._
 import scala.collection.breakOut
 import scala.collection.mutable.ListBuffer
@@ -27,29 +27,29 @@ import com.kinetica.spark.loader._
 class KineticaRelation(
     val parameters: Map[String, String],
     val dataFrame: Option[DataFrame],
-    @transient val sparkSession: SparkSession)
+    @transient val sqlContext: SQLContext)
     extends BaseRelation
     with Serializable
     with TableScan
     with PrunedFilteredScan
     with InsertableRelation
-    with LazyLogging {
+    with Logging {
 
-    logger.debug("*********************** KR:Constructor1")
+    logDebug("*********************** KR:Constructor1")
 
-    override val sqlContext: SQLContext = sparkSession.sqlContext
+    //override val sqlContext: SQLContext = sparkSession.sqlContext
 
-    def this(parameters: Map[String, String], sparkSession: SparkSession) {
-        this(parameters, None, sparkSession)
-        logger.debug("*********************** KR:Constructor2")
+    def this(parameters: Map[String, String], sqlContext: SQLContext) {
+        this(parameters, None, sqlContext)
+        logDebug("*********************** KR:Constructor2")
     }
 
     val properties = new Properties()
     parameters.foreach { case (k, v) => properties.setProperty(k, v) }
-    val conf: LoaderParams = new LoaderParams(sparkSession.sparkContext, parameters)
+    val conf: LoaderParams = new LoaderParams(sqlContext.sparkContext, parameters)
 
     lazy val querySchema: StructType = {
-        logger.debug("*********************** KR:querySchema")
+        logDebug("*********************** KR:querySchema")
         val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'database.jdbc_url' not specified"))
         val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'table.name' not specified"))
         KineticaSchema.getSparkSqlSchema(url, conf, table)
@@ -61,9 +61,9 @@ class KineticaRelation(
 
     override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
 
-        logger.debug("*********************** KR:BS ")
+        logDebug("*********************** KR:BS ")
 
-        val conf: LoaderParams = new LoaderParams(sparkSession.sparkContext, parameters)
+        val conf: LoaderParams = new LoaderParams(sqlContext.sparkContext, parameters)
         val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'database.jdbc_url' not specified"))
         val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'table.name' not specified"))
         val numPartitions = parameters.getOrElse(CONNECTOR_NUMPARTITIONS_PARAM, "4").toInt
@@ -86,29 +86,36 @@ class KineticaRelation(
     }
 
     override def insert(df: DataFrame, dummy: Boolean): Unit = {
-        logger.debug("*********************** KR:insert")
+        logDebug("*********************** KR:insert")
+        logInfo(" DF schema is -> " + df.printSchema());
         val loaderPath: Boolean = parameters.get(ConfigurationConstants.LOADERCODEPATH).getOrElse("false").toBoolean
-        logger.debug("*********************** loaderPath var is " + loaderPath)
+        logDebug("*********************** loaderPath var is " + loaderPath)
         val jdbcurl: Option[String] = parameters.get(ConfigurationConstants.KINETICA_JDBCURL_PARAM)
-        logger.debug("*********************** jdbcurlPresent var is " + jdbcurl)
+        logDebug("*********************** jdbcurlPresent var is " + jdbcurl)
         
         if (loaderPath && jdbcurl.isEmpty) {
-            logger.debug("*********************** loading loader way with config file....")
+            logDebug("*********************** loading loader way with config file....")
             insertLoaderWay(df, dummy)
         } else {
-            logger.debug("*********************** loading connector way....")
+            logDebug("*********************** loading connector way....")
             insertConnectorWay(df, dummy)
         }
     }
 
     private def insertLoaderWay(df: DataFrame, dummy: Boolean): Unit = {
-        val loaderConfig = new LoaderConfiguration(sparkSession.sparkContext, parameters)
+        val loaderConfig = new LoaderConfiguration(sqlContext.sparkContext, parameters)
         val mapper: SchemaManager = new SchemaManager(loaderConfig)
         //val dfRenamed = mapper.adjustSourceSchema(df)
         //val columnMap: java.util.HashMap[Integer, Integer] = mapper.setupSchema(loaderConfig, dfRenamed.schema)
         val columnMap: java.util.HashMap[Integer, Integer] = mapper.setupSchema(loaderConfig, df.schema)
         val kineticaFunction = new KineticaLoaderFunction(loaderConfig, columnMap)
-        df.foreachPartition(kineticaFunction)
+        //df.foreachPartition(kineticaFunction)
+        df.foreachPartition ( record =>
+            record.foreach{record => 
+                kineticaFunction.insertRow(record)
+            }
+        )
+        kineticaFunction.flush();
     }
 
     private def insertConnectorWay(df: DataFrame, dummy: Boolean): Unit = {
@@ -133,7 +140,7 @@ class KineticaRelation(
 
         if( SparkKineticaTableUtil.tableExists(conf) ) {
           if( conf.truncateTable ) {
-              logger.info("Truncating/Creating table " + conf.getTablename);
+              logInfo("Truncating/Creating table " + conf.getTablename);
               try {
                   SparkKineticaTableUtil.truncateTable(df, conf);
               } catch {
@@ -141,7 +148,7 @@ class KineticaRelation(
               }
           }
         } else if (conf.isCreateTable) {
-            logger.info("Creating table " + conf.getTablename);
+            logInfo("Creating table " + conf.getTablename);
             try {
                 SparkKineticaTableUtil.createTable(df, conf);
             } catch {
@@ -149,46 +156,44 @@ class KineticaRelation(
             }
         }
 
-        logger.debug("Get Kinetica Table Type");
+        logDebug("Get Kinetica Table Type");
         KineticaSparkDFManager.setType(conf);
 
-        logger.debug("Set LoaderParms Table Type");
+        logDebug("Set LoaderParms Table Type");
         conf.setTableType(KineticaSparkDFManager.getType(conf));
 
-        logger.debug("Set DataFrame");
+        logDebug("Set DataFrame");
         KineticaSparkDFManager.setDf(df);
 
         if (conf.isTableReplicated) {
-            logger.info("Table is replicated");
+            logInfo("Table is replicated");
         } else {
-            logger.info("Table is not replicated");
+            logInfo("Table is not replicated");
         }
 
-        logger.info("isAlterTable: " + conf.isAlterTable);
+        logInfo("isAlterTable: " + conf.isAlterTable);
         if (conf.isAlterTable) {
-            logger.info("Altering table " + conf.getTablename());
+            logInfo("Altering table " + conf.getTablename());
             try {
-                logger.debug("Alter table");
+                logDebug("Alter table");
                 SparkKineticaTableUtil.AlterTable(df, conf);
 
                 //reset table type as alter table changed avro
-                logger.debug("Get Kinetica Table Type");
+                logDebug("Get Kinetica Table Type");
                 KineticaSparkDFManager.setType(conf);
-                logger.debug("Set LoaderParms Table Type");
+                logDebug("Set LoaderParms Table Type");
                 conf.setTableType(KineticaSparkDFManager.getType(conf));
             } catch {
                 case e: Throwable => throw new RuntimeException("Failed with errors ", e);
             }
         }
 
-        logger.info("Map and Write to Kinetica");
-        KineticaSparkDFManager.KineticaMapWriter(sparkSession.sparkContext, conf);
-
-
-        // Lets try and print the accumulators
-        println(" Total rows = " + conf.totalRows.value)
-        println(" Converted rows = " + conf.convertedRows.value)
-        println(" Columns failed conversion = " + conf.failedConversion.value)
+        if( !conf.dryRun ) {
+            logInfo("Map and Write to Kinetica");
+            KineticaSparkDFManager.KineticaMapWriter(sqlContext.sparkContext, conf);
+        } else {
+            logInfo("@@@@@@@@@@ Execution was a dry-run. Look in the log for your schema and derived string column max lengths.");
+        }
     }
 
     /**
@@ -204,7 +209,7 @@ class KineticaRelation(
     }
 }
 
-object KineticaRelation extends LazyLogging {
+object KineticaRelation extends Logging {
 
 }
 

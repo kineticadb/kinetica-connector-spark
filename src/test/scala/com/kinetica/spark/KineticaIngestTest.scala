@@ -1,7 +1,8 @@
 package com.kinetica.spark
 
+import org.apache.spark.SparkContext
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.{ SaveMode, SparkSession }
+import org.apache.spark.sql.SaveMode
 
 object KineticaIngestTest extends App {
 
@@ -20,17 +21,22 @@ object KineticaIngestTest extends App {
 
     val url = s"http://${host}:9191"
 
+    /*
     val conf = new SparkConf().setAppName("spark-custom-datasource")
     conf.set("spark.driver.userClassPathFirst" , "true")
     val spark = SparkSession.builder().config(conf).getOrCreate()
+	*/
+    
+    val conf = new SparkConf().setAppName(classOf[SparkKineticaDriver].getSimpleName).setMaster("local")
+    val sc = new SparkContext(conf)
+    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 
-
-    val df = spark.read
+    val df = sqlContext.read
             .format("csv")
             .option("header", "true")
             .option("inferSchema", "true")
             .option("delimiter", ",")
-            .csv(file)
+            .load(file)
     
     println("printing schema...")
     df.printSchema()
@@ -55,6 +61,9 @@ object KineticaIngestTest extends App {
 
     println("Spark ingest to Kinetica test finished.")
     
+    /*
     spark.close()
     spark.stop()
+    */
+    System.exit(0);
 }

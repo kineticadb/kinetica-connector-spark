@@ -7,7 +7,7 @@ import com.gpudb.GenericRecord
 
 import java.io.Serializable
 import scala.beans.{ BeanProperty, BooleanBeanProperty }
-import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.Logging
 import com.kinetica.spark.util.ConfigurationConstants._
 
 import com.kinetica.spark.ssl.X509KeystoreOverride
@@ -20,9 +20,9 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 
 import org.apache.spark.SparkContext
-import org.apache.spark.util.LongAccumulator
+import org.apache.spark.Accumulator
 
-class LoaderParams extends Serializable with LazyLogging {
+class LoaderParams extends Serializable with Logging {
 
     @BeanProperty
     var timeoutMs: Int = 10000
@@ -106,23 +106,13 @@ class LoaderParams extends Serializable with LazyLogging {
     var keyStorePassword: String = null
 
     @BeanProperty
-    var totalRows: LongAccumulator = null
-
-    @BeanProperty
-    var convertedRows: LongAccumulator = null
-
-    @BeanProperty
-    var failedConversion: LongAccumulator = null
-
-    @BeanProperty
     var truncateToSize: Boolean = false
+    
+    @BeanProperty
+    var dryRun: Boolean = false
 
     def this(sc: SparkContext, params: Map[String, String]) = {
         this()
-
-        totalRows = sc.longAccumulator("TotalRows")
-        convertedRows = sc.longAccumulator("ParsedRows")
-        failedConversion = sc.longAccumulator("UnparsedRows")
 
         require(params != null, "Config cannot be null")
         require(params.nonEmpty, "Config cannot be empty")
@@ -153,6 +143,7 @@ class LoaderParams extends Serializable with LazyLogging {
         truncateTable = params.get(KINETICA_TRUNCATETABLE_PARAM).getOrElse("false").toBoolean
 
         loaderPath = params.get(LOADERCODEPATH).getOrElse("false").toBoolean
+        dryRun = params.get(KINETICA_DRYRUN).getOrElse("false").toBoolean
 
         tablename = params.get(KINETICA_TABLENAME_PARAM).getOrElse(null)
         if(tablename == null) {
@@ -196,7 +187,7 @@ class LoaderParams extends Serializable with LazyLogging {
 
     private def connect(): GPUdb = {
         setupSSL()
-        logger.info("Connecting to {} as <{}>", kineticaURL, kusername)
+        logInfo("Connecting to url/username" + kineticaURL + "/" + kusername)
         val opts: GPUdbBase.Options = new GPUdbBase.Options()
         opts.setUsername(kusername)
         opts.setPassword(kpassword)
@@ -215,7 +206,7 @@ class LoaderParams extends Serializable with LazyLogging {
         options.put(CORE_VERSION, "")
         options.put(VERSION_DATE, "")
         val rsMap: java.util.Map[String, String] = conn.showSystemProperties(options).getPropertyMap
-        logger.info("Conected to {} ({})", rsMap.get(CORE_VERSION), rsMap.get(VERSION_DATE))
+        logInfo("Conected to CORE_VERSION/VERSION_DATE)" + rsMap.get(CORE_VERSION) + "/" + rsMap.get(VERSION_DATE))
     }
 
     def hasTable(): Boolean = {
@@ -223,21 +214,21 @@ class LoaderParams extends Serializable with LazyLogging {
         if (!gpudb.hasTable(this.tablename, null).getTableExists) {
             false
         } else {
-            logger.info("Found existing table: {}", this.tablename)
+            logInfo("Found existing table: " + this.tablename)
             true
         }
     }
 
     private def setupSSL(): Unit = {
         if (this.bypassCert) {
-            logger.info("Installing truststore to bypass certificate check.")
+            logInfo("Installing truststore to bypass certificate check.")
             X509TustManagerBypass.install()
             return
         }
 
         var trustManagerList: Array[TrustManager] = null
         if (this.trustStorePath != null) {
-            logger.info("Installing custom trust manager: {}", classOf[X509TrustManagerOverride].getName)
+            logInfo("Installing custom trust manager: " + classOf[X509TrustManagerOverride].getName)
             trustManagerList = X509TrustManagerOverride.newManagers(
                 this.trustStorePath,
                 this.trustStorePassword)
@@ -245,7 +236,7 @@ class LoaderParams extends Serializable with LazyLogging {
 
         var keyManagerList: Array[KeyManager] = null
         if (this.keyStorePath != null) {
-            logger.info("Installing custom key manager: {}", classOf[X509KeystoreOverride].getName)
+            logInfo("Installing custom key manager: " + classOf[X509KeystoreOverride].getName)
             keyManagerList = X509KeystoreOverride.newManagers(
                 this.keyStorePath,
                 this.keyStorePassword)

@@ -3,11 +3,11 @@ package com.kinetica.spark.egressutil
 // MUCH OF THIS CODE IS LIFTED FROM SPARK CODEBASE - SRB
 
 import scala.collection.JavaConverters._
-import org.apache.spark.internal.Logging
+import org.apache.spark.Logging
 import java.sql.ResultSet
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
+import org.apache.spark.sql.catalyst.expressions.SpecificMutableRow
 import org.apache.spark.sql.catalyst.util.{ DateTimeUtils, GenericArrayData }
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -22,7 +22,7 @@ object KineticaUtils extends Logging {
         new NextIterator[InternalRow] {
             private[this] val rs = resultSet
             private[this] val getters: Array[JDBCValueGetter] = makeGetters(schema)
-            private[this] val mutableRow = new SpecificInternalRow(schema.fields.map(x => x.dataType))
+            private[this] val mutableRow = new SpecificMutableRow(schema.fields.map(x => x.dataType))
 
             override protected def close(): Unit = {
                 try {
@@ -64,7 +64,9 @@ object KineticaUtils extends Logging {
     private def makeGetters(schema: StructType): Array[JDBCValueGetter] =
         schema.fields.map(sf => makeGetter(sf.dataType, sf.metadata))
 
+        
     private def makeGetter(dt: DataType, metadata: Metadata): JDBCValueGetter = dt match {
+        /*
         case BooleanType =>
             (rs: ResultSet, row: InternalRow, pos: Int) =>
                 row.setBoolean(pos, rs.getBoolean(pos + 1))
@@ -79,22 +81,6 @@ object KineticaUtils extends Logging {
                     row.update(pos, null)
                 }
 
-        // When connecting with Oracle DB through JDBC, the precision and scale of BigDecimal
-        // object returned by ResultSet.getBigDecimal is not correctly matched to the table
-        // schema reported by ResultSetMetaData.getPrecision and ResultSetMetaData.getScale.
-        // If inserting values like 19999 into a column with NUMBER(12, 2) type, you get through
-        // a BigDecimal object with scale as 0. But the dataframe schema has correct type as
-        // DecimalType(12, 2). Thus, after saving the dataframe into parquet file and then
-        // retrieve it, you will get wrong result 199.99.
-        // So it is needed to set precision and scale for Decimal based on JDBC metadata.
-
-        /*        
-        case DecimalType.Fixed(p, s) =>
-            (rs: ResultSet, row: InternalRow, pos: Int) =>
-                val decimal =
-                    nullSafeConvert[java.math.BigDecimal](rs.getBigDecimal(pos + 1), d => Decimal(d, p, s))
-                row.update(pos, decimal)
-				*/
         case DoubleType =>
             (rs: ResultSet, row: InternalRow, pos: Int) =>
                 row.setDouble(pos, rs.getDouble(pos + 1))
@@ -186,7 +172,7 @@ object KineticaUtils extends Logging {
                     input = rs.getArray(pos + 1),
                     array => new GenericArrayData(elementConversion.apply(array.getArray)))
                 row.update(pos, array)
-
+		*/
         case _ => throw new IllegalArgumentException(s"Unsupported type ${dt.simpleString}")
     }
 

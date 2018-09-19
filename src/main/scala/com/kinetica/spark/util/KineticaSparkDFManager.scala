@@ -20,11 +20,11 @@ import com.gpudb.GPUdbException
 import com.gpudb.GenericRecord
 import com.gpudb.Type
 import com.kinetica.spark.LoaderParams
-import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.Logging
 
 import scala.collection.JavaConversions._
 
-object KineticaSparkDFManager extends LazyLogging {
+object KineticaSparkDFManager extends Logging {
 
     @BeanProperty
     var df: DataFrame = null
@@ -46,9 +46,9 @@ object KineticaSparkDFManager extends LazyLogging {
 
     def setType(lp: LoaderParams): Unit = {
         try {
-            logger.debug("Kinetica URL is " + lp.getKineticaURL)
+            logDebug("Kinetica URL is " + lp.getKineticaURL)
             val gpudb: GPUdb = lp.getGpudb
-            logger.debug(" Attempting Type.fromTable for table name " + lp.getTablename)
+            logDebug(" Attempting Type.fromTable for table name " + lp.getTablename)
             myType = Type.fromTable(gpudb, lp.getTablename)
         } catch {
             case e: GPUdbException => e.printStackTrace()
@@ -71,66 +71,56 @@ object KineticaSparkDFManager extends LazyLogging {
      */
     def KineticaMapWriter(sc: SparkContext, lp: LoaderParams): Unit = {
 
-        logger.debug("KineticaMapWriter")
+        logDebug("KineticaMapWriter")
         val typef: Type = myType
         val bkp: LoaderParams = lp
-        logger.debug("Mapping Dataset columns to Kinetica")
-        df.foreachPartition(new ForeachPartitionFunction[Row]() {
-            def call(t: Iterator[Row]): Unit = {
-                val kbl: KineticaBulkLoader = new KineticaBulkLoader(bkp)
-                val bi: BulkInserter[GenericRecord] = kbl.GetBulkInserter()
-                while (t.hasNext) {
-                    
-                    lp.totalRows.add(1)
-                    val row: Row = t.next()
-                    val genericRecord: GenericRecord = new GenericRecord(typef)
-                    var i: Int = 0
-                    for (column <- typef.getColumns) {
-                        try {
-                            var rtemp: Any = row.get({ i += 1; i - 1 })
-                            if (lp.isMapToSchema) {
-                                rtemp = row.getAs(column.getName)
-                            }
-                            if( rtemp != null ) { // This means null value - nothing to do.
-                                if (!putInGenericRecord(genericRecord, rtemp, column)) {
-                                    lp.failedConversion.add(1)
-                                }
-                            }
-                        } catch {
-                            case e: Exception =>
-                                //e.printStackTrace()
-                                lp.failedConversion.add(1)
-                                logger.warn("Found non-matching column DS.column --> KineticaTable.column, moving on", e)
-                                throw e
+        logDebug("Mapping Dataset columns to Kinetica")
+        df.foreachPartition( records => {
+            logDebug("Records found....")
+            val kbl: KineticaBulkLoader = new KineticaBulkLoader(bkp)
+            val bi: BulkInserter[GenericRecord] = kbl.GetBulkInserter()
+            records.foreach { row =>
+                val genericRecord: GenericRecord = new GenericRecord(typef)
+                var i: Int = 0
+                for (column <- typef.getColumns) {
+                    try {
+                        var rtemp: Any = row.get({ i += 1; i - 1 })
+                        if (lp.isMapToSchema) {
+                            rtemp = row.getAs(column.getName)
                         }
+                        if( rtemp != null ) { // This means null value - nothing to do.
+                            if (!putInGenericRecord(genericRecord, rtemp, column)) {
+                            }
+                        }
+                    } catch {
+                        case e: Exception =>
+                            //e.printStackTrace()
+                            logWarning("Found non-matching column DS.column --> KineticaTable.column, moving on", e)
+                            throw e
                     }
-                    lp.convertedRows.add(1)
-                    bi.insert(genericRecord)
                 }
-                try bi.flush()
-                catch {
-                    case e: Exception => {
-                        logger.error("Flush error", e)
-                        e.printStackTrace()
-                    }
+                bi.insert(genericRecord)    
+            }
+            try bi.flush()
+            catch {
+                case e: Exception => {
+                    logError("Flush error", e)
+                    e.printStackTrace()
                 }
             }
         })
     }
     
     def putInGenericRecord(genericRecord : GenericRecord, rtemp : Any, column : Type.Column ) : Boolean = {
-        
-        //println(" Adding 1 record 1 field .........")
-        
         var isARecord: Boolean = false
         if (rtemp != null) {
-        	logger.debug("Spark data type {} not null", rtemp.getClass())
+        	logDebug("Spark data type not null, class is " + rtemp.getClass())
         	if (rtemp.isInstanceOf[java.lang.Long]) {
-        		logger.debug("Long")
+        		logDebug("Long")
         		genericRecord.put(column.getName, rtemp)
         		isARecord = true
         	} else if (rtemp.isInstanceOf[java.lang.Integer]) {
-        		logger.debug("handling Integer")
+        		logDebug("handling Integer")
         		if (column.getType().toString().contains("java.lang.Integer")) {
         		    genericRecord.put(column.getName, rtemp)
 	        		isARecord = true
@@ -144,37 +134,37 @@ object KineticaSparkDFManager extends LazyLogging {
         		    genericRecord.put(column.getName, toDouble(rtemp))
 	        		isARecord = true
         		} else {
-        		   logger.debug("***** Kinetica column type is " + column.getType + " for name " + column.getName) 
+        		   logDebug("***** Kinetica column type is " + column.getType + " for name " + column.getName) 
         		}
         	} else if (rtemp.isInstanceOf[Timestamp]) {
-        		logger.debug("Timestamp instance")
+        		logDebug("Timestamp instance")
         		genericRecord.put(column.getName, classOf[Timestamp].cast(rtemp).getTime)
         		isARecord = true
         	} else if (rtemp.isInstanceOf[java.sql.Date]) {
-        		logger.debug("Date instance")
+        		logDebug("Date instance")
         		genericRecord.put(column.getName, rtemp.toString)
         		isARecord = true
         	} else if (rtemp.isInstanceOf[java.lang.Boolean]) {
-        		logger.debug("Boolean instance")
+        		logDebug("Boolean instance")
         		if (classOf[Boolean].cast(rtemp).booleanValue()) {
-        			logger.debug("Cast to 1")
+        			logDebug("Cast to 1")
         			genericRecord.put(column.getName, 1)
         			isARecord = true
         		} else {
-        			logger.debug("Cast to 0")
+        			logDebug("Cast to 0")
         			genericRecord.put(column.getName, 0)
         			isARecord = true
         		}
         	} else if (rtemp.isInstanceOf[BigDecimal]) {
-        		logger.debug("BigDecimal")
+        		logDebug("BigDecimal")
         		genericRecord.put(column.getName, classOf[BigDecimal].cast(rtemp).doubleValue())
         		isARecord = true
         	} else if (rtemp.isInstanceOf[java.lang.Short]) {
-        		logger.debug("Short")
+        		logDebug("Short")
         		genericRecord.put(column.getName, classOf[Short].cast(rtemp).intValue())
         		isARecord = true
         	} else if (rtemp.isInstanceOf[java.lang.Float]) {
-        		logger.debug("Float")
+        		logDebug("Float")
         		if (column.getType().toString().contains("java.lang.Float")) {
         		    genericRecord.put(column.getName, classOf[java.lang.Float].cast(rtemp).floatValue())
 	        		isARecord = true
@@ -185,25 +175,25 @@ object KineticaSparkDFManager extends LazyLogging {
         		    genericRecord.put(column.getName, rtemp.toString())
 	        		isARecord = true
         		} else {
-        		   logger.debug("**** Kinetica column type is " + column.getType + " for name " + column.getName) 
+        		   logDebug("**** Kinetica column type is " + column.getType + " for name " + column.getName) 
         		}
         	} else if (rtemp.isInstanceOf[java.lang.Double]) {
         	    if (column.getType().toString().contains("java.lang.String")) {
-        		    logger.debug("String")
+        		    logDebug("String")
         		    genericRecord.put(column.getName, rtemp.toString())
         	    } else {
-        		    logger.debug("Double")
+        		    logDebug("Double")
         		    genericRecord.put(column.getName, classOf[java.lang.Double].cast(rtemp).doubleValue())
         	    }
         		isARecord = true
         	} else if (rtemp.isInstanceOf[java.lang.Byte]) {
-        		logger.debug("Byte")
+        		logDebug("Byte")
         		genericRecord.put(
         			column.getName,
         			classOf[Byte].cast(rtemp).intValue())
         		isARecord = true
         	} else if (rtemp.isInstanceOf[java.lang.String]) {
-        		logger.debug("String found, column type is " + column.getType + " for name " + column.getName)
+        		logDebug("String found, column type is " + column.getType + " for name " + column.getName)
         		// This is the path most travelled....
         		if (column.getType().toString().contains("java.lang.Double")) {
         			genericRecord.put(column.getName, rtemp.toString().toDouble)
@@ -218,8 +208,8 @@ object KineticaSparkDFManager extends LazyLogging {
         		}
         		isARecord = true
         	 } else {
-        		logger.debug("Spark type {} ", rtemp.getClass())
-        		logger.debug("Kin instance type is {} {}", column.getType, column.getName)
+        		logDebug("Spark type " + rtemp.getClass())
+        		logDebug("Kin instance type is type/name" + column.getType + "/" + column.getName)
         		genericRecord.put(
         			column.getName,
         			column.getType.cast(rtemp))

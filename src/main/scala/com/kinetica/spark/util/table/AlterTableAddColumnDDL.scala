@@ -1,12 +1,12 @@
 package com.kinetica.spark.util.table
 
-import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.Logging
 
 //remove if not needed
 import scala.collection.JavaConversions._
 import com.kinetica.spark.LoaderParams
 
-object AlterTableAddColumnDDL extends LazyLogging {
+object AlterTableAddColumnDDL extends Logging {
 
   private var alterTableDDL: StringBuffer = null
 
@@ -42,8 +42,8 @@ object AlterTableAddColumnDDL extends LazyLogging {
   }
 
   private def addToDDL(ddlmod: String, nullable: Boolean): Unit = {
-    logger.debug("adding to ddl")
-    logger.info(ddlmod)
+    logDebug("adding to ddl")
+    logDebug(ddlmod)
     alterTableDDL.append(ddlmod)
     if (!nullable) {
       ddlmod.concat(" NOT NULL")

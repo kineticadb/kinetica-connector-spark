@@ -19,16 +19,19 @@ import com.gpudb.GenericRecord
 import com.gpudb.Type
 import com.gpudb.Type.Column
 import com.kinetica.spark.util.KineticaBulkLoader
-import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.Logging
 
 @SerialVersionUID(-594351038800346275L)
 class KineticaLoaderFunction (
     private val loaderConfig: LoaderConfiguration,
     private val columnMap: HashMap[Integer, Integer])
-        extends ForeachPartitionFunction[Row] with LazyLogging {
+        extends ForeachPartitionFunction[Row] with Logging {
 
     private val tableType: Type = this.loaderConfig.getType
 
+    private val kbl: KineticaBulkLoader = new KineticaBulkLoader(loaderConfig)
+    private val bi: BulkInserter[GenericRecord] = kbl.GetBulkInserter()
+    
     override def call(rowset: Iterator[Row]): Unit = {
 
         val kbl: KineticaBulkLoader = new KineticaBulkLoader(loaderConfig)
@@ -37,15 +40,34 @@ class KineticaLoaderFunction (
         val start: Instant = Instant.now()
         val rowcount: Long = insertRows(rowset, bi)
         val end: Instant = Instant.now()
-        logger.info("Inserted rows={}", rowcount)
-        logger.info("Inserted rows time={}", Duration.between(start, end))
+        logInfo("Inserted rows= " + rowcount)
+        logInfo("Inserted rows time=" + Duration.between(start, end))
 
+    }
+    
+    def flush() : Unit = {
+        bi.flush()
+    }
+
+    def insertRow(
+        row : Row): Unit = {
+        //logger.info("Starting insert into table: {}", bi.getTableName)
+        try {
+            val record: GenericRecord = convertRow(row)
+            bi.insert(record)
+        } catch {
+            case ex: Exception => {
+                val msg = s"Row conversion failed: ${row}"
+                logError("msg", ex)
+                throw new Exception(msg, ex)
+            }
+        }
     }
 
     private def insertRows(
         rowset: Iterator[Row],
         bi: BulkInserter[GenericRecord]): Long = {
-        logger.info("Starting insert into table: {}", bi.getTableName)
+        logInfo("Starting insert into table: " + bi.getTableName)
         var rowcount: Long = 0
         while (rowset.hasNext) {
             val row: Row = rowset.next()
@@ -55,14 +77,14 @@ class KineticaLoaderFunction (
             } catch {
                 case ex: Exception => {
                     val msg = s"Row ${rowcount} conversion failed: ${row}"
-                    logger.error(msg)
+                    logError(msg)
                     throw new Exception(msg, ex)
                 }
 
             }
             { rowcount += 1; rowcount - 1 }
             if (rowcount % 10000 == 0) {
-                logger.info("Inserted rows: {}", rowcount)
+                logInfo("Inserted rows: " + rowcount)
             }
         }
         bi.flush()

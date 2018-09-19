@@ -1,7 +1,7 @@
 package com.kinetica.spark.util.table
 
-import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.Logging
 
-object BuildByteDDL extends Serializable with LazyLogging {
+object BuildByteDDL extends Serializable with Logging {
   
 }

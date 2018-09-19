@@ -20,8 +20,8 @@ object TypeStringProcessor {
   def getMaxStringLen(ds: DataFrame, columnName: String): DataFrame = {
     val integerEncoder: Encoder[Integer] = Encoders.INT
     //println("========== getMaxStringLen on " + columnName)
-    ds.createOrReplaceTempView("temptable")
-    val sc = ds.sparkSession.sqlContext
+    ds.registerTempTable("temptable")
+    val sc = ds.sqlContext
     val sqlString = s"select max(length(${columnName})) from temptable"
     //println(" Sql string for temp table is " + sqlString)
     val df = sc.sql(sqlString)

@@ -8,13 +8,13 @@ import org.apache.spark.sql.sources.Filter
 
 import com.kinetica.spark.LoaderParams
 
-import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.Logging
 
 /**
  * Utility jdbc methods to communicate with Kinetica. These methods are based on Spark SQL code,
  * and depends on the internal class DriverRegistry.
  */
-private[kinetica] object KineticaJdbcUtils extends LazyLogging {
+private[kinetica] object KineticaJdbcUtils extends Logging {
 
     /**
      * Given  an url, return a function that loads the
@@ -34,7 +34,7 @@ private[kinetica] object KineticaJdbcUtils extends LazyLogging {
                     if (driver != null) DriverRegistry.register(driver)
                 } catch {
                     case e: ClassNotFoundException =>
-                        logger.error(s"Couldn't find class $driver", e)
+                        logError(s"Couldn't find class $driver", e)
                 }
                 val p: Properties = new Properties()
                 p.setProperty("UID", lp.getKusername)
@@ -54,7 +54,7 @@ private[kinetica] object KineticaJdbcUtils extends LazyLogging {
         filters: Array[Filter]): Long = {
         val whereClause = KineticaFilters.getFilterClause(filters)
         val countQuery = s"SELECT count(*) FROM $table $whereClause"
-        logger.info(countQuery)
+        logInfo(countQuery)
         val conn = KineticaJdbcUtils.getConnector(url, properties)
         var count: Long = 0
         try {

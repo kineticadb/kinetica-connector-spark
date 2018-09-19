@@ -12,15 +12,18 @@ import org.apache.commons.configuration.ConfigurationException
 import org.apache.commons.configuration.PropertiesConfiguration
 import org.apache.commons.io.FileUtils
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.DataFrameReader
 
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkConf
+
 import com.kinetica.spark.loader.LoaderConfiguration
-import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.Logging
 
-object SparkKineticaDriver extends LazyLogging {
+object SparkKineticaDriver extends Logging {
 
-    logger.info("Version {}", getVersionString())
+    logInfo("Version is " + getVersionString())
 
     def main(args: Array[String]): Unit = {
         System.setProperty("spark.sql.warehouse.dir", "file:///C:/1SPARK/spark-warehouse");
@@ -30,14 +33,21 @@ object SparkKineticaDriver extends LazyLogging {
         }
         val loaderJob: SparkKineticaDriver = new SparkKineticaDriver(args)
 
+        /* THIS IS SPARK 2.0 WAY...
         val sess = SparkSession.builder()
             .appName(classOf[SparkKineticaDriver].getSimpleName)
             .enableHiveSupport()
             .getOrCreate
         loaderJob.start(sess)
-
         sess.close()
         sess.stop()
+        */
+        val conf = new SparkConf().setAppName(classOf[SparkKineticaDriver].getSimpleName).setMaster("local")
+        val sc = new SparkContext(conf)
+        val sess = new org.apache.spark.sql.SQLContext(sc)
+        
+        logInfo("Starting job: " + conf.get("spark.app.name"))
+        loaderJob.start(sess)
     }
 
     private def getVersionString(): String = {
@@ -51,9 +61,9 @@ object SparkKineticaDriver extends LazyLogging {
 import com.kinetica.spark.util.ConfigurationConstants
 import org.apache.spark.SparkContext
 
-class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
+class SparkKineticaDriver(args: Array[String]) extends Logging {
 
-    logger.debug(" ********** SparkKineticaDriver class main constructor ********** ")
+    logDebug(" ********** SparkKineticaDriver class main constructor ********** ")
 
     private val propertyConf: PropertiesConfiguration = parseArgs(args)
 
@@ -64,7 +74,7 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
     while (propIt.hasNext) {
         val key: String  = propIt.next.toString
         val param: String = propertyConf.getString(key)
-        logger.debug("config: {} = {}", key, param)
+        logDebug("config: key/param = " + key + "/" + param)
         params += (key -> param)
     }
 
@@ -75,18 +85,18 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
     val immutableParams = params.map(kv => (kv._1,kv._2)).toMap
     var loaderConfig : LoaderConfiguration = _
 
-    def start(sess: SparkSession): Unit = {
+    def start(sess: SQLContext): Unit = {
 
         loaderConfig = new LoaderConfiguration(sess.sparkContext,  immutableParams)
 
-        logger.info("Starting job: {}", sess.conf.get("spark.app.name"))
+        logInfo("Starting job.... ")
         val inputDs: DataFrame = getDataset(sess)
 
-        logger.info("Starting Kinetica write...")
+        logInfo("Starting Kinetica write...")
         inputDs.write.format("com.kinetica.spark").options(params).save()
     }
 
-    private def getDataset(sess: SparkSession): DataFrame = {
+    private def getDataset(sess: SQLContext): DataFrame = {
 
         val sqlFileName: String = loaderConfig.sqlFileName
         val dataPath: String = loaderConfig.dataPath
@@ -98,7 +108,7 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
         if (sqlFileName != null) {
             val sqlFile: File = new File(parentDir, sqlFileName)
             val sql: String = FileUtils.readFileToString(sqlFile)
-            logger.info("Executing SQL: {}", sql)
+            logInfo("Executing SQL: " + sql)
             inputDs = sess.sql(sql)
         } else if (dataPath != null) {
             if (dataFormat == null) {
@@ -109,7 +119,7 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
                 dataFormat = "com.databricks.spark.avro"
             }
 
-            logger.info("Attempting to load file as {}: {}", dataFormat, dataPath)
+            logInfo("Attempting to load file as dataFormat/dataPath " + dataFormat + "/" + dataPath)
             val dfReader: DataFrameReader = sess.read.format(dataFormat)
 
             if(dataFormat.equalsIgnoreCase("csv") && loaderConfig.csvHeader == true) {
@@ -134,10 +144,10 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
     private def repartition(inputDs: DataFrame): DataFrame = {
         val origPartitions: Int = inputDs.javaRDD.getNumPartitions
         val numRows: Long = inputDs.count
-        logger.info("Original dataset has <{}> rows and <{}> partitions.", numRows, origPartitions)
+        logInfo("Original dataset has rows/partitions " + numRows + "/" + origPartitions)
 
         val newPartitions: Int = (numRows / loaderConfig.partitionRows.toLong).toInt + 1
-        logger.info("Repartitioning dataset to <{}> partitions.", newPartitions)
+        logInfo("Repartitioning dataset to  number of partitions = " + newPartitions)
         inputDs.repartition(newPartitions)
     }
 
@@ -145,7 +155,7 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
         val argList: List[String] = new ArrayList[String](Arrays.asList(args: _*))
         val propPath: String = argList.remove(0)
         val propFile: File = new File(propPath)
-        logger.info("Reading properties from file: {}", propFile)
+        logInfo("Reading properties from file: " + propFile)
 
         val conf = new PropertiesConfiguration(propPath);
 
@@ -161,7 +171,7 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
                     "No value found for parameter: " + key)
             }
             val value: String = iter.next()
-            logger.debug("commnd line: {} = {}", Array(key, value): _*)
+            logDebug("commnd line key/value : " + key + "/" + value)
             conf.setProperty(key, value)
         }
         conf

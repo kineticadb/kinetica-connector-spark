@@ -1,6 +1,12 @@
 Kinetica Spark Connector Changelog
 ==============================
 
+Version 6.2.1 - 2018-09-27
+--------------------------
+
+	- Stringification of some complex datatypes. Creating columns with unrestricted string type
+		for those data items.
+
 
 Version 6.2.0 - 2018-07-01
 --------------------------

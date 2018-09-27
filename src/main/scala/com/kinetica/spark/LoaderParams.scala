@@ -116,6 +116,9 @@ class LoaderParams extends Serializable with LazyLogging {
 
     @BeanProperty
     var truncateToSize: Boolean = false
+    
+    @BeanProperty
+    var dryRun: Boolean = false
 
     def this(sc: SparkContext, params: Map[String, String]) = {
         this()
@@ -153,6 +156,7 @@ class LoaderParams extends Serializable with LazyLogging {
         truncateTable = params.get(KINETICA_TRUNCATETABLE_PARAM).getOrElse("false").toBoolean
 
         loaderPath = params.get(LOADERCODEPATH).getOrElse("false").toBoolean
+        dryRun = params.get(KINETICA_DRYRUN).getOrElse("false").toBoolean
 
         tablename = params.get(KINETICA_TABLENAME_PARAM).getOrElse(null)
         if(tablename == null) {

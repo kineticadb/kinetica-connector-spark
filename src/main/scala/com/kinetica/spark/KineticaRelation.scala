@@ -87,6 +87,7 @@ class KineticaRelation(
 
     override def insert(df: DataFrame, dummy: Boolean): Unit = {
         logger.debug("*********************** KR:insert")
+        logger.info(" DF schema is -> " + df.printSchema());
         val loaderPath: Boolean = parameters.get(ConfigurationConstants.LOADERCODEPATH).getOrElse("false").toBoolean
         logger.debug("*********************** loaderPath var is " + loaderPath)
         val jdbcurl: Option[String] = parameters.get(ConfigurationConstants.KINETICA_JDBCURL_PARAM)
@@ -181,8 +182,12 @@ class KineticaRelation(
             }
         }
 
-        logger.info("Map and Write to Kinetica");
-        KineticaSparkDFManager.KineticaMapWriter(sparkSession.sparkContext, conf);
+        if( !conf.dryRun ) {
+            logger.info("Map and Write to Kinetica");
+            KineticaSparkDFManager.KineticaMapWriter(sparkSession.sparkContext, conf);
+        } else {
+            logger.info("@@@@@@@@@@ Execution was a dry-run. Look in the log for your schema and derived string column max lengths.");
+        }
 
 
         // Lets try and print the accumulators

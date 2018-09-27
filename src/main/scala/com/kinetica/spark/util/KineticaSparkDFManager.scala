@@ -64,6 +64,8 @@ object KineticaSparkDFManager extends LazyLogging {
 
     def toDouble: (Any) => Double = { case i: Int => i case f: Float => f case d: Double => d }
     def toLong: (Any) => Long = { case i: Int => i }
+    def toBoolean: (Any) => Boolean = { case i: Boolean => i }
+    def bool2int(b:Boolean) = if (b) 1 else 0
 
     /**
      * Maps over dataframe using either matching columns or chronological ordering
@@ -124,7 +126,7 @@ object KineticaSparkDFManager extends LazyLogging {
         
         var isARecord: Boolean = false
         if (rtemp != null) {
-        	logger.debug("Spark data type {} not null", rtemp.getClass())
+        	logger.debug("Spark data type {} not null", rtemp.getClass() + " ** column name ** " + column.getName)
         	if (rtemp.isInstanceOf[java.lang.Long]) {
         		logger.debug("Long")
         		genericRecord.put(column.getName, rtemp)
@@ -144,27 +146,36 @@ object KineticaSparkDFManager extends LazyLogging {
         		    genericRecord.put(column.getName, toDouble(rtemp))
 	        		isARecord = true
         		} else {
-        		   logger.debug("***** Kinetica column type is " + column.getType + " for name " + column.getName) 
+        		   logger.debug("***** Kinetica column type is " + column.getType) 
         		}
         	} else if (rtemp.isInstanceOf[Timestamp]) {
         		logger.debug("Timestamp instance")
-        		genericRecord.put(column.getName, classOf[Timestamp].cast(rtemp).getTime)
+        		if (column.getType().toString().contains("java.lang.String")) {
+        		    logger.debug("Timestamp to date conversion perhaps.")
+        		    if ( column.getProperties.contains("date") ) {
+            		    logger.debug("Timestamp to date conversion surely.")
+        		        val timelong = classOf[Timestamp].cast(rtemp).getTime 
+        		        val formatter = new java.text.SimpleDateFormat("YYYY-MM-dd")
+            		    val dateString = formatter.format(timelong)
+            		    logger.debug("Date string is " + dateString)
+            		    genericRecord.put(column.getName, dateString)
+        		    } else {
+        		        // TODO - Handle datetime 
+        		        logger.info("Kin col properties " + column.getProperties)
+        		    }
+        		} else {
+        		    logger.info(" ################ " + classOf[Timestamp].cast(rtemp).getTime)
+        		    genericRecord.put(column.getName, classOf[Timestamp].cast(rtemp).getTime)
+        		}
         		isARecord = true
         	} else if (rtemp.isInstanceOf[java.sql.Date]) {
         		logger.debug("Date instance")
         		genericRecord.put(column.getName, rtemp.toString)
         		isARecord = true
         	} else if (rtemp.isInstanceOf[java.lang.Boolean]) {
-        		logger.debug("Boolean instance")
-        		if (classOf[Boolean].cast(rtemp).booleanValue()) {
-        			logger.debug("Cast to 1")
-        			genericRecord.put(column.getName, 1)
-        			isARecord = true
-        		} else {
-        			logger.debug("Cast to 0")
-        			genericRecord.put(column.getName, 0)
-        			isARecord = true
-        		}
+        		logger.debug("Boolean instance xxx " + toBoolean(rtemp))
+        		genericRecord.put(column.getName, bool2int(toBoolean(rtemp)))
+        		isARecord = true
         	} else if (rtemp.isInstanceOf[BigDecimal]) {
         		logger.debug("BigDecimal")
         		genericRecord.put(column.getName, classOf[BigDecimal].cast(rtemp).doubleValue())
@@ -185,7 +196,7 @@ object KineticaSparkDFManager extends LazyLogging {
         		    genericRecord.put(column.getName, rtemp.toString())
 	        		isARecord = true
         		} else {
-        		   logger.debug("**** Kinetica column type is " + column.getType + " for name " + column.getName) 
+        		   logger.debug("**** Kinetica column type is " + column.getType) 
         		}
         	} else if (rtemp.isInstanceOf[java.lang.Double]) {
         	    if (column.getType().toString().contains("java.lang.String")) {
@@ -203,7 +214,7 @@ object KineticaSparkDFManager extends LazyLogging {
         			classOf[Byte].cast(rtemp).intValue())
         		isARecord = true
         	} else if (rtemp.isInstanceOf[java.lang.String]) {
-        		logger.debug("String found, column type is " + column.getType + " for name " + column.getName)
+        		logger.debug("String found, column type is " + column.getType)
         		// This is the path most travelled....
         		if (column.getType().toString().contains("java.lang.Double")) {
         			genericRecord.put(column.getName, rtemp.toString().toDouble)
@@ -218,11 +229,11 @@ object KineticaSparkDFManager extends LazyLogging {
         		}
         		isARecord = true
         	 } else {
-        		logger.debug("Spark type {} ", rtemp.getClass())
-        		logger.debug("Kin instance type is {} {}", column.getType, column.getName)
+        		logger.debug("Spark type {} Kin instance type is {} ", rtemp.getClass(), column.getType)
         		genericRecord.put(
         			column.getName,
-        			column.getType.cast(rtemp))
+        			//column.getType.cast(rtemp))
+        			rtemp.toString())
         		isARecord = true
         	}
         } 

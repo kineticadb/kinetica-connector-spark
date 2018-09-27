@@ -52,50 +52,27 @@ object ColumnProcessor extends LazyLogging {
         columnName: String,
         nullable: Boolean,
         alterDDL: Boolean,
-        existingColumn: Boolean): Unit = {
-        var maxIntDs: DataFrame = null
-        maxIntDs = TypeStringProcessor.getMaxStringLen(ds, columnName)
-        //set to 0 for new columns
-        var existingColumnMaxLength: Int = 0
-        
+        existingColumn: Boolean,
+        dryRun : Boolean,
+        unrestrictedString : Boolean = false): Unit = {
         var maxInt = 1
-        try {
-            maxInt = maxIntDs.first.getInt(0)
-        } catch {
-            case e: Exception => {
-                logger.info("Could not determine max length for column, setting to 1 " + columnName)
-            }
-        }
-        
-        logger.debug(" @@@@@@@@@@@@ column name and max length is " + columnName + "/" + maxInt)
-
-        try if (alterDDL && existingColumn) {
-            existingColumnMaxLength =
-                SparkKineticaTableUtil.getExistingColumnCharN(columnName)
-        } catch {
-            case e: KineticaException => existingColumnMaxLength = -1
-
-            case e: Exception => {
-                logger.debug("Parse error, skipping column")
-                existingColumnMaxLength = -1
-            }
-
-        }
-        if (alterDDL) {
-            //if new column
-            if (!existingColumn) {
-                AlterTableAddColumnDDL.buildString(columnName, maxInt, nullable)
-            } else //existing column
-            if (maxInt > existingColumnMaxLength && existingColumnMaxLength >= 0) {
-                AlterTableModifyColumnDDL.buildString(columnName, maxInt, nullable)
-            } else {
-                //remove alter table modification init alter statement
-                AlterTableModifyColumnDDL.deInit()
+        if( !unrestrictedString ) {
+            var maxIntDs: DataFrame = null
+            maxIntDs = TypeStringProcessor.getMaxStringLen(ds, columnName)
+            //set to 0 for new columns
+            var existingColumnMaxLength: Int = 0
+            try {
+                maxInt = maxIntDs.first.getInt(0)
+            } catch {
+                case e: Exception => {
+                    logger.info("Could not determine max length for column, setting to 1 " + columnName)
+                }
             }
         } else {
-            //new table
-            KineticaDDLBuilder.buildString(columnName, maxInt, nullable)
+            maxInt = 1000; // We need an unrestricted string. 
         }
+        logger.info(" @@@@@@@@@@@@ column name and max length is " + columnName + "/" + maxInt)
+        KineticaDDLBuilder.buildString(columnName, maxInt, nullable)
     }
 
     def processTS(

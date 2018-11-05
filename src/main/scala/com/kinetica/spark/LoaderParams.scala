@@ -117,8 +117,11 @@ class LoaderParams extends Serializable with LazyLogging {
     @BeanProperty
     var truncateToSize: Boolean = false
     
-    @BeanProperty
+    @BooleanBeanProperty
     var dryRun: Boolean = false
+    
+    @BooleanBeanProperty
+    var flattenSourceSchema: Boolean = false
 
     def this(sc: SparkContext, params: Map[String, String]) = {
         this()
@@ -157,6 +160,8 @@ class LoaderParams extends Serializable with LazyLogging {
 
         loaderPath = params.get(LOADERCODEPATH).getOrElse("false").toBoolean
         dryRun = params.get(KINETICA_DRYRUN).getOrElse("false").toBoolean
+
+        flattenSourceSchema = params.get(KINETICA_FLATTEN_SCHEMA).getOrElse("false").toBoolean
 
         tablename = params.get(KINETICA_TABLENAME_PARAM).getOrElse(null)
         if(tablename == null) {
@@ -219,7 +224,7 @@ class LoaderParams extends Serializable with LazyLogging {
         options.put(CORE_VERSION, "")
         options.put(VERSION_DATE, "")
         val rsMap: java.util.Map[String, String] = conn.showSystemProperties(options).getPropertyMap
-        logger.info("Conected to {} ({})", rsMap.get(CORE_VERSION), rsMap.get(VERSION_DATE))
+        logger.info("Connected to {} ({})", rsMap.get(CORE_VERSION), rsMap.get(VERSION_DATE))
     }
 
     def hasTable(): Boolean = {

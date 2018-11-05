@@ -45,12 +45,12 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
         if(this.useTemplates) {
             // lookup schema from template
             this.resolveTemplate()
-            if (loaderConfig.truncateTable) {
+            if (loaderConfig.hasTable()) {
                 this.gpudb.clearTable(this.tableName, null, null)
             }
             this.createTable()
         }
-        if (loaderConfig.hasTable()) {
+        else if (loaderConfig.hasTable()) {
             // use existing schema from table
             val response: ShowTableResponse = this.gpudb.showTable(this.tableName, null)
             this.setTypeFromResponse(response, 0)

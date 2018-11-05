@@ -1,6 +1,12 @@
 Kinetica Spark Connector Changelog
 ==============================
 
+Version 6.2.1 - 2018-09-30
+--------------------------
+
+	- Now handling byte array types (Kinetica BYTE datatype)
+
+
 Version 6.2.1 - 2018-09-27
 --------------------------
 

@@ -22,6 +22,8 @@ import com.gpudb.Type
 import com.kinetica.spark.LoaderParams
 import com.typesafe.scalalogging.LazyLogging
 
+import java.nio.ByteBuffer
+
 import scala.collection.JavaConversions._
 
 object KineticaSparkDFManager extends LazyLogging {
@@ -164,7 +166,7 @@ object KineticaSparkDFManager extends LazyLogging {
         		        logger.info("Kin col properties " + column.getProperties)
         		    }
         		} else {
-        		    logger.info(" ################ " + classOf[Timestamp].cast(rtemp).getTime)
+        		    logger.debug(" ################ " + classOf[Timestamp].cast(rtemp).getTime)
         		    genericRecord.put(column.getName, classOf[Timestamp].cast(rtemp).getTime)
         		}
         		isARecord = true
@@ -228,7 +230,13 @@ object KineticaSparkDFManager extends LazyLogging {
         			genericRecord.put(column.getName, rtemp.toString())
         		}
         		isARecord = true
+        	 } else if (rtemp.isInstanceOf[Array[Byte]]) {
+        	     logger.debug("Byte array found, column type is " + column.getType)
+        	     logger.debug("Byte array lnegth = " + rtemp.asInstanceOf[Array[Byte]].length)
+        	     genericRecord.put(column.getName, ByteBuffer.wrap(rtemp.asInstanceOf[Array[Byte]]))
+        	     isARecord = true
         	 } else {
+        	 
         		logger.debug("Spark type {} Kin instance type is {} ", rtemp.getClass(), column.getType)
         		genericRecord.put(
         			column.getName,

@@ -87,17 +87,17 @@ class KineticaRelation(
 
     override def insert(df: DataFrame, dummy: Boolean): Unit = {
         logger.debug("*********************** KR:insert")
-        logger.info(" DF schema is -> " + df.printSchema());
+        logger.info(" DF schema is -> " + df.schema.treeString);
         val loaderPath: Boolean = parameters.get(ConfigurationConstants.LOADERCODEPATH).getOrElse("false").toBoolean
         logger.debug("*********************** loaderPath var is " + loaderPath)
         val jdbcurl: Option[String] = parameters.get(ConfigurationConstants.KINETICA_JDBCURL_PARAM)
         logger.debug("*********************** jdbcurlPresent var is " + jdbcurl)
-        
+
         if (loaderPath && jdbcurl.isEmpty) {
-            logger.debug("*********************** loading loader way with config file....")
+            logger.info("*********************** loading loader way with config file....")
             insertLoaderWay(df, dummy)
         } else {
-            logger.debug("*********************** loading connector way....")
+            logger.info("*********************** loading connector way....")
             insertConnectorWay(df, dummy)
         }
     }
@@ -124,6 +124,8 @@ class KineticaRelation(
         })
 		*/
 
+        logger.info("Executing spark ingest ingest_analysis = {}", conf.isDryRun());
+
         if (df.rdd.isEmpty()) {
             throw new KineticaException("Dataframe/Dataset is empty, try again");
         }
@@ -132,68 +134,63 @@ class KineticaRelation(
             throw new KineticaException("Create table and alter table option set to true. Only one must be set to true ");
         }
 
-        if( SparkKineticaTableUtil.tableExists(conf) ) {
-          if( conf.truncateTable ) {
-              logger.info("Truncating/Creating table " + conf.getTablename);
-              try {
-                  SparkKineticaTableUtil.truncateTable(df, conf);
-              } catch {
-                  case e: Throwable => throw new RuntimeException("Failed with errors ", e);
-              }
-          }
-        } else if (conf.isCreateTable) {
-            logger.info("Creating table " + conf.getTablename);
-            try {
-                SparkKineticaTableUtil.createTable(df, conf);
-            } catch {
-                case e: Throwable => throw new RuntimeException("Failed with errors ", e);
-            }
-        }
-
-        logger.debug("Get Kinetica Table Type");
-        KineticaSparkDFManager.setType(conf);
-
-        logger.debug("Set LoaderParms Table Type");
-        conf.setTableType(KineticaSparkDFManager.getType(conf));
-
-        logger.debug("Set DataFrame");
-        KineticaSparkDFManager.setDf(df);
-
-        if (conf.isTableReplicated) {
-            logger.info("Table is replicated");
+        // The dataframe being ingested may have nested structs, arrays and maps. If the user wants to flatten the schema...
+        val dfSource = if (conf.isFlattenSourceSchema) {
+            logger.info("Flattening/Exploding source schema....")
+            val almostFlat = Flatten.flatten_all(df)
+            val jsonString = almostFlat.toJSON
+            sqlContext.read.json(jsonString)
         } else {
-            logger.info("Table is not replicated");
+            logger.info("NO Flattening/Exploding of original source schema....")
+            df
         }
 
-        logger.info("isAlterTable: " + conf.isAlterTable);
-        if (conf.isAlterTable) {
-            logger.info("Altering table " + conf.getTablename());
+        if (conf.isDryRun()) {
             try {
-                logger.debug("Alter table");
-                SparkKineticaTableUtil.AlterTable(df, conf);
-
-                //reset table type as alter table changed avro
-                logger.debug("Get Kinetica Table Type");
-                KineticaSparkDFManager.setType(conf);
-                logger.debug("Set LoaderParms Table Type");
-                conf.setTableType(KineticaSparkDFManager.getType(conf));
+                SparkKineticaTableUtil.createTable(dfSource, conf);
             } catch {
                 case e: Throwable => throw new RuntimeException("Failed with errors ", e);
             }
-        }
+            logger.info("****** Execution was a dry-run. Create table DLL and derived string columns max lengths available as log statements.");
+        } else {
+            if (SparkKineticaTableUtil.tableExists(conf)) {
+                if (conf.truncateTable) {
+                    logger.info("Truncating/Creating table " + conf.getTablename);
+                    try {
+                        SparkKineticaTableUtil.truncateTable(dfSource, conf);
+                    } catch {
+                        case e: Throwable => throw new RuntimeException("Failed with errors ", e);
+                    }
+                }
+            } else if (conf.isCreateTable) {
+                try {
+                    SparkKineticaTableUtil.createTable(dfSource, conf);
+                } catch {
+                    case e: Throwable => throw new RuntimeException("Failed with errors ", e);
+                }
+            }
+            logger.debug("Get Kinetica Table Type");
+            KineticaSparkDFManager.setType(conf);
 
-        if( !conf.dryRun ) {
+            logger.debug("Set LoaderParms Table Type");
+            conf.setTableType(KineticaSparkDFManager.getType(conf));
+
+            logger.debug("Set DataFrame");
+            KineticaSparkDFManager.setDf(dfSource);
+
+            if (conf.isTableReplicated) {
+                logger.info("Table is replicated");
+            } else {
+                logger.info("Table is not replicated");
+            }
+
             logger.info("Map and Write to Kinetica");
             KineticaSparkDFManager.KineticaMapWriter(sparkSession.sparkContext, conf);
-        } else {
-            logger.info("@@@@@@@@@@ Execution was a dry-run. Look in the log for your schema and derived string column max lengths.");
-        }
-
-
-        // Lets try and print the accumulators
-        println(" Total rows = " + conf.totalRows.value)
-        println(" Converted rows = " + conf.convertedRows.value)
-        println(" Columns failed conversion = " + conf.failedConversion.value)
+            // Lets try and print the accumulators
+            println(" Total rows = " + conf.totalRows.value)
+            println(" Converted rows = " + conf.convertedRows.value)
+            println(" Columns failed conversion = " + conf.failedConversion.value)
+        } 
     }
 
     /**

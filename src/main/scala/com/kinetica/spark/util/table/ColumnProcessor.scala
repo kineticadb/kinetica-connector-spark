@@ -98,6 +98,18 @@ object ColumnProcessor extends LazyLogging {
             KineticaDDLBuilder.buildDate(columnName, nullable)
         }
     }
+    
+    def processByteArray(
+        ds: DataFrame,
+        columnName: String,
+        nullable: Boolean,
+        alterDDL: Boolean): Unit = {
+        if (alterDDL) {
+            //AlterTableAddColumnDDL.buildDate(columnName, nullable)
+        } else {
+            KineticaDDLBuilder.buildByteArray(columnName, nullable)
+        }
+    }
 
     def processBoolean(
         ds: DataFrame,

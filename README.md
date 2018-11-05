@@ -15,7 +15,7 @@ The following guide provides step by step instructions to get started using
 *Spark* with *Kinetica*.  The *Spark Connector* provides easy integration of
 *Spark v2.x* with *Kinetica* via the *Spark Data Source API*.
 
-There are two ways in which this connector can interface with *Kinetica*:
+There are three ways in which this connector can interface with *Kinetica*:
 
 1. as a configurable [data loader](#spark-data-loader), via the command line,
    which can load data into *Kinetica* via *Spark*
@@ -25,8 +25,8 @@ There are two ways in which this connector can interface with *Kinetica*:
    *Kinetica* from *Spark* or egress data from *Kinetica* into *Spark*
 3. as an interactive
    [streaming data processor](#spark-streaming-processor),
-   programmatically, via the *Kinetica Spark API*, which can stream data inserts
-   against *Kinetica* into *Spark*
+   programmatically, via the *Kinetica Spark API*, which can stream data from
+   *Kinetica* into *Spark*
 
 Source code for the connector can be found at:
 
@@ -230,18 +230,8 @@ environment, and execute ``run-spark-loader.sh`` from within the
 The *Spark Ingest/Egress Processor* provides an easy API-level interface for
 moving data between *Spark* and *Kinetica*.
 
-Features include:
-
-* Interfaces with *Kinetica* through *Spark DataFrames*
-
-  * Optimizes datatype conversions between *Spark* and *Kinetica*
-  * Automatic right-sizing of string and numeric fields
-
-* Handles drifting/evolving schemas
-
-  * Automatically adds new columns from *DataFrames* to existing *Kinetica*
-    tables
-  * Automatically widens *Kinetica* table columns to fit new data
+It is designed to interface with *Kinetica* through *Spark DataFrames*, and
+optimize data type conversions between the two.
 
 
 ### Architecture
@@ -271,9 +261,8 @@ Another option exposed via connector is to map data to columns based on
 position.  If this is used, the number & order of columns must match between the
 dataset and table.
 
-The *Ingest Processor* will create the target table, if necessary, and then load
-data into it.  Each *Spark* ``DataFrame`` partition instantiates a *Kinetica*
-``BulkInserter``, which is a native API for rapid data ingest.
+For the *Ingest Processor*, each *Spark* ``DataFrame`` partition instantiates a
+*Kinetica* ``BulkInserter``, which is a native API for rapid data ingest.
 
 
 ### Property Specification
@@ -287,6 +276,8 @@ processing and passed in as format options as a set.
 
 ### Data Ingest
 
+#### Process Flow
+
 1. Create a ``Map`` and initialize with appropriate connection config
 2. Create a ``SparkSession``
 3. Create a ``DataFrame`` with the data to load (the data types should match the
@@ -294,23 +285,179 @@ processing and passed in as format options as a set.
 4. Write out the ``DataFrame`` using the *Kinetica* custom format and ``Map``
    options
 
-**NOTE:**  To use the drifting/evolving schema option, set the
-``table.append_new_columns`` parameter to ``true`` in the options ``Map``.
+#### Creating Schemas
+
+The *Ingest Processor* can create the target table, if necessary, and then load
+data into it.  It will perform automatic right-sizing of string and numeric
+fields when creating column types & sizes.
+
+To use the automatic schema creation option, set the ``table.create`` parameter
+to ``true`` in the options ``Map``.
+
+#### Complex Data Types
+
+The *Ingest Processor* is able to perform conversions on several complex data
+types to fit them into a single target table.  The following complex types are
+supported:
+
+* [Struct](#struct)
+* [Array](#array)
+* [Map](#map)
+
+To use the complex data type conversion option, set the
+``ingester.flatten_source_schema`` parameter to ``true`` in the options ``Map``.
+
+##### Struct
+
+Each leaf node of a *struct* will result in a single column in the target table.
+The column's name will be derived from the name of each level of the *struct's*
+hierarchy leading to the leaf node, separated by spaces.
+
+For example, given this schema containing a *struct*:
+
+    root
+     |-- customer_name: string (nullable = true)
+     |-- customer_address: struct (nullable = true)
+     |    |-- street: struct (nullable = true)
+     |    |    |-- number: string (nullable = true)
+     |    |    |-- name: string (nullable = true)
+     |    |    |-- unit: string (nullable = true)
+     |    |-- city: string (nullable = true)
+     |    |-- state: string (nullable = true)
+     |    |-- zip: string (nullable = true)
+
+This schema may be derived (depending on the sizes of the data values):
+
+```sql
+CREATE TABLE customer
+(
+    customer_name VARCHAR(50),
+    customer_address_street_number VARCHAR(5),
+    customer_address_street_name VARCHAR(30),
+    customer_address_street_unit VARCHAR(5),
+    customer_address_city VARCHAR(30),
+    customer_address_state VARCHAR(2),
+    customer_address_zip VARCHAR(10)
+)
+```
+
+##### Array
+
+Each *array* will result in a single column in the target table, named the same
+as the *array* field.  Each element in the *array* will result in a separate
+record being inserted into the database.  All of the other column values will be
+duplicated for each array element record.
+
+For example, given this schema containing an *array*:
+
+    root
+     |-- customer_name: string (nullable = true)
+     |-- customer_order_number: array (nullable = true)
+     |    |-- element: integer (containsNull = true)
+
+...and this data set:
+
+```javascript
+{
+    {
+        "customer_name": "John",
+        "customer_order_number": [1,2,4]
+    },
+    {
+        "customer_name": "Mary",
+        "customer_order_number": [3,5]
+    }
+}
+```
+
+This table will be created:
+
+    +-------------+---------------------+
+    |customer_name|customer_order_number|
+    +-------------+---------------------+
+    |John         |                    1|
+    |John         |                    2|
+    |John         |                    4|
+    |Mary         |                    3|
+    |Mary         |                    5|
+    +-------------+---------------------+
+
+##### Map
+
+Each unique *map key* will result in a single column in the target table.  Each
+column's name is derived from the *map* name and *map key*, separated by an
+underscore.  For a given record, *map values* will be populated in their
+respective columns, while columns lacking corresponding *map values* will be set
+to null.
+
+For example, given this schema containing a *map*:
+
+    root
+     |-- customer_name: string (nullable = true)
+     |-- customer_phone: map (nullable = true)
+     |    |-- key: string
+     |    |-- value: string (valueContainsNull = false)
+
+...and this data set:
+
+```javascript
+{
+    {
+        "customer_name": "John",
+        "customer_phone":
+        {
+            "home": "111-111-1111",
+            "cell": "222-222-2222"
+        }
+    },
+    {
+        "customer_name": "Mary",
+        "customer_phone":
+        {
+            "cell": "333-333-3333",
+            "work": "444-444-4444"
+        }
+    }
+}
+```
+
+This table will be created:
+
+    +-------------+-------------------+-------------------+-------------------+
+    |customer_name|customer_phone_home|customer_phone_work|customer_phone_cell|
+    +-------------+-------------------+-------------------+-------------------+
+    |John         |111-111-1111       |                   |222-222-2222       |
+    |Mary         |                   |444-444-4444       |333-333-3333       |
+    +-------------+-------------------+-------------------+-------------------+
+
+#### Drifting/Evolving Schemas
+
+The *Ingest Processor* can handle drifting/evolving schemas:
+
+* Automatically adding new columns from *DataFrames* to existing *Kinetica*
+  tables
+* Automatically widening *Kinetica* table columns to fit new data
+
+To use the drifting/evolving schema option, set the ``table.append_new_columns``
+parameter to ``true`` in the options ``Map``.
 
 
 ### Data Egress
+
+#### Process Flow
 
 1. Create a ``Map`` and initialize with appropriate connection config
 2. Create a ``SparkSession``
 3. Load data from *Kinetica* into a ``DataFrame``, using the
    ``com.kinetica.spark`` read format with the session's ``sqlContext``
 
-**NOTE:**  When using ``filter`` operations, the query will be split into the
-number of partitions specified by ``spark.num_partitions`` in the configuration
-``Map``. Each partition will pass the filtering operation to *Kinetica* to
-perform and will only extract those *Kinetica*-filtered records.  Presently,
-``filter`` is the only operation that takes advantage of this pass-down
-optimization.
+#### Filter Pass-Down
+
+When using ``filter`` operations, the query will be split into the number of
+partitions specified by ``spark.num_partitions`` in the configuration ``Map``.
+Each partition will pass the filtering operation to *Kinetica* to perform and
+will only extract those *Kinetica*-filtered records.  Presently, ``filter`` is
+the only operation that takes advantage of this pass-down optimization.
 
 
 ### Usage Considerations
@@ -339,6 +486,61 @@ This example assumes the ``2008.csv`` and *Spark* connector JAR
 ``/opt/gpudb/connectors/spark`` directory on the *Spark* master node.
 
 
+#### Analyze Data
+
+Before loading data into the database, an analysis of the data to ingest can be
+done.  This will scan through the source data to determine what the target table
+column types & sizes should be, and output the resulting ``CREATE TABLE``
+statement without creating the table or loading any data.
+
+To execute a data analysis, the ``ingester.analyze_data_only`` property must be
+set to ``true``.  All other properties are ignored, and no connectivity to a
+Kinetica database instance is required.
+
+The following example shows how to perform a data analysis via ``DataFrame``.
+It will read airline data from CSV into a ``DataFrame`` and write the schema, as
+a ``CREATE TABLE`` statement, to the *Spark* log file (or console, depending on
+*log4j* configuration).
+
+
+Launch *Spark Shell*:
+
+```shell
+$ spark-shell --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.1-jar-with-dependencies.jar
+```
+
+Configure loader for target database; be sure to provide an appropriate value
+for ``<KineticaHostName/IP>``, as well as ``<Username>`` & ``<Password>``, if
+the database is configured to require authentication:
+
+```scala
+val options = Map(
+    "ingester.analyze_data_only" -> "true"
+)
+```
+
+Read data from CSV file into ``DataFrame``:
+
+```scala
+val df = spark.read.
+         format("csv").
+         option("header", "true").
+         option("inferSchema", "true").
+         option("delimiter", ",").
+         csv("/opt/gpudb/connectors/spark/2008.csv")
+```
+
+Derive schema from ``DataFrame``, and log schema:
+
+```scala
+df.write.format("com.kinetica.spark").options(options).save()
+```
+
+
+After this is complete, the log should contain the ``CREATE TABLE`` statement
+for the table appropriate for the airline dataset contained in :file:`2008.csv`.
+
+
 #### Ingest
 
 The following example shows how to load data into *Kinetica* via ``DataFrame``.
@@ -353,8 +555,8 @@ $ spark-shell --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.1-jar-with-d
 ```
 
 Configure loader for target database; be sure to provide an appropriate value
-   for ``<KineticaHostName/IP>``, as well as ``<Username>`` & ``<Password>``, if
-   the database is configured to require authentication:
+for ``<KineticaHostName/IP>``, as well as ``<Username>`` & ``<Password>``, if
+the database is configured to require authentication:
 
 ```scala
 val host = "<KineticaHostName/IP>"
@@ -438,8 +640,8 @@ import org.apache.spark.sql.functions
 ```
 
 Configure processor for source database; be sure to provide an appropriate
-   value for ``<KineticaHostName/IP>``, as well as ``<Username>`` &
-   ``<Password>``, if the database is configured to require authentication:
+value for ``<KineticaHostName/IP>``, as well as ``<Username>`` &
+``<Password>``, if the database is configured to require authentication:
 
 ```scala
 val host = "<KineticaHostName/IP>"
@@ -554,8 +756,8 @@ from pyspark.sql import SQLContext
 ```
 
 Configure loader for target database; be sure to provide an appropriate value
-   for ``<KineticaHostName/IP>``, as well as ``<Username>`` & ``<Password>``, if
-   the database is configured to require authentication:
+for ``<KineticaHostName/IP>``, as well as ``<Username>`` & ``<Password>``, if
+the database is configured to require authentication:
 
 ```python
 host = "<KineticaHostName/IP>"
@@ -631,7 +833,7 @@ streaming data from *Kinetica* to *Spark*.
 The connector API creates a *table monitor* in *Kinetica*, which will watch for
 record inserts into a given table and publish them on a *ZMQ* topic.  A *Spark*
 *DStream* will be established, which subscribes to that topic and makes those
-added records available to the API user.
+added records available to the API user within *Spark*.
 
 *ZMQ* runs on the *Kinetica* head node on the default port of ``9002``.
 
@@ -694,8 +896,8 @@ import com.kinetica.spark.streaming._
 ```
 
 Configure streaming database source; be sure to provide an appropriate value
-   for ``<KineticaHostName/IP>``, as well as ``<Username>`` & ``<Password>``, if
-   the database is configured to require authentication:
+for ``<KineticaHostName/IP>``, as well as ``<Username>`` & ``<Password>``, if
+the database is configured to require authentication:
 
 ```scala
 val host = "<KineticaHostName/IP>"
@@ -747,31 +949,31 @@ ssc.start
 ```
 
 Once the *table monitor* & *DStream* are established, streaming inserts will
-   continuously be routed to *Spark* for processing and new records will be
-   output to the *Spark* console.  Verify that polling of the stream is
-   occurring at regular intervals and printing out similar text to this:
+continuously be routed to *Spark* for processing and new records will be
+output to the *Spark* console.  Verify that polling of the stream is
+occurring at regular intervals and printing out similar text to this:
 
     -------------------------------------------
     Time: 1530503165000 ms
     -------------------------------------------
 
 At this point, records can be inserted into the ``airline_in`` table at any
-   time with the following command (press ``ENTER`` at any time to get a
-   ``scala>`` prompt):
+time with the following command (press ``ENTER`` at any time to get a
+``scala>`` prompt):
 
 ```scala
 df.limit(10).write.format("com.kinetica.spark").options(options).save()
 ```
 
 Each time this command is given, a short loading sequence should occur,
-   followed by a write summary that can be verified to look like this:
+followed by a write summary that can be verified to look like this:
 
     Total rows = 10
     Converted rows = 10
     Columns failed conversion = 10
 
 After each data load, the stream will receive the inserted records and write
-    them to the *Spark* console:
+them to the *Spark* console:
 
     {"Year": 2008, "Month": 1, "DayofMonth": 3, "DayOfWeek": 4, "DepTime": "2003", "CRSDepTime": 1955, "ArrTime": "2211", "CRSArrTime": 2225, "UniqueCarrier": "WN", "FlightNum": 335, "TailNum": "N712SW", "ActualElapsedTime": "128", "CRSElapsedTime": "150", "AirTime": "116", "ArrDelay": "-14", "DepDelay": "8", "Origin": "IAD", "Dest": "TPA", "Distance": 810, "TaxiIn": "4", "TaxiOut": "8", "Cancelled": 0, "CancellationCode": null, "Diverted": 0, "CarrierDelay": "NA", "WeatherDelay": "NA", "NASDelay": "NA", "SecurityDelay": "NA", "LateAircraftDelay": "NA"}
     {"Year": 2008, "Month": 1, "DayofMonth": 3, "DayOfWeek": 4, "DepTime": "754", "CRSDepTime": 735, "ArrTime": "1002", "CRSArrTime": 1000, "UniqueCarrier": "WN", "FlightNum": 3231, "TailNum": "N772SW", "ActualElapsedTime": "128", "CRSElapsedTime": "145", "AirTime": "113", "ArrDelay": "2", "DepDelay": "19", "Origin": "IAD", "Dest": "TPA", "Distance": 810, "TaxiIn": "5", "TaxiOut": "10", "Cancelled": 0, "CancellationCode": null, "Diverted": 0, "CarrierDelay": "NA", "WeatherDelay": "NA", "NASDelay": "NA", "SecurityDelay": "NA", "LateAircraftDelay": "NA"}
@@ -807,8 +1009,8 @@ to a set of files under a directory named ``StreamExample.out`` in the directory
 where *Spark* was launched.
 
 **NOTE:**  This test via ``spark-submit`` relies on the ``airline_in`` table
-having been created via ``spark-shell`` in the manual *Spark* streaming example
-above.
+having been created via ``spark-shell`` in the manual *Spark* streaming
+example above.
 
 
 ## SQL
@@ -826,7 +1028,7 @@ accessible and loaded, and allow the specification of a query to run.  The
 result of the query will be loaded into a ``DataFrame`` and the schema and
 result set will be output to the console.
 
-This example makes use of the NYC taxi trip data set, which can be loaded using
+This example makes use of the NYC taxi trip table, which can be loaded using
 *GAdmin* from the *Demo Data* page, under *Cluster* > *Demo*.
 
 **NOTE:**  The ``nyctaxi`` table **must** exist before this example can be run.
@@ -840,9 +1042,9 @@ $ spark-shell --jars \
 ```
 
 Configure JDBC for source database and specify query for map key ``dbtable``;
-   be sure to provide an appropriate value for ``<KineticaHostName/IP>``, as
-   well as ``<Username>`` & ``<Password>``, if the database is configured to
-   require authentication:
+be sure to provide an appropriate value for ``<KineticaHostName/IP>``, as
+well as ``<Username>`` & ``<Password>``, if the database is configured to
+require authentication:
 
 ```scala
 val host = "<KineticaHostName/IP>"
@@ -954,10 +1156,10 @@ $ spark-shell --jars \
 ```
 
 Configure *Ingest Processor* to load a new taxi zone table and be sure to
-   provide an appropriate value for ``<KineticaHostName/IP>``, as well as
-   ``<Username>`` & ``<Password>``, if the database is configured to require
-   authentication; note assignment of ``geom`` column as a *WKT* type--this will
-   be necessary for the geospatial join in the JDBC query:
+provide an appropriate value for ``<KineticaHostName/IP>``, as well as
+``<Username>`` & ``<Password>``, if the database is configured to require
+authentication; note assignment of ``geom`` column as a *WKT* type--this will
+be necessary for the geospatial join in the JDBC query:
 
 ```scala
 val host = "<KineticaHostName/IP>"
@@ -995,8 +1197,8 @@ val dfTaxiZone = spark.read.
 ```
 
 Write taxi zone data into new table; the ``DataFrame`` will be written to
-   *Kinetica* for use in the JDBC query and also be reused itself in the
-   federated join:
+*Kinetica* for use in the JDBC query and also be reused itself in the
+federated join:
 
 ```scala
 dfTaxiZone.write.format("com.kinetica.spark").options(options).save()
@@ -1050,7 +1252,7 @@ val dfTaxiTrip = sqlContext.read.format("jdbc").options(options).load()
 ```
 
 Perform federated join of taxi zone ``DataFrame`` and taxi trip JDBC
-   ``DataFrame``:
+``DataFrame``:
 
 ```scala
 val dfFedJoin = dfTaxiTrip.join(dfTaxiZone, Seq("objectid"))
@@ -1077,10 +1279,10 @@ dfFedJoin.
 ```
 
 Verify output, showing the taxi pickup zones with the greatest percentage of
-    overall & per-vendor night time pickups.  For instance *79%* of the *1,363*
-    pickups in *Williamsburg (North Side)* were at night (after *8:00pm* and
-    before *5:00am*), though *85%* of the pickups for vendor *VTS* at that
-    location were at night:
+overall & per-vendor night time pickups.  For instance *79%* of the *1,363*
+pickups in *Williamsburg (North Side)* were at night (after *8:00pm* and
+before *5:00am*), though *85%* of the pickups for vendor *VTS* at that
+location were at night:
 
     +-----------------------------+-------------+-------------------------------+-------+-------+-------+--------+
     |Pickup Zone                  |Total Pickups|Overall Night Pickup Percentage|CMT NPP|NYC NPP|VTS NPP|YCAB NPP|
@@ -1109,33 +1311,35 @@ properties are applicable to both connector modes; exceptions will be noted.
 
 The following properties control the authentication & connection to *Kinetica*.
 
-| Property Name                | Default   | Description
-| :---                         | :---      | :---
-| ``database.url``             | *<none>*  | URL of *Kinetica* instance (http or https)
-| ``database.jdbc_url``        | *<none>*  | JDBC URL of the *Kinetica ODBC Server*  **Ingest Processor Only**
-| ``database.stream_url``      | *<none>*  | ZMQ URL of the *Kinetica* table monitor  **Streaming Processor Only**
-| ``database.username``        | *<none>*  | *Kinetica* login username
-| ``database.password``        | *<none>*  | *Kinetica* login password
-| ``database.retry_count``     | ``5``     | Connection retry count
-| ``database.timeout_ms``      | ``10000`` | Connection timeout, in milliseconds
-| ``ingester.multi_head``      | ``false`` | Enable multi-head ingest; this must be false for replicated tables
-| ``ingester.ip_regex``        | *<none>*  | Regular expression to use in selecting *Kinetica* worker node IP addresses (e.g., ``172.*``) that are accessible by the connector, for multi-head ingest  **Ingest Processor Only**
-| ``ingester.num_threads``     | ``4``     | Number of threads for bulk inserter
-| ``ingester.batch_size``      | ``10000`` | Batch size for bulk inserter
-| ``ingester.use_snappy``      | ``false`` | Use *snappy* compression during ingestion  **Ingest Processor Only**
-| ``spark.num_partitions``     | ``4``     | Number of *Spark* partitions to use for extracting data  **Egress Processor Only**
-| ``spark.rows_per_partition`` | *<none>*  | Number of records per partition *Spark* should segment data into before loading into *Kinetica*; if not specified, *Spark* will use the same number of partitions it used to retrieve the source data  **Data Loader Only**
+| Property Name                      | Default   | Description
+| :---                               | :---      | :---
+| ``database.url``                   | *<none>*  | URL of *Kinetica* instance (http or https)
+| ``database.jdbc_url``              | *<none>*  | JDBC URL of the *Kinetica ODBC Server*  **Ingest/Egress Processor Only**
+| ``database.stream_url``            | *<none>*  | ZMQ URL of the *Kinetica* table monitor  **Streaming Processor Only**
+| ``database.username``              | *<none>*  | *Kinetica* login username
+| ``database.password``              | *<none>*  | *Kinetica* login password
+| ``database.retry_count``           | ``5``     | Connection retry count
+| ``database.timeout_ms``            | ``10000`` | Connection timeout, in milliseconds
+| ``ingester.analyze_data_only``     | ``false`` | When ``true``, will analyze the ingest data set, determining the types & sizes of columns necessary to hold the ingest data, and will output the derived schema as a ``CREATE TABLE statement`` (at the INFO log level).  **NOTE:** If this parameter is set to ``true``, all others will be ignored.  **Ingest Processor Only**
+| ``ingester.batch_size``            | ``10000`` | Batch size for bulk inserter
+| ``ingester.flatten_source_schema`` | ``false`` | When ``true``, converts the following complex source data structures into single-table representations:  *struct*, *array*, & *map*.  See [Complex Data Types](#complex-data-types) for details.  **Ingest Processor Only**
+| ``ingester.ip_regex``              | *<none>*  | Regular expression to use in selecting *Kinetica* worker node IP addresses (e.g., ``172.*``) that are accessible by the connector, for multi-head ingest  **Ingest Processor Only**
+| ``ingester.multi_head``            | ``false`` | Enable multi-head ingest; this must be false for replicated tables
+| ``ingester.num_threads``           | ``4``     | Number of threads for bulk inserter
+| ``ingester.use_snappy``            | ``false`` | Use *snappy* compression during ingestion  **Ingest Processor Only**
+| ``spark.num_partitions``           | ``4``     | Number of *Spark* partitions to use for extracting data  **Egress Processor Only**
+| ``spark.rows_per_partition``       | *<none>*  | Number of records per partition *Spark* should segment data into before loading into *Kinetica*; if not specified, *Spark* will use the same number of partitions it used to retrieve the source data  **Data Loader Only**
 
 The following apply for the *Data Loader* if SSL is used. A keystore or
 truststore can be specified to override the default from the JVM.
 
 | Property Name               | Default  | Description
 | :---                        | :---     | :---
-| ``ssl.truststore_jks``      | *<none>* | JKS trust store for CA certificate check
-| ``ssl.truststore_password`` | *<none>* | Trust store password
+| ``ssl.bypass_cert_check``   | *<none>* | Whether CA certificate check should be skipped
 | ``ssl.keystore_p12``        | *<none>* | PKCS#12 key store--only for 2-way SSL
 | ``ssl.keystore_password``   | *<none>* | Key store password
-| ``ssl.bypass_cert_check``   | *<none>* | Whether CA certificate check should be skipped
+| ``ssl.truststore_jks``      | *<none>* | JKS trust store for CA certificate check
+| ``ssl.truststore_password`` | *<none>* | Trust store password
 
 ### Data Source/Target Properties
 
@@ -1144,36 +1348,28 @@ the access mechanism.
 
 | Property Name                   | Default   | Description
 | :---                            | :---      | :---
-| ``table.name``                  | *<none>*  | *Kinetica* table to access
 | ``table.create``                | ``false`` | Automatically create table if missing
-| ``table.truncate``              | ``false`` | Truncate table if it exists
 | ``table.is_replicated``         | ``false`` | Whether the target table is replicated or not  **Ingest Processor Only**
+| ``table.name``                  | *<none>*  | *Kinetica* table to access
+| ``table.truncate``              | ``false`` | Truncate table if it exists
+| ``table.truncate_to_size``      | ``false`` | Truncate strings when inserting into charN columns  **Data Loader Only**
 | ``table.update_on_existing_pk`` | ``false`` | If the target table, ``table.name``, has a primary key, update records in it with matching primary key values from records being ingested
 | ``table.use_templates``         | ``false`` | Enable *template tables*; see [Template Tables](#template-tables) section for details  **Data Loader Only**
-| ``table.truncate_to_size``      | ``false`` | Truncate charN strings to size.
 
 For the *Data Loader*, the following properties specify the data source &
 format.
 
 | Property Name          | Default   | Description
 | :---                   | :---      | :---
-| ``source.sql_file``    | *<none>*  | File containing a SQL-compliant query to use to retrieve data from *Hive* or *Spark-SQL*
-| ``source.data_path``   | *<none>*  | File or directory in Hadoop or the local filesystem containing source data
-| ``source.data_format`` | *<none>*  | Indicates the format of the file(s) in ``source.data_path``
 | ``source.csv_header``  | ``false`` | If format is CSV, whether the file has column headers or not; if ``true``, the column headers will be used as column names in creating the target table if it doesn't exist and mapping source fields to target columns if the table does exist.  If ``false``, columns will be mapped by position.
-
-**NOTE:**  Supported formats include:
-
-* ``avro``
-* ``csv``
-* ``json``
-* ``orc``
-* ``parquet``
+| ``source.data_format`` | *<none>*  | Indicates the format of the file(s) in ``source.data_path``.  Supported formats include:  ``avro``, ``csv``, ``json``, ``orc``, & ``parquet``
+| ``source.data_path``   | *<none>*  | File or directory in Hadoop or the local filesystem containing source data
+| ``source.sql_file``    | *<none>*  | File containing a SQL-compliant query to use to retrieve data from *Hive* or *Spark-SQL*
 
 For the *Ingest/Egress Processor*, the following properties govern
 evolving/drifting schemas.
 
 | Property Name                 | Default   | Description
 | :---                          | :---      | :---
-| ``table.map_columns_by_name`` | ``true``  | Whether the *Ingest Processor* should map ``DataFrame`` columns by name or position; if ``true``, columns in the ``DataFrame`` will be mapped in case-sensitive fashion to the target table; if ``false``, ``DataFrame`` columns will be mapped by position within the ``DataFrame`` to position within the target table
 | ``table.append_new_columns``  | ``false`` | Whether the *Ingest Processor* should append columns from the source that don't exist in the target table to the target table
+| ``table.map_columns_by_name`` | ``true``  | Whether the *Ingest Processor* should map ``DataFrame`` columns by name or position; if ``true``, columns in the ``DataFrame`` will be mapped in case-sensitive fashion to the target table; if ``false``, ``DataFrame`` columns will be mapped by position within the ``DataFrame`` to position within the target table

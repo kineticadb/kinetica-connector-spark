@@ -46,5 +46,6 @@ object ConfigurationConstants {
     val ACCUMULATOR_NAME: String = "acc_name"
 
     val LOADERCODEPATH: String = "loadercodepath"
-    val KINETICA_DRYRUN: String = "ingester.dry_run"
+    val KINETICA_DRYRUN: String = "ingester.analyze_data_only"
+    val KINETICA_FLATTEN_SCHEMA: String = "ingester.flatten_source_schema"
 }

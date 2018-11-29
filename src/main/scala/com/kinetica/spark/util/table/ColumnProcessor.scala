@@ -28,8 +28,6 @@ object ColumnProcessor extends LazyLogging {
             processNumeric(columnName, "float", nullable, alterDDL)
         } else if (dt.isInstanceOf[DoubleType]) {
             processNumeric(columnName, "double", nullable, alterDDL)
-        } else if (dt.isInstanceOf[DecimalType]) {
-            processNumeric(columnName, "decimal", nullable, alterDDL)
         } else {
             processNumeric(columnName, "double", nullable, alterDDL)
         }
@@ -72,7 +70,21 @@ object ColumnProcessor extends LazyLogging {
             maxInt = 1000; // We need an unrestricted string. 
         }
         logger.info(" @@@@@@@@@@@@ column name and max length is " + columnName + "/" + maxInt)
+        SparkKineticaTableUtil.charColumnLengths += (columnName -> maxInt)
         KineticaDDLBuilder.buildString(columnName, maxInt, nullable)
+    }
+    
+    def processDecimal(
+        dt: DataType,
+        columnName: String,
+        nullable: Boolean,
+        alterDDL: Boolean): Unit = {
+        if (alterDDL) {
+            // DONT DO ANYTHING - AlterTableAddColumnDDL.buildTS(columnName, nullable)
+        } else {
+            val decimalType : DecimalType = dt.asInstanceOf[DecimalType]
+            KineticaDDLBuilder.buildDecimal(columnName, decimalType.precision, decimalType.scale, nullable)
+        }
     }
 
     def processTS(

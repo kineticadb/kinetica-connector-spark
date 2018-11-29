@@ -27,6 +27,9 @@ import java.nio.ByteBuffer
 import scala.collection.JavaConversions._
 
 object KineticaSparkDFManager extends LazyLogging {
+    
+    val MAX_DATE = 29379542399999L;
+    val MIN_DATE = -30610224000000L;
 
     @BeanProperty
     var df: DataFrame = null
@@ -166,8 +169,14 @@ object KineticaSparkDFManager extends LazyLogging {
         		        logger.info("Kin col properties " + column.getProperties)
         		    }
         		} else {
-        		    logger.debug(" ################ " + classOf[Timestamp].cast(rtemp).getTime)
-        		    genericRecord.put(column.getName, classOf[Timestamp].cast(rtemp).getTime)
+        		    var sinceepoch = classOf[Timestamp].cast(rtemp).getTime
+        		    if( sinceepoch > MAX_DATE ) {
+        		        sinceepoch = MAX_DATE;
+        		    } else if( sinceepoch < MIN_DATE ) {
+        		        sinceepoch = MIN_DATE;
+        		    }           
+        		    logger.debug(" ################ " + sinceepoch)
+        		    genericRecord.put(column.getName, sinceepoch)
         		}
         		isARecord = true
         	} else if (rtemp.isInstanceOf[java.sql.Date]) {
@@ -180,7 +189,7 @@ object KineticaSparkDFManager extends LazyLogging {
         		isARecord = true
         	} else if (rtemp.isInstanceOf[BigDecimal]) {
         		logger.debug("BigDecimal")
-        		genericRecord.put(column.getName, classOf[BigDecimal].cast(rtemp).doubleValue())
+        		genericRecord.put(column.getName, rtemp.toString)
         		isARecord = true
         	} else if (rtemp.isInstanceOf[java.lang.Short]) {
         		logger.debug("Short")

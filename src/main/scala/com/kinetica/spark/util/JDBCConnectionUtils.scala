@@ -48,13 +48,15 @@ object JDBCConnectionUtils {
     }
 
     def executeSQL(sqlStatement: String): Unit = {
-        try stmt.execute(sqlStatement)
-        catch {
+        try {
+            stmt.execute(sqlStatement)
+            stmt.getResultSet
+            stmt.close
+        } catch {
             case e: Exception => {
                 e.printStackTrace()
                 throw new RuntimeException("SQL failed: " + sqlStatement, e)
             }
-
         }
     }
 

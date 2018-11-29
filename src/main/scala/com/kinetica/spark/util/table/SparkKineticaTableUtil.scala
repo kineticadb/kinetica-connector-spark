@@ -52,6 +52,9 @@ object SparkKineticaTableUtil extends LazyLogging {
 
     @BeanProperty
     var alterStatements: List[String] = new ArrayList[String]()
+    
+    @BeanProperty
+    var charColumnLengths: scala.collection.mutable.Map[String, Integer] = scala.collection.mutable.Map();
 
     def init(): Unit = {
         shardkeys = new ArrayList[String]()
@@ -177,14 +180,24 @@ object SparkKineticaTableUtil extends LazyLogging {
         KineticaDDLBuilder.init(lp)
         val alterDDL: Boolean = false
         var sField: scala.collection.Iterator[StructField] = ds.schema.iterator
+        
+        charColumnLengths.clear();
+        
         while (sField.hasNext) {
             val sf2: StructField = sField.next()
             val dt: DataType = sf2.dataType
 
             //System.out.println(" sf2 ####################### " + sf2.name)
             //System.out.println(" dt ####################### " + dt)
-
-            if (dt.isInstanceOf[NumericType]) {
+            if (dt.isInstanceOf[DecimalType]) {
+                logger.debug("Found DecimalType")
+                ColumnProcessor.processDecimal(
+                    dt,
+                    sf2.name,
+                    sf2.nullable,
+                    alterDDL)
+            }
+            else if (dt.isInstanceOf[NumericType]) {
                 logger.debug("Found NumericType")
                 ColumnProcessor.processNumeric(
                     dt,
@@ -227,6 +240,7 @@ object SparkKineticaTableUtil extends LazyLogging {
                     true)
             }
         }
+        logger.info(" @@@@@@@@@@@@ String column name and lengths found " + getCharColumnLengths())
         KineticaDDLBuilder.closeDDL()
     }
 

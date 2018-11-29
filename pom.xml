@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.kinetica</groupId>
     <artifactId>kinetica-spark</artifactId>
-    <version>6.2.1</version>
+    <version>6.2.1-SNAPSHOT</version>
     <packaging>jar</packaging>
     <name>spark-kinetica</name>
     <description>Tools for reading/writing data from/to Spark into Kinetica</description>
@@ -17,7 +17,7 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <gpudb-api.version>${project.version}</gpudb-api.version>
+        <gpudb-api.version>6.2.1</gpudb-api.version>
         <simba.version>10.1.4</simba.version>
         <java.version>1.8</java.version>
         <spark.version>2.2.1</spark.version>
@@ -40,6 +40,18 @@
         <version.timestamp>${git.commit.time}</version.timestamp>
     </properties>
 
+    <distributionManagement>
+       <repository>
+          <id>releases</id>
+          <name>Releases</name>
+          <url>http://files.kinetica.com/nexus/content/repositories/releases</url>
+       </repository>
+       <snapshotRepository>
+          <id>snapshots</id>
+          <name>Snapshots</name>
+          <url>http://files.kinetica.com/nexus/content/repositories/snapshots</url>
+       </snapshotRepository>
+    </distributionManagement>
     <repositories>
         <repository>
             <id>gisfed-releases</id>
@@ -196,6 +208,14 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+
+            <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-surefire-plugin</artifactId>
+              <configuration>
+                <useSystemClassLoader>false</useSystemClassLoader>
+              </configuration>
             </plugin>
 
             <plugin>

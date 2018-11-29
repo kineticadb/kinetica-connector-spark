@@ -184,8 +184,9 @@ class KineticaRelation(
                 logger.info("Table is not replicated");
             }
 
-            logger.info("Map and Write to Kinetica");
+            logger.info("Map and Write to Kinetica...");
             KineticaSparkDFManager.KineticaMapWriter(sparkSession.sparkContext, conf);
+            logger.info("Map and Write to Kinetica done.");
             // Lets try and print the accumulators
             println(" Total rows = " + conf.totalRows.value)
             println(" Converted rows = " + conf.convertedRows.value)

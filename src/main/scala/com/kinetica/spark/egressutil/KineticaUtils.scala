@@ -88,13 +88,19 @@ object KineticaUtils extends Logging {
         // retrieve it, you will get wrong result 199.99.
         // So it is needed to set precision and scale for Decimal based on JDBC metadata.
 
-        /*        
-        case DecimalType.Fixed(p, s) =>
-            (rs: ResultSet, row: InternalRow, pos: Int) =>
-                val decimal =
-                    nullSafeConvert[java.math.BigDecimal](rs.getBigDecimal(pos + 1), d => Decimal(d, p, s))
-                row.update(pos, decimal)
-				*/
+        case decimalType: DecimalType =>
+        	(rs: ResultSet, row: InternalRow, pos: Int) =>
+    	{
+    		val bigD = rs.getBigDecimal(pos + 1)
+    		val decimal =  nullSafeConvert2[java.math.BigDecimal, Decimal](bigD, d => Decimal(d, decimalType.precision, decimalType.scale))
+    		if(decimal.isDefined)
+    		{
+    			row.setDecimal(pos, decimal.get, decimalType.precision)
+    		} else if(bigD != null) {
+    			throw new Exception(s"unable to convert $bigD to Spark Decimal")
+    		}
+    	}
+                
         case DoubleType =>
             (rs: ResultSet, row: InternalRow, pos: Int) =>
                 row.setDouble(pos, rs.getDouble(pos + 1))
@@ -190,6 +196,15 @@ object KineticaUtils extends Logging {
         case _ => throw new IllegalArgumentException(s"Unsupported type ${dt.simpleString}")
     }
 
+    private def nullSafeConvert2[T, R](input: T, f: T => R): Option[R] = {
+    	if (input == null) {
+    		None
+    	} else {
+    		Some(f(input))
+    	}
+    }
+
+    
     private def nullSafeConvert[T](input: T, f: T => Any): Any = {
         if (input == null) {
             null

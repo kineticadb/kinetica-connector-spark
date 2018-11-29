@@ -42,6 +42,10 @@ object KineticaDDLBuilder extends LazyLogging {
         nullable: Boolean): Unit = {
         addToDDL(BuildStringDDL.buildDDL(columnName, maxStringLen), nullable)
     }
+    
+    def buildDecimal(columnName: String, precision: Int, scale: Int, nullable: Boolean): Unit = {
+        addToDDL(BuildDecimalDDL.buildDDL(columnName, precision, scale), nullable)
+    }
 
     def buildTS(columnName: String, nullable: Boolean): Unit = {
         addToDDL(BuildTSDDL.buildDDL(columnName), nullable)

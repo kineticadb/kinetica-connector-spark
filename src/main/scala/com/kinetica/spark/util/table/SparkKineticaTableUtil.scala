@@ -87,15 +87,16 @@ object SparkKineticaTableUtil extends LazyLogging {
     }
 
     /**
-     * Creates Kinetica table from spark dataframe
-     * @param ds Spark Dataframe
+     * Creates Kinetica table from spark dataframe or a schema type
+     * @param ds Option[DataFrame]
+     * @param schema Option[StructType]
      * @param lp LoaderParams
      * @throws KineticaException
      */
-    def createTable(ds: DataFrame, lp: LoaderParams): Unit = {
-        logger.info("Creating table from DataFrame")
+    def createTable(ds: Option[DataFrame], schema: Option[StructType], lp: LoaderParams): Unit = {
+        logger.info("Creating table from schema")
         verifyJdbcUrl(lp)
-        buildCreateTableDDL(ds, lp)
+        buildCreateTableDDL(ds, schema, lp)
         JDBCConnectionUtils.Init(lp)
         //execute create table
         logger.info("Create table DDL:  {}", KineticaDDLBuilder.getCreateTableDDL)
@@ -112,7 +113,7 @@ object SparkKineticaTableUtil extends LazyLogging {
         }
     }
 
-    def truncateTable(ds: DataFrame, lp: LoaderParams): Unit = {
+    def truncateTable(ds: Option[DataFrame], lp: LoaderParams): Unit = {
         logger.debug("truncateTable")
         verifyJdbcUrl(lp)
         JDBCConnectionUtils.Init(lp)
@@ -153,7 +154,7 @@ object SparkKineticaTableUtil extends LazyLogging {
             }
 
         }
-        buildAlterDDL(ds, lp)
+        buildAlterDDL(Option.apply(ds), lp)
         JDBCConnectionUtils.Init(lp)
         var iterator: Iterator[String] = null
         //execute alter table statements
@@ -171,18 +172,31 @@ object SparkKineticaTableUtil extends LazyLogging {
     }
 
     /**
-     * Builds Kinetica DDL
-     * @param ds Spark Dataframe
+     * Builds Kinetica DDL from either a DataFrame or a schema
+     * @param schema StructType  Schema for the table
      * @param lp LoaderParams object
      */
-    def buildCreateTableDDL(ds: DataFrame, lp: LoaderParams): Unit = {
+    def buildCreateTableDDL(ds: Option[DataFrame], schema: Option[StructType], lp: LoaderParams): Unit = {
         iniAlterStatements()
         KineticaDDLBuilder.init(lp)
         val alterDDL: Boolean = false
-        var sField: scala.collection.Iterator[StructField] = ds.schema.iterator
+
+        // Get the schema
+        var sField: scala.collection.Iterator[StructField] = null
+        ds match {
+            case Some(ds) => sField = ds.schema.iterator;
+            case None => {
+                // Since no dataframe is given, a StructType better be given!
+                schema match {
+                    case Some(schema) => sField = schema.iterator;
+                    case None => throw new RuntimeException("Need either a dataFrame or a StructType; neither given")
+;
+                }
+            }
+        }
         
         charColumnLengths.clear();
-        
+
         while (sField.hasNext) {
             val sf2: StructField = sField.next()
             val dt: DataType = sf2.dataType
@@ -244,13 +258,20 @@ object SparkKineticaTableUtil extends LazyLogging {
         KineticaDDLBuilder.closeDDL()
     }
 
-    def buildAlterDDL(ds: DataFrame, lp: LoaderParams): Unit = {
+    def buildAlterDDL(ds: Option[DataFrame], lp: LoaderParams): Unit = {
         AlterTableAddColumnDDL.init(lp)
         AlterTableModifyColumnDDL.init(lp)
         iniAlterStatements()
         val mytype: Type = KineticaSparkDFManager.getType(lp)
         val alterDDL: Boolean = true
-        var sField: scala.collection.Iterator[StructField] = ds.schema.iterator
+
+        // Get the field iterator
+        var sField: scala.collection.Iterator[StructField] = null
+        ds match {
+            case Some(ds) => sField = ds.schema.iterator;
+            case None => throw new KineticaException("No data frame given!");
+        }
+
         while (sField.hasNext) {
             var columnFound: Boolean = false
             val sf2: StructField = sField.next()
@@ -348,12 +369,13 @@ object SparkKineticaTableUtil extends LazyLogging {
 
     /**
      * Return kinetica DDL from dataframe
-     * @param ds Dataframe
+     * @param ds Option[DataFrame] Optional data frame
+     * @param schema Option[StructType]  The schema for the table
      * @param lp LoaderParams
      * @return Generate DDL
      */
-    def getCreateTableDDL(ds: DataFrame, lp: LoaderParams): String = {
-        buildCreateTableDDL(ds, lp)
+    def getCreateTableDDL(ds: Option[DataFrame], schema: Option[StructType], lp: LoaderParams): String = {
+        buildCreateTableDDL(ds, schema, lp)
         KineticaDDLBuilder.getCreateTableDDL
     }
 
@@ -390,7 +412,7 @@ object SparkKineticaTableUtil extends LazyLogging {
      * @return Generate DDL
      */
     def getAlterTableDDL(ds: DataFrame, lp: LoaderParams): List[String] = {
-        buildAlterDDL(ds, lp)
+        buildAlterDDL(Option.apply(ds), lp)
         getAlterStatements
     }
 

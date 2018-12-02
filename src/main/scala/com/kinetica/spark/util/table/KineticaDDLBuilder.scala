@@ -5,7 +5,6 @@ import java.util.{ ArrayList, List }
 import com.kinetica.spark.LoaderParams
 import com.typesafe.scalalogging.LazyLogging
 
-//remove if not needed
 
 object KineticaDDLBuilder extends LazyLogging {
 
@@ -16,14 +15,26 @@ object KineticaDDLBuilder extends LazyLogging {
     private var firstColumn: Boolean = true
 
     def init(lp: LoaderParams): Unit = {
+        // Get the table creation part of the DDL
         createTableDDL =
-            if (lp.isTableReplicated)
+            if (lp.isTableReplicated) {
+                // Replicated tables must be explicitly declared
                 new StringBuffer().append(
                     "CREATE REPLICATED TABLE " + lp.getTablename +
                         " (")
-            else
-                new StringBuffer()
-                    .append("CREATE TABLE " + lp.getTablename + " (")
+            }
+            else {
+                if ( lp.getSchemaname.isEmpty ) {
+                    // Regular table
+                    new StringBuffer()
+                        .append("CREATE TABLE " + lp.getTablename + " (")
+                }
+                else {
+                    // Table with a collection
+                    new StringBuffer()
+                        .append("CREATE TABLE " + lp.getSchemaname + "." + lp.getTablename + " (")
+                }
+            }
         compressDDLs = new ArrayList[String]()
         firstColumn = true
         SubTypeDDL.init()

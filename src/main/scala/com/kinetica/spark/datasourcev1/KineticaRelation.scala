@@ -1,8 +1,9 @@
-package com.kinetica.spark
+package com.kinetica.spark.datasourcev1
 
 import java.io.IOException
 import java.util.UUID
 import java.util.regex.Pattern
+import com.kinetica.spark.LoaderParams
 import com.kinetica.spark.util.ConfigurationConstants._
 import com.kinetica.spark.util._
 import com.kinetica.spark.util.table._
@@ -46,7 +47,7 @@ class KineticaRelation(
 
     val properties = new Properties()
     parameters.foreach { case (k, v) => properties.setProperty(k, v) }
-    val conf: LoaderParams = new LoaderParams(sparkSession.sparkContext, parameters)
+    val conf: LoaderParams = new LoaderParams( Option.apply(sparkSession.sparkContext), parameters)
 
     lazy val querySchema: StructType = {
         logger.debug("*********************** KR:querySchema")
@@ -63,7 +64,7 @@ class KineticaRelation(
 
         logger.debug("*********************** KR:BS ")
 
-        val conf: LoaderParams = new LoaderParams(sparkSession.sparkContext, parameters)
+        val conf: LoaderParams = new LoaderParams( Option.apply(sparkSession.sparkContext), parameters)
         val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'database.jdbc_url' not specified"))
         val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'table.name' not specified"))
         val numPartitions = parameters.getOrElse(CONNECTOR_NUMPARTITIONS_PARAM, "4").toInt
@@ -147,7 +148,7 @@ class KineticaRelation(
 
         if (conf.isDryRun()) {
             try {
-                SparkKineticaTableUtil.createTable(dfSource, conf);
+                SparkKineticaTableUtil.createTable( Option.apply(dfSource), None, conf );
             } catch {
                 case e: Throwable => throw new RuntimeException("Failed with errors ", e);
             }
@@ -157,14 +158,14 @@ class KineticaRelation(
                 if (conf.truncateTable) {
                     logger.info("Truncating/Creating table " + conf.getTablename);
                     try {
-                        SparkKineticaTableUtil.truncateTable(dfSource, conf);
+                        SparkKineticaTableUtil.truncateTable(Option.apply(dfSource), conf);
                     } catch {
                         case e: Throwable => throw new RuntimeException("Failed with errors ", e);
                     }
                 }
             } else if (conf.isCreateTable) {
                 try {
-                    SparkKineticaTableUtil.createTable(dfSource, conf);
+                    SparkKineticaTableUtil.createTable( Option.apply(dfSource), None, conf );
                 } catch {
                     case e: Throwable => throw new RuntimeException("Failed with errors ", e);
                 }

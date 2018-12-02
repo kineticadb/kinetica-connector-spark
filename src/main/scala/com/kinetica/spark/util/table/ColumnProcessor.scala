@@ -46,7 +46,7 @@ object ColumnProcessor extends LazyLogging {
     }
 
     def processString(
-        ds: DataFrame,
+        ds: Option[DataFrame],
         columnName: String,
         nullable: Boolean,
         alterDDL: Boolean,
@@ -54,20 +54,25 @@ object ColumnProcessor extends LazyLogging {
         dryRun : Boolean,
         unrestrictedString : Boolean = false): Unit = {
         var maxInt = 1
-        if( !unrestrictedString ) {
-            var maxIntDs: DataFrame = null
-            maxIntDs = TypeStringProcessor.getMaxStringLen(ds, columnName)
-            //set to 0 for new columns
-            var existingColumnMaxLength: Int = 0
-            try {
-                maxInt = maxIntDs.first.getInt(0)
-            } catch {
-                case e: Exception => {
-                    logger.info("Could not determine max length for column, setting to 1 " + columnName)
+        ds match {
+            case Some(ds) => {
+                if( !unrestrictedString ) {
+                    var maxIntDs: DataFrame = null
+                    maxIntDs = TypeStringProcessor.getMaxStringLen(ds, columnName)
+                    //set to 0 for new columns
+                    var existingColumnMaxLength: Int = 0
+                    try {
+                        maxInt = maxIntDs.first.getInt(0)
+                    } catch {
+                        case e: Exception => {
+                            logger.info("Could not determine max length for column, setting to 1 " + columnName)
+                        }
+                    }
+                } else {
+                    maxInt = 1000; // We need an unrestricted string. 
                 }
             }
-        } else {
-            maxInt = 1000; // We need an unrestricted string. 
+            case None => maxInt = 1000; // We need an unrestricted string. 
         }
         logger.info(" @@@@@@@@@@@@ column name and max length is " + columnName + "/" + maxInt)
         SparkKineticaTableUtil.charColumnLengths += (columnName -> maxInt)
@@ -88,7 +93,7 @@ object ColumnProcessor extends LazyLogging {
     }
 
     def processTS(
-        ds: DataFrame,
+        ds: Option[DataFrame],
         columnName: String,
         nullable: Boolean,
         alterDDL: Boolean): Unit = {
@@ -100,7 +105,7 @@ object ColumnProcessor extends LazyLogging {
     }
 
     def processDate(
-        ds: DataFrame,
+        ds: Option[DataFrame],
         columnName: String,
         nullable: Boolean,
         alterDDL: Boolean): Unit = {
@@ -112,7 +117,7 @@ object ColumnProcessor extends LazyLogging {
     }
     
     def processByteArray(
-        ds: DataFrame,
+        ds: Option[DataFrame],
         columnName: String,
         nullable: Boolean,
         alterDDL: Boolean): Unit = {
@@ -124,7 +129,7 @@ object ColumnProcessor extends LazyLogging {
     }
 
     def processBoolean(
-        ds: DataFrame,
+        ds: Option[DataFrame],
         columnName: String,
         nullable: Boolean,
         alterDDL: Boolean): Unit = {

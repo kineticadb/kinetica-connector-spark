@@ -1,34 +1,36 @@
-Kinetica Spark Connector Changelog
-==============================
+# Kinetica Spark Connector Changelog
 
-Version 6.2.1 - 2018-09-30
---------------------------
+## Version 6.2
 
-	- Now handling byte array types (Kinetica BYTE datatype)
+### Version 6.2.2
 
-
-Version 6.2.1 - 2018-09-27
---------------------------
-
-	- Stringification of some complex datatypes. Creating columns with unrestricted string type
-		for those data items.
-
-
-Version 6.2.0 - 2018-07-01
---------------------------
-
-	- Aligned examples to take username & password
+#### Added
+-   Added a new package `com.kinetica.spark.datasourcev1` that is the current
+    implementation utilizing Spark's DataSource v1 API.  This acts as the default
+    package when specifying `com.kinetica.spark`.
+-   Added a new package `com.kinetica.spark.datasourcev2` that is utilizes
+    Spark's DataSource v2 API (which is still evolving; so you should use v1).  This
+    path does NOT alter destination Kinetica tables on the fly.
+-   Loader configuration parameter `spark.datasource_api_version`
 
 
-Version 6.2.0 - 2018-06-22
---------------------------
+### Version 6.2.1
 
-	- Added streaming API example
-	- Parameter names consolidated between Loader, Ingest/Egress Processor and Streamer
-	- Added federated query example
-	- Added PySpark example
+#### Changed
+-   Refactored code to use Spark's DataSource API
+-   Now handling byte array types (Kinetica BYTE datatype)
+-   Stringification of some complex datatypes. Creating columns with unrestricted string type
+    for those data items.
+-   Parameter names now allow embedded periods
 
-Version 6.2.0 - 2018-07-03
---------------------------
 
-    - Added support for headers and type inference for CSV files.
+
+### Version 6.2.0
+
+-   Aligned examples to take username & password
+-   Added streaming API example
+-   Parameter names consolidated between Loader, Ingest/Egress Processor and Streamer
+-   Added federated query example
+-   Added PySpark example
+-   Added support for headers and type inference for CSV files.
+

@@ -10,7 +10,8 @@ import com.kinetica.spark.LoaderParams
 import org.apache.spark.SparkContext
 
 @SerialVersionUID(-2502861044221136156L)
-class LoaderConfiguration(sc:SparkContext, params: Map[String, String]) extends LoaderParams(sc, params) with Serializable with LazyLogging {
+class LoaderConfiguration(sc:SparkContext, params: Map[String, String])
+    extends LoaderParams(Option.apply(sc), params) with Serializable with LazyLogging {
 
     @BeanProperty
     val sqlFileName: String = params.get(CONNECTOR_SQLFILE_PARAM).getOrElse(null)
@@ -29,4 +30,10 @@ class LoaderConfiguration(sc:SparkContext, params: Map[String, String]) extends 
 
     @BeanProperty
     val csvHeader: Boolean = params.get(KINETICA_CSV_HEADER).getOrElse("false").toBoolean
+
+    // Use the datasource v1 API path by default
+    @BeanProperty
+    val datasourceVersion: String = params.get(SPARK_DATASOURCE_VERSION).getOrElse("v1")
+
+
 }

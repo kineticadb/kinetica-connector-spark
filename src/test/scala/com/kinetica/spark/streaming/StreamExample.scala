@@ -171,7 +171,7 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
         )
         
         val sc = new SparkConf().setAppName(sparkAppName)
-        val lp = new LoaderParams(SparkSessionSingleton.getInstance(sc).sparkContext, streamingOptions)
+        val lp = new LoaderParams(Option.apply( SparkSessionSingleton.getInstance(sc).sparkContext ), streamingOptions)
         val ssc = new StreamingContext(SparkSessionSingleton.getInstance(sc).sparkContext, Durations.seconds(STREAM_POLL_INTERVAL_SECS))
 
         // table monitor to queue to the data stream

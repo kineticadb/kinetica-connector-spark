@@ -49,6 +49,12 @@ object KineticaSparkDFManager extends LazyLogging {
         myType
     }
 
+
+    /**
+     * Sets the type of the Kinetica table.
+     *
+     * @param lp LoaderParams  Contains all parameters
+     */
     def setType(lp: LoaderParams): Unit = {
         try {
             logger.debug("Kinetica URL is " + lp.getKineticaURL)

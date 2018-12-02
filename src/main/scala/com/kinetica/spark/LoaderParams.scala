@@ -4,6 +4,8 @@ import com.gpudb.Type
 import com.gpudb.GPUdb
 import com.gpudb.GPUdbBase
 import com.gpudb.GenericRecord
+import com.gpudb.protocol.ShowTableRequest
+import com.gpudb.protocol.ShowTableResponse
 
 import java.io.Serializable
 import scala.beans.{ BeanProperty, BooleanBeanProperty }
@@ -22,6 +24,9 @@ import javax.net.ssl.TrustManager
 import org.apache.spark.SparkContext
 import org.apache.spark.util.LongAccumulator
 
+import scala.collection.JavaConverters._
+
+    
 class LoaderParams extends Serializable with LazyLogging {
 
     @BeanProperty
@@ -63,6 +68,9 @@ class LoaderParams extends Serializable with LazyLogging {
     @BeanProperty
     var threads: Int = 4
 
+    @BeanProperty
+    var numPartitions: Int = 4
+        
     @BeanProperty
     var jdbcURL: String = null
 
@@ -123,12 +131,18 @@ class LoaderParams extends Serializable with LazyLogging {
     @BooleanBeanProperty
     var flattenSourceSchema: Boolean = false
 
-    def this(sc: SparkContext, params: Map[String, String]) = {
+    def this(sc: Option[SparkContext], params: Map[String, String]) = {
         this()
 
-        totalRows = sc.longAccumulator("TotalRows")
-        convertedRows = sc.longAccumulator("ParsedRows")
-        failedConversion = sc.longAccumulator("UnparsedRows")
+        // Get a few long accumulators only if the context is given
+        sc match {
+            case Some(sc) => {
+                totalRows = sc.longAccumulator("TotalRows")
+                convertedRows = sc.longAccumulator("ParsedRows")
+                failedConversion = sc.longAccumulator("UnparsedRows")
+            }
+            case None => Unit
+        }
 
         require(params != null, "Config cannot be null")
         require(params.nonEmpty, "Config cannot be empty")
@@ -145,6 +159,8 @@ class LoaderParams extends Serializable with LazyLogging {
         KdbIpRegex = params.get(KINETICA_IPREGEX_PARAM).getOrElse("")
         useSnappy = params.get(KINETICA_USESNAPPY_PARAM).getOrElse("false").toBoolean
 
+        numPartitions = params.get(CONNECTOR_NUMPARTITIONS_PARAM).getOrElse("4").toInt
+        
         retryCount = params.get(KINETICA_RETRYCOUNT_PARAM).getOrElse("5").toInt
         jdbcURL = params.get(KINETICA_JDBCURL_PARAM).getOrElse(null)
         createTable = params.get(KINETICA_CREATETABLE_PARAM).getOrElse("false").toBoolean
@@ -168,14 +184,29 @@ class LoaderParams extends Serializable with LazyLogging {
             throw new Exception( "Parameter is required: " + KINETICA_TABLENAME_PARAM)
         }
 
-        if( loaderPath ) {
+        // Instead of diverging the behavior for spark-submit vs spark shell etc.,
+        // just check if a collection name is given; if so, honor it (but not
+        // require it)
+        if( tablename contains "." ) {
             val tableParams: Array[String] = tablename.split("\\.")
-            if (tableParams.length != 2) {
-                throw new Exception( "tablename is needed in the form [schema].[table] " + tablename)
+            if (tableParams.length > 2) {
+                // Too many periods!!
+                throw new Exception( s"Option 'table.name' value can have at most one '.' separating the collection name from the table ([collection].[table]); given $tablename")
             }
-            tablename = tableParams(1)
-            schemaname = tableParams(0)
+            // A collection name IS given
+            if (tableParams.length == 2) {
+                schemaname = tableParams( 0 )
+                tablename = tableParams( 1 )
+            }
         }
+        // if( loaderPath ) {
+        //     val tableParams: Array[String] = tablename.split("\\.")
+        //     if (tableParams.length != 2) {
+        //         throw new Exception( "tablename is needed in the form [schema].[table] " + tablename)
+        //     }
+        //     tablename = tableParams(1)
+        //     schemaname = tableParams(0)
+        // }
 
         // SSL
         bypassCert = params.get(KINETICA_SSLBYPASSCERTCJECK_PARAM).getOrElse("false").toBoolean
@@ -183,7 +214,7 @@ class LoaderParams extends Serializable with LazyLogging {
         trustStorePassword = params.get(KINETICA_TRUSTSTOREPASSWORD_PARAM).getOrElse(null)
         keyStorePath = params.get(KINETICA_KEYSTOREP12_PARAM).getOrElse(null)
         keyStorePassword = params.get(KINETICA_KEYSTOREPASSWORD_PARAM).getOrElse(null)
-    }
+    }   // end constructor
 
     // below are not serializable so they are created on demand
     @transient
@@ -227,6 +258,9 @@ class LoaderParams extends Serializable with LazyLogging {
         logger.info("Connected to {} ({})", rsMap.get(CORE_VERSION), rsMap.get(VERSION_DATE))
     }
 
+    /**
+     * Checks if the table exists.
+     */
     def hasTable(): Boolean = {
         val gpudb: GPUdb = this.getGpudb
         if (!gpudb.hasTable(this.tablename, null).getTableExists) {
@@ -235,6 +269,43 @@ class LoaderParams extends Serializable with LazyLogging {
             logger.info("Found existing table: {}", this.tablename)
             true
         }
+    }
+
+    /**
+     * Checks if the table belongs to the collection, if
+     * given any.  Returns true if no collection is given, or if
+     * one is given AND the table belongs to that collection.
+     * false otherwise.  If the table does not exist, return false.
+     */
+    def doesTableCollectionMatch(): Boolean = {
+        val gpudb: GPUdb = this.getGpudb
+        // Now check if it's part of the collection, if given any
+        if ( !this.schemaname.isEmpty() ) {
+            var stOptions = Map( ShowTableRequest.Options.NO_ERROR_IF_NOT_EXISTS -> ShowTableRequest.Options.TRUE );
+            
+            val rsp: ShowTableResponse = gpudb.showTable( this.tablename, stOptions.asJava );
+            if ( rsp.getAdditionalInfo().isEmpty() )
+                return false; // the table does not exist, so collection can't match!
+
+            val rspAdditionalInfo: Map[String, String] = rsp.getAdditionalInfo().get( 0 ).asScala.toMap
+            if ( rspAdditionalInfo.contains( ShowTableResponse.AdditionalInfo.COLLECTION_NAMES ) ) {
+                // Now, is it the same collection?
+                val collName: String = rspAdditionalInfo( ShowTableResponse.AdditionalInfo.COLLECTION_NAMES );
+                if ( collName == this.schemaname) {
+                    // Collection name matches
+                    return true;
+                }
+                else {
+                    // Collection name does not match
+                    return false;
+                }
+            }
+            // The table does not belong to a collection (but is supposed
+            // to), so not quite a match
+            return false;
+        }
+        else
+            return true; // no collection name given
     }
 
     private def setupSSL(): Unit = {

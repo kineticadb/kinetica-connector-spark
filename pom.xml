@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.kinetica</groupId>
     <artifactId>kinetica-spark</artifactId>
-    <version>6.2.1-SNAPSHOT</version>
+    <version>6.2.2-SNAPSHOT</version>
     <packaging>jar</packaging>
     <name>spark-kinetica</name>
     <description>Tools for reading/writing data from/to Spark into Kinetica</description>
@@ -20,7 +20,7 @@
         <gpudb-api.version>6.2.1</gpudb-api.version>
         <simba.version>10.1.4</simba.version>
         <java.version>1.8</java.version>
-        <spark.version>2.2.1</spark.version>
+        <spark.version>2.3.1</spark.version>
         <spark-avro.version>4.0.0</spark-avro.version>
         <scala.version>2.11.11</scala.version>
         <scala.binary.version>2.11</scala.binary.version>
@@ -215,6 +215,9 @@
               <artifactId>maven-surefire-plugin</artifactId>
               <configuration>
                 <useSystemClassLoader>false</useSystemClassLoader>
+                    <excludes>
+                        <exclude>**/*.java</exclude>
+                    </excludes>
               </configuration>
             </plugin>
 
@@ -391,6 +394,19 @@
             <version>${scalatest.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.11</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.thedeanda</groupId>
+            <artifactId>lorem</artifactId>
+            <version>1.2</version>
+            <scope>test</scope>
+        </dependency>
+        
 
     </dependencies>
 </project>

@@ -83,7 +83,19 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
         val inputDs: DataFrame = getDataset(sess)
 
         logger.info("Starting Kinetica write...")
-        inputDs.write.format("com.kinetica.spark").options(params).save()
+        if ( loaderConfig.datasourceVersion == "v1" ) {
+            logger.info("Using the Spark DataSource v1 API for loading")
+            inputDs.write.format("com.kinetica.spark.datasourcev1").options(params).save()
+        }
+        else if ( loaderConfig.datasourceVersion == "v2" ) {
+            logger.info("Using the Spark DataSource v2 API for loading")
+            inputDs.write.format("com.kinetica.spark.datasourcev2").options(params).save()
+        }
+        else {
+            val errorMsg: String = s"Must provide a valid value for parameter '${ConfigurationConstants.SPARK_DATASOURCE_VERSION}', if given.  Accepted values: 'v1', 'v2'; given '${loaderConfig.datasourceVersion}'";
+            logger.error( errorMsg )
+            throw new Exception( errorMsg )
+        }
     }
 
     private def getDataset(sess: SparkSession): DataFrame = {

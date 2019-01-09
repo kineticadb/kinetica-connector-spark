@@ -20,19 +20,19 @@ object KineticaDDLBuilder extends LazyLogging {
             if (lp.isTableReplicated) {
                 // Replicated tables must be explicitly declared
                 new StringBuffer().append(
-                    "CREATE REPLICATED TABLE " + lp.getTablename +
-                        " (")
+                    "CREATE REPLICATED TABLE \"" + lp.getTablename +
+                        "\" (")
             }
             else {
                 if ( lp.getSchemaname.isEmpty ) {
                     // Regular table
                     new StringBuffer()
-                        .append("CREATE TABLE " + lp.getTablename + " (")
+                        .append("CREATE TABLE \"" + lp.getTablename + "\" (")
                 }
                 else {
                     // Table with a collection
                     new StringBuffer()
-                        .append("CREATE TABLE " + lp.getSchemaname + "." + lp.getTablename + " (")
+                        .append("CREATE TABLE \"" + lp.getSchemaname + "." + lp.getTablename + "\" (")
                 }
             }
         compressDDLs = new ArrayList[String]()

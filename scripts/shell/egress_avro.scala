@@ -5,7 +5,7 @@ val TableName = "flights"
 
 // config options
 val KineticaOptions = Map(
-    "database.jdbc_url" -> "jdbc:simba://gpudb:9292;ParentSet=test",
+    "database.jdbc_url" -> "jdbc:kinetica://gpudb:9191;ParentSet=test",
     "database.username" -> "",
     "database.password" -> "",
     "table.name" -> TableName,

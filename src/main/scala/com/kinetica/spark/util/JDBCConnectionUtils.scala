@@ -25,7 +25,7 @@ object JDBCConnectionUtils {
     }
 
     private def createKineticaConnection(lp: LoaderParams): Connection =
-        getConnection("com.simba.client.core.jdbc4.SCJDBC4Driver", lp)
+        getConnection("com.kinetica.jdbc.Driver", lp)
 
     private def getConnection(driverClass: String, lp: LoaderParams): Connection = {
         Class.forName(driverClass)

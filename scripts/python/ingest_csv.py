@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
     tableDF.write.format('com.kinetica.spark') \
         .option('database.url', 'http://gpudb:9191') \
-        .option('database.jdbc_url', 'jdbc:simba://gpudb:9292;ParentSet=test') \
+        .option('database.jdbc_url', 'jdbc:kinetica://gpudb:9191;ParentSet=test') \
         .option('table.name', tableName) \
         .option('table.is_replicated' ,'false') \
         .option('table.map_columns_by_name', 'false') \

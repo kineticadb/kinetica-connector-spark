@@ -1,6 +1,6 @@
 package com.kinetica.spark.egressutil
 
-import java.sql.{ ResultSetMetaData, Connection, SQLException }
+import java.sql.{ ResultSet, ResultSetMetaData, Connection, SQLException }
 import java.util.Properties
 import org.apache.spark.sql.types._
 import com.kinetica.spark.LoaderParams
@@ -27,7 +27,10 @@ private[kinetica] object KineticaSchema {
         //println(s"########## Getting schema for table ${table} ############# ") 
         val conn: Connection = KineticaJdbcUtils.getConnector(url, properties)()
         try {
-            val rs = conn.prepareStatement(s"SELECT * FROM $table limit 1").executeQuery()
+            // Get one row from the table to get the dataframe
+            val query = s"SELECT * FROM $table limit 1"
+            val rs = conn.prepareStatement( query ).executeQuery()
+
             try {
                 val rsmd = rs.getMetaData
                 val ncols = rsmd.getColumnCount

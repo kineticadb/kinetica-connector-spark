@@ -1,5 +1,13 @@
 # Kinetica Spark Connector Changelog
 
+## Version 7.0
+
+### Version 7.0.0.0
+
+#### Changed
+- Updated the JDBC connector to use the 7.0 JDBC connector
+
+
 ## Version 6.2
 
 ### Version 6.2.2

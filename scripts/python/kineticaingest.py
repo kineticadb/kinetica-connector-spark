@@ -19,7 +19,7 @@ def basic_ingest_example():
     url = "http://%s:9191" % host
     options = {
         "database.url" : url,
-        "database.jdbc_url" : "jdbc:simba://%s:9292;URL=%s;ParentSet=MASTER" % (host, url),
+        "database.jdbc_url" : "jdbc:kinetica://%s:9191;URL=%s;ParentSet=MASTER" % (host, url),
         "database.username" : username,
         "database.password" : password,
         "table.name" : "airline",

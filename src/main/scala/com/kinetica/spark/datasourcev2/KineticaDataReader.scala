@@ -16,7 +16,7 @@ class KineticaDataReader (
     extends DataReader[Row] {
  
     val logger = Logger("KineticaDataReader")
-  
+
     val requiredColumns = requiredSchema.fieldNames
 
     val numPartitions = conf.getNumPartitions
@@ -29,12 +29,10 @@ class KineticaDataReader (
 
     // Read the table's rows
     val myrows: Iterator[Row] = {
-       // val queryStr = buildTableQuery(table, requiredColumns)
        val queryStr = buildTableQuery(table, requiredColumns, pushedCatalystFilters)
 
        val conn = com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)()
-       val stmt = conn.prepareStatement( queryStr )
-       val rs = stmt.executeQuery
+       val rs   = conn.prepareStatement( queryStr ).executeQuery
         
        val internalRows = com.kinetica.spark.egressutil.KineticaUtils.resultSetToSparkInternalRows( rs, requiredSchema )
        val encoder = org.apache.spark.sql.catalyst.encoders.RowEncoder.apply( requiredSchema ).resolveAndBind()
@@ -50,7 +48,7 @@ class KineticaDataReader (
         myrows.next()
     }
 
-    override def close(): Unit = {  
+    override def close(): Unit = {
     }
   
     private def buildTableQuery(

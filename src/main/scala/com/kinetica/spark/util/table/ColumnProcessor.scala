@@ -28,6 +28,8 @@ object ColumnProcessor extends LazyLogging {
             processNumeric(columnName, "float", nullable, alterDDL)
         } else if (dt.isInstanceOf[DoubleType]) {
             processNumeric(columnName, "double", nullable, alterDDL)
+        } else if (dt.isInstanceOf[DecimalType]) {
+            processNumeric(columnName, "decimal", nullable, alterDDL)
         } else {
             processNumeric(columnName, "double", nullable, alterDDL)
         }

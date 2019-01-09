@@ -39,7 +39,7 @@ class KineticaSubmitTest extends FunSuite with LazyLogging {
 
     // config options
     private final val KineticaOptions = Map(
-        "database.jdbc_url" -> "jdbc:simba://localhost:9292",
+        "database.jdbc_url" -> "jdbc:kinetica://localhost:9191",
         "database.username" -> "",
         "database.password" -> "",
         "table.name" -> TableName,
@@ -107,7 +107,7 @@ class KineticaSubmitTest extends FunSuite with LazyLogging {
              "table.is_replicated" -> "false",
              "table.map_columns_by_name" -> "false",
              "table.create" -> "true",
-             "database.jdbc_url" -> "jdbc:simba://localhost:9292",
+             "database.jdbc_url" -> "jdbc:kinetica://localhost:9191",
              "database.username" -> "",
              "ingester.multi_head" -> "false",
              "database.password" -> "");

@@ -1,6 +1,6 @@
 package com.kinetica.spark.egressutil
 
-import java.sql.{ Connection, DriverManager }
+import java.sql.{ Connection, DriverManager, ResultSet }
 import java.util.Properties
 
 import org.apache.spark.sql.execution.datasources.jdbc.DriverRegistry
@@ -17,7 +17,7 @@ import com.typesafe.scalalogging.LazyLogging
 private[kinetica] object KineticaJdbcUtils extends LazyLogging {
 
     /**
-     * Given  an url, return a function that loads the
+     * Given a URL, return a function that loads the
      * specified driver string then returns a connection to the JDBC url.
      * getConnector is run on the driver code, while the function it returns
      * is run on the executor.
@@ -29,7 +29,7 @@ private[kinetica] object KineticaJdbcUtils extends LazyLogging {
     def getConnector(url: String, lp: LoaderParams): () => Connection = {
         () =>
             {
-                val driver = "com.simba.client.core.jdbc4.SCJDBC4Driver"
+                val driver = "com.kinetica.jdbc.Driver"
                 try {
                     if (driver != null) DriverRegistry.register(driver)
                 } catch {
@@ -47,6 +47,20 @@ private[kinetica] object KineticaJdbcUtils extends LazyLogging {
         s"""$colName"""
     }
 
+    /**
+     * Given a database connection and a SQL query, executes the query and
+     * returns a function that generates a result set.
+     *
+     * @param conn   The database connection.
+     * @param query  The SQL query.
+     * @return  A function that executes the query and returns a ResultSet object.
+     * @throws A RuntimeException when the query yields no result set.
+     */
+    def executeSqlQuery( conn: Connection, query: String ) : () => ResultSet = {
+        // Prepare and execute a sql statement
+        conn.prepareStatement( query ).executeQuery
+    }
+
     def getCountWithFilter(
         url: String,
         properties: LoaderParams,
@@ -55,10 +69,10 @@ private[kinetica] object KineticaJdbcUtils extends LazyLogging {
         val whereClause = KineticaFilters.getFilterClause(filters)
         val countQuery = s"SELECT count(*) FROM $table $whereClause"
         logger.info(countQuery)
-        val conn = KineticaJdbcUtils.getConnector(url, properties)
+        val conn = KineticaJdbcUtils.getConnector(url, properties)()
         var count: Long = 0
         try {
-            val results = conn().prepareStatement(countQuery).executeQuery()
+            val results = conn.prepareStatement( countQuery ).executeQuery()
 
             if (results.next()) {
                 count = results.getLong(1)
@@ -66,8 +80,10 @@ private[kinetica] object KineticaJdbcUtils extends LazyLogging {
                 throw new IllegalStateException("Could not read count from Kinetica")
             }
         } finally {
-            conn().close()
+            conn.close()
         }
         count
     }
+
+
 }

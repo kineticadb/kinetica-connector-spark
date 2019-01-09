@@ -22,7 +22,8 @@ object TypeStringProcessor {
     //println("========== getMaxStringLen on " + columnName)
     ds.createOrReplaceTempView("temptable")
     val sc = ds.sparkSession.sqlContext
-    val sqlString = s"select max(length(${columnName})) from temptable"
+    val colNameWithoutQuotes = columnName.substring(1, columnName.length()-1)
+    val sqlString = s"select max(length(${colNameWithoutQuotes})) from temptable"
     //println(" Sql string for temp table is " + sqlString)
     val df = sc.sql(sqlString)
     df

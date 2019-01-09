@@ -187,7 +187,7 @@ class StreamExample(args: Array[String]) extends Serializable with LazyLogging {
         logger.info(" Destination table is = " + destTableName)
         val ingestOptions = Map(
             "database.url" -> url,
-            "database.jdbc_url" -> s"jdbc:simba://${host}:9292;URL=${url}",
+            "database.jdbc_url" -> s"jdbc:kinetica://${host}:9191;URL=${url}",
             "database.username" -> username,
             "database.password" -> password,
             "ingester.batch_size" -> ingestBatchSize,

@@ -37,7 +37,7 @@ object KineticaIngestTest extends App {
     
     var kineticaOptions = Map(
         "database.url" -> url,
-        "database.jdbc_url" -> s"jdbc:simba://${host}:9292;URL=${url};ParentSet=MASTER",
+        "database.jdbc_url" -> s"jdbc:kinetica://${host}:9191;URL=${url};ParentSet=MASTER",
         "database.username" -> username,
         "database.password" -> password,
         "table.name" -> "airline",

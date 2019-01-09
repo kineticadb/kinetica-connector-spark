@@ -196,18 +196,21 @@ object SparkKineticaTableUtil extends LazyLogging {
         }
         
         charColumnLengths.clear();
-
+        
         while (sField.hasNext) {
             val sf2: StructField = sField.next()
             val dt: DataType = sf2.dataType
 
             //System.out.println(" sf2 ####################### " + sf2.name)
             //System.out.println(" dt ####################### " + dt)
+            
+            val colName = "\"" + sf2.name + "\""
+
             if (dt.isInstanceOf[DecimalType]) {
                 logger.debug("Found DecimalType")
                 ColumnProcessor.processDecimal(
                     dt,
-                    sf2.name,
+                    colName,
                     sf2.nullable,
                     alterDDL)
             }
@@ -215,7 +218,7 @@ object SparkKineticaTableUtil extends LazyLogging {
                 logger.debug("Found NumericType")
                 ColumnProcessor.processNumeric(
                     dt,
-                    sf2.name,
+                    colName,
                     sf2.nullable,
                     alterDDL)
             } else if (dt.isInstanceOf[StringType]) {
@@ -223,29 +226,29 @@ object SparkKineticaTableUtil extends LazyLogging {
                 val dryRun = lp.isDryRun()
                 ColumnProcessor.processString(
                     ds,
-                    sf2.name,
+                    colName,
                     sf2.nullable,
                     alterDDL,
                     false,
                     dryRun)
             } else if (dt.isInstanceOf[TimestampType]) {
                 logger.debug("Found TimestampType")
-                ColumnProcessor.processTS(ds, sf2.name, sf2.nullable, alterDDL)
+                ColumnProcessor.processTS(ds, colName, sf2.nullable, alterDDL)
             } else if (dt.isInstanceOf[DateType]) {
                 logger.debug("Found DateType")
-                ColumnProcessor.processDate(ds, sf2.name, sf2.nullable, alterDDL)
+                ColumnProcessor.processDate(ds, colName, sf2.nullable, alterDDL)
             } else if (dt.isInstanceOf[BooleanType]) {
                 logger.debug("Found BooleanType")
-                ColumnProcessor.processBoolean(ds, sf2.name, sf2.nullable, alterDDL)
+                ColumnProcessor.processBoolean(ds, colName, sf2.nullable, alterDDL)
             } else if (dt.isInstanceOf[BinaryType]) {
                 logger.debug("Found BinaryType")
-                ColumnProcessor.processByteArray(ds, sf2.name, sf2.nullable, alterDDL)
+                ColumnProcessor.processByteArray(ds, colName, sf2.nullable, alterDDL)
             } else {
                 logger.debug("Found complex type perhaps")
                 val dryRun = lp.isDryRun()
                 ColumnProcessor.processString(
                     ds,
-                    sf2.name,
+                    colName,
                     sf2.nullable,
                     alterDDL,
                     false,

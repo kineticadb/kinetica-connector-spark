@@ -1,9 +1,19 @@
 package com.kinetica.spark.loader
 
-import java.util.ArrayList
-import java.util.Date
-import java.util.HashMap
-import java.util.List
+import com.gpudb.Type.Column
+import com.gpudb.protocol.CreateTableRequest
+import com.gpudb.protocol.DeleteRecordsRequest
+import com.gpudb.protocol.ShowTableRequest
+import com.gpudb.protocol.ShowTableResponse
+import com.gpudb.ColumnProperty
+import com.gpudb.GPUdb
+import com.gpudb.GPUdbBase
+import com.gpudb.Type
+import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.types.DataTypes
+import org.apache.spark.sql.types.DecimalType
+import org.apache.spark.sql.types.StructType
 
 import scala.beans.BeanProperty
 import scala.collection.JavaConversions.asScalaBuffer
@@ -11,24 +21,9 @@ import scala.collection.JavaConversions.setAsJavaSet
 import scala.util.control.Breaks.break
 import scala.util.control.Breaks.breakable
 
-import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.types.DataTypes
-import org.apache.spark.sql.types.DecimalType
-import org.apache.spark.sql.types.StructType
-
-import com.gpudb.ColumnProperty
-import com.gpudb.GPUdb
-import com.gpudb.GPUdbBase
-import com.gpudb.Type
-import com.gpudb.Type.Column
-import com.gpudb.protocol.CreateTableRequest
-import com.gpudb.protocol.ShowTableRequest
-import com.gpudb.protocol.ShowTableResponse
-import com.typesafe.scalalogging.LazyLogging
-
 class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
 
-    private val gpudb: GPUdb = conf.getGpudb
+    private val gpudb: GPUdb = conf.getGpudb()
     private val tableName: String = conf.tablename
     private val schemaName: String = conf.schemaname
     private val useTemplates: Boolean = conf.useTemplates
@@ -56,8 +51,9 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
             this.setTypeFromResponse(response, 0)
 
             if (loaderConfig.truncateTable) {
-                this.gpudb.clearTable(this.tableName, null, null)
-                this.createTable()
+                //this.gpudb.clearTable(this.tableName, null, null)
+                //this.createTable()
+                this.truncateTable()
             }
         }
         else if (loaderConfig.createTable) {
@@ -74,6 +70,16 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
         }
         loaderConfig.setType(this.getDestType)
         this.getColumnMap(sparkSchema)
+    }
+
+    private def truncateTable(): Unit = {
+        logger.info("Truncating table <{}>", this.tableName)
+        val options: java.util.Map[String, String] = GPUdbBase.options(
+            DeleteRecordsRequest.Options.DELETE_ALL_RECORDS,
+            DeleteRecordsRequest.Options.TRUE)
+        val expressions: java.util.List[String] = new java.util.ArrayList[String]()
+
+        this.gpudb.deleteRecords(this.tableName, expressions, options)
     }
 
     private def createTable(): Unit = {
@@ -94,7 +100,7 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
     }
 
     private def setTypeFromResponse(response: ShowTableResponse, index: Int): Unit = {
-        this.destTypeId = response.getTypeIds().get(index)
+        this.destTypeId = response.getTypeIds.get(index)
 
         val typeSchema: String = response.getTypeSchemas.get(index)
         val typeLabel: String = response.getTypeLabels.get(index)
@@ -102,7 +108,7 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
         this.destType = new Type(typeLabel, typeSchema, typeProps)
 
         // check if this table is replicated
-        val tableDesc: List[String] = response.getTableDescriptions().get(index)
+        val tableDesc: java.util.List[String] = response.getTableDescriptions.get(index)
         if(tableDesc.contains("REPLICATED")) {
             this.isReplicated = tableDesc.contains("REPLICATED")
         }
@@ -111,13 +117,13 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
     private def resolveTemplate(): Unit = {
         val templateSchema: String = this.schemaName + ".template"
 
-        val options: HashMap[String, String] = new HashMap[String, String]()
+        val options: java.util.HashMap[String, String] = new java.util.HashMap[String, String]()
         options.put(
             ShowTableRequest.Options.SHOW_CHILDREN,
             ShowTableRequest.Options.TRUE)
 
         val response: ShowTableResponse = this.gpudb.showTable(templateSchema, options)
-        val tableNames: List[String] = response.getTableNames
+        val tableNames: java.util.List[String] = response.getTableNames
         val prefix: String = this.tableName + "."
 
         val templateName: String  = tableNames
@@ -134,31 +140,31 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
     }
     
     def adjustSourceSchema(df: org.apache.spark.sql.DataFrame): org.apache.spark.sql.DataFrame = {
-        if( conf.csvHeader == false && conf.hasTable) {
+        if( !conf.csvHeader && conf.hasTable) {
             val response: ShowTableResponse = this.gpudb.showTable(this.tableName, null)
             setTypeFromResponse(response, 0)
             val destCols = this.destType.getColumns
-            val colNames = destCols.map(t => (t.getName.toUpperCase)).toArray
+            val colNames = destCols.map(t => t.getName.toUpperCase).toArray
             val dfRenamed = df.toDF(colNames: _*)
             return dfRenamed
         } 
-        return df
+        df
     }
 
-    private def getColumnMap(sparkSchema: StructType): HashMap[Integer, Integer] = {
+    private def getColumnMap(sparkSchema: StructType): java.util.HashMap[Integer, Integer] = {
         val sourceType: Type = convertType(sparkSchema)
         val sourceCols = sourceType.getColumns
         val destCols = this.destType.getColumns
 
         val toMapped = destCols.map(t => (t.getName.toUpperCase, t)).toMap
-        var unMappedDest : scala.collection.mutable.Map[String, Column]
-            = collection.mutable.Map(toMapped.toSeq: _*)
+        val unMappedDest: scala.collection.mutable.Map[String, Column]
+        = collection.mutable.Map(toMapped.toSeq: _*)
 
         val toUnmapped = sourceCols.map(t => (t.getName.toUpperCase, t)).toMap
         val unMappedSource : scala.collection.mutable.Map[String, Column]
             = collection.mutable.Map(toUnmapped.toSeq: _*)
 
-        val columnMap: HashMap[Integer, Integer] = new HashMap[Integer, Integer]()
+        val columnMap: java.util.HashMap[Integer, Integer] = new java.util.HashMap[Integer, Integer]()
 
         for (sourceIdx <- 0 until sourceCols.size) {
             breakable {
@@ -181,7 +187,7 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
                 val destIdx: Int = this.destType.getColumnIndex(destCol.getName)
                 if (destIdx < 0) {
                     // should never happen
-                    throw new Exception("Column not found in type");
+                    throw new Exception("Column not found in type")
                 }
 
                 // add the mapping
@@ -194,15 +200,15 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
             }
         }
 
-        if (unMappedSource.size > 0) {
+        if (unMappedSource.nonEmpty) {
             val unMappedCols: String = unMappedSource.keySet.mkString(",")
             logger.info("The following columns in the dataframe were not mapped to table <{}.{}>: [{}]",
                 this.schemaName, this.tableName, unMappedCols)
         }
-        if (unMappedDest.size > 0) {
-            val nullColumnList = unMappedDest.values.filter(x => !x.isNullable()).map(_.getName)
+        if (unMappedDest.nonEmpty) {
+            val nullColumnList = unMappedDest.values.filter(x => !x.isNullable).map(_.getName)
 
-            if (nullColumnList.size > 0) {
+            if (nullColumnList.nonEmpty) {
                 val nullColumns: String = nullColumnList.mkString(",")
                 throw new Exception(
                     String.format("The following columns in <%s.%s> are nullable and not mapped: %s",
@@ -217,13 +223,13 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
     }
 
     private def convertType(schema: StructType): Type = {
-        val columns: List[Column] = new ArrayList[Column]()
+        val columns: java.util.List[Column] = new java.util.ArrayList[Column]()
 
         for (field <- schema.fields) {
             val dataType: DataType = field.dataType
             val columnName: String = field.name
             var classType: Class[_] = null
-            val colProps: ArrayList[String] = new ArrayList[String]()
+            val colProps: java.util.ArrayList[String] = new java.util.ArrayList[String]()
 
             if (field.nullable) {
                 colProps.add("nullable")

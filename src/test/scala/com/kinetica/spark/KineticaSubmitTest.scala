@@ -3,7 +3,6 @@ package com.kinetica.spark
 import org.scalatest.FunSuite
 import org.apache.spark.sql.SparkSession
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.spark.SparkConf
 import com.databricks.spark.avro._
 
 class KineticaSubmitTest extends FunSuite with LazyLogging {
@@ -101,16 +100,16 @@ class KineticaSubmitTest extends FunSuite with LazyLogging {
         logger.info("Writing lines: {}", tableDF.count())
         tableDF.printSchema()
 
-        var writeToKineticaOpts = Map(
-             "database.url" -> "http://localhost:9191",
-             "table.name" -> "flights",
-             "table.is_replicated" -> "false",
-             "table.map_columns_by_name" -> "false",
-             "table.create" -> "true",
-             "database.jdbc_url" -> "jdbc:kinetica://localhost:9191",
-             "database.username" -> "",
-             "ingester.multi_head" -> "false",
-             "database.password" -> "");
+        val writeToKineticaOpts: Map[String, String] = Map(
+            "database.url" -> "http://localhost:9191",
+            "table.name" -> "flights",
+            "table.is_replicated" -> "false",
+            "table.map_columns_by_name" -> "false",
+            "table.create" -> "true",
+            "database.jdbc_url" -> "jdbc:kinetica://localhost:9191",
+            "database.username" -> "",
+            "ingester.multi_head" -> "false",
+            "database.password" -> "")
 
         tableDF.write.format("com.kinetica.spark").options(writeToKineticaOpts).save()
     }

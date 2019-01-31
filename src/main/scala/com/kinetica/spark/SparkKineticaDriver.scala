@@ -1,29 +1,26 @@
 package com.kinetica.spark
 
 import java.io.File
-import java.util.ArrayList
-import java.util.Arrays
-import java.util.Iterator
-import java.util.List
+import java.nio.file.Path
+import java.nio.file.Paths
 
-import scala.collection.JavaConversions.asScalaIterator
-
+import com.kinetica.spark.loader.LoaderConfiguration
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.configuration.ConfigurationException
 import org.apache.commons.configuration.PropertiesConfiguration
 import org.apache.commons.io.FileUtils
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.DataFrameReader
+import org.apache.spark.sql.SparkSession
 
-import com.kinetica.spark.loader.LoaderConfiguration
-import com.typesafe.scalalogging.LazyLogging
+import scala.collection.mutable
 
 object SparkKineticaDriver extends LazyLogging {
 
-    logger.info("Version {}", getVersionString())
+    logger.info("Version {}", getVersionString)
 
     def main(args: Array[String]): Unit = {
-        System.setProperty("spark.sql.warehouse.dir", "file:///C:/1SPARK/spark-warehouse");
+        System.setProperty("spark.sql.warehouse.dir", "file:///C:/1SPARK/spark-warehouse")
         System.setProperty("hadoop.home.dir", "c:/1SPARK/")
         if (args.length < 1) {
             throw new Exception("First argument must be a properties file.")
@@ -40,7 +37,7 @@ object SparkKineticaDriver extends LazyLogging {
         sess.stop()
     }
 
-    private def getVersionString(): String = {
+    private def getVersionString: String = {
         val thisPackage: Package = this.getClass.getPackage
         val thisTitle: String = thisPackage.getImplementationTitle
         val thisVersion: String = thisPackage.getImplementationVersion
@@ -49,7 +46,6 @@ object SparkKineticaDriver extends LazyLogging {
 }
 
 import com.kinetica.spark.util.ConfigurationConstants
-import org.apache.spark.SparkContext
 
 class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
 
@@ -57,9 +53,9 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
 
     private val propertyConf: PropertiesConfiguration = parseArgs(args)
 
-    var params = scala.collection.mutable.Map[String, String]()
+    var params: mutable.Map[String, String] = scala.collection.mutable.Map[String, String]()
 
-    val propIt : Iterator[_] = propertyConf.getKeys()
+    val propIt : java.util.Iterator[_] = propertyConf.getKeys()
 
     while (propIt.hasNext) {
         val key: String  = propIt.next.toString
@@ -72,7 +68,7 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
     // one of the 2 different paths from 2 original connectors.
     params += (ConfigurationConstants.LOADERCODEPATH -> "true")
 
-    val immutableParams = params.map(kv => (kv._1,kv._2)).toMap
+    val immutableParams: Map[String, String] = params.map(kv => (kv._1,kv._2)).toMap
     var loaderConfig : LoaderConfiguration = _
 
     def start(sess: SparkSession): Unit = {
@@ -92,7 +88,7 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
             inputDs.write.format("com.kinetica.spark.datasourcev2").options(params).save()
         }
         else {
-            val errorMsg: String = s"Must provide a valid value for parameter '${ConfigurationConstants.SPARK_DATASOURCE_VERSION}', if given.  Accepted values: 'v1', 'v2'; given '${loaderConfig.datasourceVersion}'";
+            val errorMsg: String = s"Must provide a valid value for parameter '${ConfigurationConstants.SPARK_DATASOURCE_VERSION}', if given.  Accepted values: 'v1', 'v2'; given '${loaderConfig.datasourceVersion}'"
             logger.error( errorMsg )
             throw new Exception( errorMsg )
         }
@@ -105,10 +101,10 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
         var dataFormat: String = loaderConfig.dataFormat
 
         var inputDs: DataFrame = null
-        val parentDir: String = this.propertyConf.getFile.getParent
+        val parentPath: Path = Paths.get(this.propertyConf.getFile.getParent)
 
         if (sqlFileName != null) {
-            val sqlFile: File = new File(parentDir, sqlFileName)
+            val sqlFile: File = parentPath.resolve(sqlFileName).toFile
             val sql: String = FileUtils.readFileToString(sqlFile)
             logger.info("Executing SQL: {}", sql)
             inputDs = sess.sql(sql)
@@ -124,7 +120,7 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
             logger.info("Attempting to load file as {}: {}", dataFormat, dataPath)
             val dfReader: DataFrameReader = sess.read.format(dataFormat)
 
-            if(dataFormat.equalsIgnoreCase("csv") && loaderConfig.csvHeader == true) {
+            if(dataFormat.equalsIgnoreCase("csv") && loaderConfig.csvHeader) {
                 dfReader.option("header", "true")
                 dfReader.option("inferSchema", "true")
             } else if(dataFormat.equalsIgnoreCase("csv")) {
@@ -137,7 +133,7 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
         }
 
         if(loaderConfig.partitionRows > 0) {
-            inputDs = repartition(inputDs);
+            inputDs = repartition(inputDs)
         }
 
         inputDs
@@ -154,14 +150,14 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
     }
 
     private def parseArgs(args: Array[String]): PropertiesConfiguration = {
-        val argList: List[String] = new ArrayList[String](Arrays.asList(args: _*))
+        val argList: java.util.List[String] = new java.util.ArrayList[String](java.util.Arrays.asList(args: _*))
         val propPath: String = argList.remove(0)
         val propFile: File = new File(propPath)
         logger.info("Reading properties from file: {}", propFile)
 
-        val conf = new PropertiesConfiguration(propPath);
+        val conf = new PropertiesConfiguration(propPath)
 
-        val iter: Iterator[String] = argList.iterator()
+        val iter: java.util.Iterator[String] = argList.iterator()
         while (iter.hasNext) {
             var key: String = iter.next()
             if (!key.startsWith("--")) {

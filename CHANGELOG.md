@@ -2,7 +2,7 @@
 
 ## Version 7.0
 
-### Version 7.0.0.0
+### Version 7.0.0.0 -- 2019-01-31
 
 #### Changed
 - Updated the JDBC connector to use the 7.0 JDBC connector

@@ -64,7 +64,7 @@ public class KineticaSubmitSqlTest {
         }
     }
 
-    public static Dataset<Row> createTestTable(SparkSession spark) {
+    private static Dataset<Row> createTestTable(SparkSession spark) {
 
         List<StructField> fields = new ArrayList<>();
         fields.add(DataTypes.createStructField("test_name", DataTypes.StringType, true));

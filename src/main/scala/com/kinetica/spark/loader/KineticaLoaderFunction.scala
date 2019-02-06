@@ -3,33 +3,29 @@ package com.kinetica.spark.loader
 import java.time.Duration
 import java.time.Instant
 import java.util.Date
-import java.util.HashMap
-import java.util.Iterator
-import java.util.List
 
 //remove if not needed
-import scala.collection.JavaConversions.mapAsScalaMap
-import scala.collection.JavaConversions.asScalaBuffer
-
-import org.apache.spark.api.java.function.ForeachPartitionFunction
-import org.apache.spark.sql.Row
-
 import com.gpudb.BulkInserter
 import com.gpudb.GenericRecord
 import com.gpudb.Type
 import com.gpudb.Type.Column
 import com.kinetica.spark.util.KineticaBulkLoader
 import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.api.java.function.ForeachPartitionFunction
+import org.apache.spark.sql.Row
+
+import scala.collection.JavaConversions.asScalaBuffer
+import scala.collection.JavaConversions.mapAsScalaMap
 
 @SerialVersionUID(-594351038800346275L)
 class KineticaLoaderFunction (
     private val loaderConfig: LoaderConfiguration,
-    private val columnMap: HashMap[Integer, Integer])
+    private val columnMap: java.util.HashMap[Integer, Integer])
         extends ForeachPartitionFunction[Row] with LazyLogging {
 
-    private val tableType: Type = this.loaderConfig.getType
+    private val tableType: Type = this.loaderConfig.getType()
 
-    override def call(rowset: Iterator[Row]): Unit = {
+    override def call(rowset: java.util.Iterator[Row]): Unit = {
 
         val kbl: KineticaBulkLoader = new KineticaBulkLoader(loaderConfig)
         val bi: BulkInserter[GenericRecord] = kbl.GetBulkInserter()
@@ -43,7 +39,7 @@ class KineticaLoaderFunction (
     }
 
     private def insertRows(
-        rowset: Iterator[Row],
+        rowset: java.util.Iterator[Row],
         bi: BulkInserter[GenericRecord]): Long = {
         logger.info("Starting insert into table: {}", bi.getTableName)
         var rowcount: Long = 0
@@ -53,12 +49,10 @@ class KineticaLoaderFunction (
                 val record: GenericRecord = convertRow(row)
                 bi.insert(record)
             } catch {
-                case ex: Exception => {
-                    val msg = s"Row ${rowcount} conversion failed: ${row}"
+                case ex: Exception =>
+                    val msg = s"Row $rowcount conversion failed: $row"
                     logger.error(msg)
                     throw new Exception(msg, ex)
-                }
-
             }
             { rowcount += 1; rowcount - 1 }
             if (rowcount % 10000 == 0) {
@@ -89,12 +83,12 @@ class KineticaLoaderFunction (
 
         val destType: Class[_] = destColDef.getType
         val srcType: Class[_] = inValue.getClass
-        val colProps: List[String] = destColDef.getProperties
+        val colProps: java.util.List[String] = destColDef.getProperties
         var outValue: Any = null
 
         // need to check timestamp first because it may need normalization
         if (colProps.contains("timestamp")) {
-            outValue = convertFromDate(srcType, inValue);
+            outValue = convertFromDate(srcType, inValue)
         }
         else if (destType == srcType) {
             // fast path
@@ -119,11 +113,11 @@ class KineticaLoaderFunction (
         if(loaderConfig.truncateToSize && destType == classOf[java.lang.String]) {
             // truncate string if length exceeds charN max
             val outStr: String = outValue.asInstanceOf[java.lang.String]
-            val charNParam: Option[String] = colProps.filter(x => x.startsWith("char")).headOption
+            val charNParam: Option[String] = colProps.find(x => x.startsWith("char"))
 
-            if(!charNParam.isEmpty) {
+            if(charNParam.isDefined) {
                 val charMax: Int = charNParam.get.stripPrefix("char").toInt
-                if(outStr.size > charMax) {
+                if(outStr.length > charMax) {
                     outValue = outStr.substring(0, charMax)
                 }
             }

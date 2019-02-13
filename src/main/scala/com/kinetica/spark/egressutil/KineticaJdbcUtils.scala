@@ -29,6 +29,7 @@ private[kinetica] object KineticaJdbcUtils extends LazyLogging {
     def getConnector(url: String, lp: LoaderParams): () => Connection = {
         () =>
             {
+                logger.debug(" ############# Getting egress jdbc connection ############# ")
                 val driver = "com.simba.client.core.jdbc4.SCJDBC4Driver"
                 try {
                     if (driver != null) DriverRegistry.register(driver)

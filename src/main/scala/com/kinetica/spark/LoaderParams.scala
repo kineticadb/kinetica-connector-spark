@@ -236,7 +236,7 @@ class LoaderParams extends Serializable with LazyLogging {
 
     private def connect(): GPUdb = {
         setupSSL()
-        logger.info("Connecting to {} as <{}>", kineticaURL, kusername)
+        logger.debug("Connecting to {} as <{}>", kineticaURL, kusername)
         val opts: GPUdbBase.Options = new GPUdbBase.Options()
         opts.setUsername(kusername)
         opts.setPassword(kpassword)
@@ -255,7 +255,7 @@ class LoaderParams extends Serializable with LazyLogging {
         options.put(CORE_VERSION, "")
         options.put(VERSION_DATE, "")
         val rsMap: java.util.Map[String, String] = conn.showSystemProperties(options).getPropertyMap
-        logger.info("Connected to {} ({})", rsMap.get(CORE_VERSION), rsMap.get(VERSION_DATE))
+        logger.debug("Connected to {} ({})", rsMap.get(CORE_VERSION), rsMap.get(VERSION_DATE))
     }
 
     /**

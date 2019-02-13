@@ -13,6 +13,14 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.util.CompletionIterator
 
+import com.kinetica.spark.LoaderParams
+import com.gpudb.Record;
+
+import com.gpudb.protocol.GetRecordsByColumnRequest;
+import com.gpudb.protocol.GetRecordsByColumnResponse;
+
+
+
 import scala.util.control.NonFatal
 
 import com.typesafe.scalalogging.LazyLogging
@@ -37,111 +45,33 @@ private[kinetica] class KineticaRDD(
     columns: Array[String],
     filters: Array[Filter],
     partitions: Array[Partition],
-    properties: Properties)
+    properties: Properties,
+    conf: LoaderParams
+    )
     extends RDD[Row](sc, Nil) with LazyLogging {
-
+    
+    private val  MAX_ROWS_TO_FETCH = 10000
+   
     /**
      * Retrieve the list of partitions corresponding to this RDD.
      */
     override def getPartitions: Array[Partition] = partitions
 
     override def compute(thePart: Partition, context: TaskContext): Iterator[Row] = {
-        var closed = false
-        var rs: ResultSet = null
-        var conn: Connection = null
-
-        conn = getConnection()
 
         val part = thePart.asInstanceOf[KineticaPartition]
-        val query = buildTableQuery(conn, table, columns, filters, part, schema)
-        logger.debug("Query is {}", query)
-        val stmt = conn.prepareStatement(query)
-        rs = stmt.executeQuery
 
-        val internalRows = KineticaUtils.resultSetToSparkInternalRows(rs, schema)
-        val encoder = RowEncoder.apply(schema).resolveAndBind()
+        // Fetch the rows
+        val allRows = KineticaUtils.getRowsFromKinetica( conf.getGpudb, conf.getTablename,
+                                                         columns, schema,
+                                                         part.startRow, part.numRows,
+                                                         MAX_ROWS_TO_FETCH );
 
-        /*
-        println(" *************************** ")
-        println(encoder)
-        println(encoder.clsTag)
-        println(encoder.flat)
-
-        println(internalRows.size)
-
-        //internalRows.foreach(println)
-
-        for( ir <- internalRows ) {
-            println(ir)
-            println(encoder.fromRow(ir))
-        }
-        println(" *************************** ")
-        *
-        */
-        val myrows = internalRows.map(encoder.fromRow)
 
         def close() {
-            if (closed) return
-            try {
-                if (null != rs) {
-                    rs.close()
-                }
-            } catch {
-                case e: Exception => logWarning("Exception closing resultset", e)
-            }
-            try {
-                if (null != stmt) {
-                    stmt.close()
-                }
-            } catch {
-                case e: Exception => logWarning("Exception closing statement", e)
-            }
-            try {
-                if (null != conn) {
-                    if (!conn.isClosed && !conn.getAutoCommit) {
-                        try {
-                            conn.commit()
-                        } catch {
-                            case NonFatal(e) => logWarning("Exception committing transaction", e)
-                        }
-                    }
-                    conn.close()
-                }
-                logInfo("closed connection")
-            } catch {
-                case e: Exception => logWarning("Exception closing connection", e)
-            }
-            context.addTaskCompletionListener { context => close() }
-            closed = true
         }
+        context.addTaskCompletionListener { context => close() }
 
-        myrows
-    }
-
-    def buildTableQuery(
-        conn: Connection,
-        table: String,
-        columns: Array[String],
-        filters: Array[Filter],
-        partition: KineticaPartition,
-        schema: StructType): String = {
-
-        val baseQuery = {
-            val (whereClause, maxRowsToFetch) = KineticaFilters.getWhereClause(filters, partition)
-            val colStrBuilder = new StringBuilder()
-
-            //log.info(" KineticaDataReader buildTableQuery are - ")
-            //columns.foreach(println)
-
-            if (columns.length > 0) {
-                colStrBuilder.append(columns(0))
-                columns.drop(1).foreach(col => colStrBuilder.append(",").append(col))
-            } else {
-                colStrBuilder.append("1")
-            }
-            s"/* KI_HINT_MAX_ROWS_TO_FETCH($maxRowsToFetch) */SELECT $colStrBuilder FROM $table $whereClause"
-        }
-        log.info("External Table Query: " + baseQuery)
-        baseQuery.toString()
+        allRows
     }
 }

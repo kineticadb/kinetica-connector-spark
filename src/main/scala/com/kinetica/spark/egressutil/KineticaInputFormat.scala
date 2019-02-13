@@ -53,25 +53,26 @@ private[kinetica] object KineticaInputFormat {
         val numberOfRows = getTotalNumberOfRows(conn, table, filters)
         var rowsPerPartition = numberOfRows / numPartitions
         
-        if( numberOfRows % numPartitions != 0 ) {
-            rowsPerPartition += 1     
-        }
-        
-        //println(s"Number of rows is ${numberOfRows}") 
-        //println(s"Rows per partition is ${rowsPerPartition}") 
-        //println(s"Number of partitions is ${numPartitions}") 
+        val extra = numberOfRows % numPartitions
+
+        /*
+        println(s"Number of rows is ${numberOfRows}") 
+        println(s"Rows per partition is ${rowsPerPartition}") 
+        println(s"Number of partitions is ${numPartitions}") 
+		*/
         
         if (rowsPerPartition <= 1) {
             Array[Partition](KineticaPartition(0, numberOfRows, 0))
         } else {
             val ans = new ArrayBuffer[Partition]()
-            var partitionIndex = 0
             var start = 0
             var numRows = rowsPerPartition
-            for (index <- 1 to numPartitions) {
-                //println(s"Partition is ${start}/${numRows}/${partitionIndex}") 
-                ans += KineticaPartition(start, numRows, partitionIndex)
-                partitionIndex = partitionIndex + 1
+            for (index <- 0 to numPartitions-1) {
+                if( index == numPartitions-1 ) {
+                    numRows = numRows + extra
+                }
+                //println(s"Partition is ${start}/${numRows}/${index}") 
+                ans += KineticaPartition(start, numRows, index)
                 start = start + numRows;
             }
             ans.toArray

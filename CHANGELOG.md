@@ -2,6 +2,13 @@
 
 ## Version 6.2
 
+### Version 6.2.2.1 -- 2019-02-13
+
+##### Changed
+-   Kinetica egress now uses the native Java client API to fetch records instead
+    of utilizing the JDBC connector.
+
+
 ### Version 6.2.2
 
 #### Added

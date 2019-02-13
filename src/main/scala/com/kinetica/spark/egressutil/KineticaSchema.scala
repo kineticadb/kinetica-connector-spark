@@ -4,6 +4,8 @@ import java.sql.{ ResultSetMetaData, Connection, SQLException }
 import java.util.Properties
 import org.apache.spark.sql.types._
 import com.kinetica.spark.LoaderParams
+import com.gpudb.Type
+import com.gpudb.Type._
 
 /**
  * Generates schema for the data source by mapping to Kinetica jdbc type to Spark sql data types.
@@ -25,6 +27,8 @@ private[kinetica] object KineticaSchema {
     def getSparkSqlSchema(url: String, properties: LoaderParams, table: String): StructType = {
 
         //println(s"########## Getting schema for table ${table} ############# ") 
+        val typeColumns = Type.fromTable(properties.getGpudb(), table).getColumns
+        
         val conn: Connection = KineticaJdbcUtils.getConnector(url, properties)()
         try {
             val rs = conn.prepareStatement(s"SELECT * FROM $table limit 1").executeQuery()
@@ -44,16 +48,35 @@ private[kinetica] object KineticaSchema {
                     val columnType = getSparkSqlType(dataType, fieldSize, fieldScale, isSigned)
 
                     val metadata = new MetadataBuilder().putString("name", columnName)
+                    //val index = reorderSchemaFieldIndex(typeColumns, columnName)
+                    
+                    //println("index and column name = " + index + "/" + columnName) 
+                    
+                    //fields(index) = StructField(columnName, columnType, nullable, metadata.build())
                     fields(i) = StructField(columnName, columnType, nullable, metadata.build())
                     i = i + 1
                 }
-                new StructType(fields)
+                val schema = new StructType(fields)
+                print( " Hey hey Schema is " + schema) 
+                schema
             } finally {
                 rs.close()
             }
         } finally {
             conn.close()
         }
+    }
+    
+    def reorderSchemaFieldIndex(columns: java.util.List[Column], columnName: String): Int = {
+        val it = columns.iterator()
+        var ii = 0;
+        while( it.hasNext() ) {
+            if( it.next.getName.equals(columnName) ) {
+                return ii
+            }
+            ii = ii + 1
+        }
+        throw new RuntimeException(" Schema field not found -> " + columnName) 
     }
 
     /**
@@ -117,13 +140,15 @@ private[kinetica] object KineticaSchema {
     /**
      * Prune all but the specified columns from the Spark SQL schema.
      *
-     * @param schema - The Spark sql schema of the mappned kinetica table
+     * @param schema - The Spark sql schema of the mapped kinetica table
      * @param columns - The list of desired columns
      *
      * @return A Spark sql schema corresponding to columns in the given order.
      */
     def pruneSchema(schema: StructType, columns: Array[String]): StructType = {
         val fieldMap = Map(schema.fields map { x => x.metadata.getString("name") -> x }: _*)
-        new StructType(columns map { name => fieldMap(name) })
+        val newSchema = new StructType(columns map { name => fieldMap(name) })
+        //println(" Schema PRUNED = " + newSchema)
+        newSchema
     }
 }

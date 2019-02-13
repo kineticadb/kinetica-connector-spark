@@ -5,9 +5,11 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.StructType
 import com.kinetica.spark.LoaderParams
+import com.kinetica.spark.egressutil.KineticaUtils
 import com.kinetica.spark.util.ConfigurationConstants._
 import com.typesafe.scalalogging.Logger
 
+    
 class KineticaDataReader (
     val conf: LoaderParams,
     val tableSchema: StructType,
@@ -15,37 +17,37 @@ class KineticaDataReader (
     val requiredSchema: StructType)
     extends DataReader[Row] {
  
-    val logger = Logger("KineticaDataReader")
+    val logger = Logger("KineticaDataReader");
+  
+    val requiredColumns = requiredSchema.fieldNames;
 
-    val requiredColumns = requiredSchema.fieldNames
-
-    val numPartitions = conf.getNumPartitions
-    val url   = if (conf.getJdbcURL   != null ) conf.getJdbcURL   else sys.error("Option 'database.jdbc_url' not specified")
-    val table = if (conf.getTablename != null ) conf.getTablename else sys.error("Option 'table.name' not specified")
+    val numPartitions = conf.getNumPartitions;
+    val url   = if (conf.getJdbcURL   != null ) conf.getJdbcURL   else sys.error("Option 'database.jdbc_url' not specified");
+    val table = if (conf.getTablename != null ) conf.getTablename else sys.error("Option 'table.name' not specified");
         
     // // Handle the case when no required column is given
     // if ( requiredColumns.isEmpty ) {
     // }
 
+    val gpudbConn = conf.getGpudb;
+    val tableName = conf.getTablename;
+    
+    // Get the table size
+    val tableSize = KineticaUtils.getKineticaTableSize( gpudbConn, tableName );
+     
     // Read the table's rows
-    val myrows: Iterator[Row] = {
-       val queryStr = buildTableQuery(table, requiredColumns, pushedCatalystFilters)
-
-       val conn = com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)()
-       val rs   = conn.prepareStatement( queryStr ).executeQuery
-        
-       val internalRows = com.kinetica.spark.egressutil.KineticaUtils.resultSetToSparkInternalRows( rs, requiredSchema )
-       val encoder = org.apache.spark.sql.catalyst.encoders.RowEncoder.apply( requiredSchema ).resolveAndBind()
-       internalRows.map(encoder.fromRow)
-    }
+    val batchSize = 10000
+    val myRows = KineticaUtils.getRowsFromKinetica( gpudbConn, tableName,
+                                                    requiredColumns, requiredSchema,
+                                                    0, tableSize.toInt, batchSize );
   
   
     override def next(): Boolean = {
-        myrows.hasNext
+        myRows.hasNext
     }
 
     override def get(): Row = {
-        myrows.next()
+        myRows.next()
     }
 
     override def close(): Unit = {

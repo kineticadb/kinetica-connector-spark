@@ -53,7 +53,7 @@ class KineticaRelation(
         logger.debug("*********************** KR:querySchema")
         val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'database.jdbc_url' not specified"))
         val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'table.name' not specified"))
-        KineticaSchema.getSparkSqlSchema(url, conf, table)
+        KineticaSchema.getSparkSqlSchema(url, conf, conf.getTablename)
     }
 
     override def schema: StructType = querySchema
@@ -68,7 +68,7 @@ class KineticaRelation(
         val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'database.jdbc_url' not specified"))
         val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'table.name' not specified"))
         val numPartitions = parameters.getOrElse(CONNECTOR_NUMPARTITIONS_PARAM, "4").toInt
-
+                
         if (requiredColumns.isEmpty) {
             emptyRowRDD(filters, url, table, numPartitions)
         } else {
@@ -82,7 +82,8 @@ class KineticaRelation(
                 requiredColumns,
                 filters,
                 parts,
-                properties)
+                properties,
+                conf)
         }
     }
 

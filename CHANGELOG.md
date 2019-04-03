@@ -2,9 +2,22 @@
 
 ## Version 6.2
 
+### Version 6.2.2.2 -- 2019-04-02
+
+#### Changes
+-   Changed the default timeout to 30 minutes
+-   Changed the default retry count to 0
+
+#### Bugfix
+-   Fixed egress issue related to importing string column type with the
+    `datetime` subtype.
+-   Fixed decimal ingestion failure (decimal in Kinetica can be mapped to any
+    of float, double, int, long, string value based on the scale and precision).
+
+
 ### Version 6.2.2.1 -- 2019-02-13
 
-##### Changed
+#### Changed
 -   Kinetica egress now uses the native Java client API to fetch records instead
     of utilizing the JDBC connector.
 

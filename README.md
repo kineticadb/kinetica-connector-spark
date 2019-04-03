@@ -1326,25 +1326,25 @@ properties are applicable to both connector modes; exceptions will be noted.
 
 The following properties control the authentication & connection to *Kinetica*.
 
-| Property Name                      | Default   | Description
-| :---                               | :---      | :---
-| ``database.url``                   | *<none>*  | URL of *Kinetica* instance (http or https)
-| ``database.jdbc_url``              | *<none>*  | JDBC URL of the *Kinetica ODBC Server*  **Ingest/Egress Processor Only**
-| ``database.stream_url``            | *<none>*  | ZMQ URL of the *Kinetica* table monitor  **Streaming Processor Only**
-| ``database.username``              | *<none>*  | *Kinetica* login username
-| ``database.password``              | *<none>*  | *Kinetica* login password
-| ``database.retry_count``           | ``5``     | Connection retry count
-| ``database.timeout_ms``            | ``10000`` | Connection timeout, in milliseconds
-| ``ingester.analyze_data_only``     | ``false`` | When ``true``, will analyze the ingest data set, determining the types & sizes of columns necessary to hold the ingest data, and will output the derived schema as a ``CREATE TABLE statement`` (at the INFO log level).  **NOTE:** If this parameter is set to ``true``, all others will be ignored.  **Ingest Processor Only**
-| ``ingester.batch_size``            | ``10000`` | Batch size for bulk inserter
-| ``ingester.flatten_source_schema`` | ``false`` | When ``true``, converts the following complex source data structures into single-table representations:  *struct*, *array*, & *map*.  See [Complex Data Types](#complex-data-types) for details.  **Ingest Processor Only**
-| ``ingester.ip_regex``              | *<none>*  | Regular expression to use in selecting *Kinetica* worker node IP addresses (e.g., ``172.*``) that are accessible by the connector, for multi-head ingest  **Ingest Processor Only**
-| ``ingester.multi_head``            | ``false`` | Enable multi-head ingest; this must be false for replicated tables
-| ``ingester.num_threads``           | ``4``     | Number of threads for bulk inserter
-| ``ingester.use_snappy``            | ``false`` | Use *snappy* compression during ingestion  **Ingest Processor Only**
-| ``spark.num_partitions``           | ``4``     | Number of *Spark* partitions to use for extracting data  **Egress Processor Only**
-| ``spark.rows_per_partition``       | *<none>*  | Number of records per partition *Spark* should segment data into before loading into *Kinetica*; if not specified, *Spark* will use the same number of partitions it used to retrieve the source data  **Data Loader Only**
-| ``spark.datasource_api_version``   | ``v1``    | Which Spark DataSource API to use (accepted values: ``v1`` and ``v2``). **Data Loader Only**
+| Property Name                      | Default     | Description
+| :---                               | :---        | :---
+| ``database.url``                   | *<none>*    | URL of *Kinetica* instance (http or https)
+| ``database.jdbc_url``              | *<none>*    | JDBC URL of the *Kinetica ODBC Server*  **Ingest/Egress Processor Only**
+| ``database.stream_url``            | *<none>*    | ZMQ URL of the *Kinetica* table monitor  **Streaming Processor Only**
+| ``database.username``              | *<none>*    | *Kinetica* login username
+| ``database.password``              | *<none>*    | *Kinetica* login password
+| ``database.retry_count``           | ``0``       | Connection retry count
+| ``database.timeout_ms``            | ``1800000`` | Connection timeout, in milliseconds (default is 30 minutes)
+| ``ingester.analyze_data_only``     | ``false``   | When ``true``, will analyze the ingest data set, determining the types & sizes of columns necessary to hold the ingest data, and will output the derived schema as a ``CREATE TABLE statement`` (at the INFO log level).  **NOTE:** If this parameter is set to ``true``, all others will be ignored.  **Ingest Processor Only**
+| ``ingester.batch_size``            | ``10000``   | Batch size for bulk inserter
+| ``ingester.flatten_source_schema`` | ``false``   | When ``true``, converts the following complex source data structures into single-table representations:  *struct*, *array*, & *map*.  See [Complex Data Types](#complex-data-types) for details.  **Ingest Processor Only**
+| ``ingester.ip_regex``              | *<none>*    | Regular expression to use in selecting *Kinetica* worker node IP addresses (e.g., ``172.*``) that are accessible by the connector, for multi-head ingest  **Ingest Processor Only**
+| ``ingester.multi_head``            | ``false``   | Enable multi-head ingest; this must be false for replicated tables
+| ``ingester.num_threads``           | ``4``       | Number of threads for bulk inserter
+| ``ingester.use_snappy``            | ``false``   | Use *snappy* compression during ingestion  **Ingest Processor Only**
+| ``spark.num_partitions``           | ``4``       | Number of *Spark* partitions to use for extracting data  **Egress Processor Only**
+| ``spark.rows_per_partition``       | *<none>*    | Number of records per partition *Spark* should segment data into before loading into *Kinetica*; if not specified, *Spark* will use the same number of partitions it used to retrieve the source data  **Data Loader Only**
+| ``spark.datasource_api_version``   | ``v1``      | Which Spark DataSource API to use (accepted values: ``v1`` and ``v2``). **Data Loader Only**
 
 
 The following apply for the *Data Loader* if SSL is used. A keystore or

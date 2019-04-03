@@ -67,6 +67,11 @@ private[kinetica] class KineticaRDD(
                                                          part.startRow, part.numRows,
                                                          MAX_ROWS_TO_FETCH );
 
+        // Note: Beware of calling .size or other functions on the rows created above
+        //       (even in a debug print); it may have unintended consequences For example,
+        //       such a debug here with ${myRows.size} in it caused allRows to be iterated;
+        //       as a result, the RDD was ALWAYS thought to be empty.  Bottom line: do NOT
+        //       iterate over the rows being returned.
 
         def close() {
         }

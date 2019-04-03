@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.kinetica</groupId>
     <artifactId>kinetica-spark</artifactId>
-    <version>6.2.2.1</version>
+    <version>6.2.2.2</version>
     <packaging>jar</packaging>
     <name>spark-kinetica</name>
     <description>Tools for reading/writing data from/to Spark into Kinetica</description>
@@ -17,7 +17,7 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <gpudb-api.version>6.2.1</gpudb-api.version>
+        <gpudb-api.version>[6.2.1,7.0)</gpudb-api.version>
         <simba.version>10.1.4</simba.version>
         <java.version>1.8</java.version>
         <spark.version>2.3.1</spark.version>
@@ -213,6 +213,7 @@
             <plugin>
               <groupId>org.apache.maven.plugins</groupId>
               <artifactId>maven-surefire-plugin</artifactId>
+              <version>3.0.0-M3</version>
               <configuration>
                 <useSystemClassLoader>false</useSystemClassLoader>
                     <excludes>

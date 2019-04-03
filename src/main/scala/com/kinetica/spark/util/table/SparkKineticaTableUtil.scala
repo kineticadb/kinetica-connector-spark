@@ -1,22 +1,27 @@
-package com.kinetica.spark.util.table
+package com.kinetica.spark.util.table;
 
-import com.google.common.base.CharMatcher
-import com.gpudb.Type
-import org.apache.spark.sql._
-import org.apache.spark.sql.types._
+import com.google.common.base.CharMatcher;
+import org.apache.spark.sql._;
+import org.apache.spark.sql.types._;
 
-import java.util.ArrayList
-import java.util.Iterator
-import java.util.List
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
-import scala.beans.{ BeanProperty, BooleanBeanProperty }
-import com.typesafe.scalalogging.LazyLogging
+import scala.beans.{ BeanProperty, BooleanBeanProperty };
+import com.typesafe.scalalogging.LazyLogging;
 
-import com.kinetica.spark.LoaderParams
-import com.kinetica.spark.util.JDBCConnectionUtils
-import com.kinetica.spark.util.KineticaSparkDFManager
+import com.gpudb.Type;
+import com.gpudb.protocol.HasTableResponse;
 
-import scala.collection.JavaConversions._
+
+import com.kinetica.spark.LoaderParams;
+import com.kinetica.spark.util.JDBCConnectionUtils;
+import com.kinetica.spark.util.KineticaSparkDFManager;
+
+import scala.collection.JavaConversions._;
+
+
 
 object SparkKineticaTableUtil extends LazyLogging {
 
@@ -83,6 +88,26 @@ object SparkKineticaTableUtil extends LazyLogging {
                 logger.error("JDBC url missing")
                 throw new RuntimeException("Missing JDBC URL or invalid")
             }
+        }
+    }
+
+
+    /**
+     * Check if the table exists in Kinetica.
+     *
+     * @param tableName  The name of the table
+     *
+     * @returns true if the table exists, false otherwise
+     */
+    def hasTable( tableName: String, properties: LoaderParams ): Boolean = {
+        val db = properties.getGpudb()
+        try {
+            val result = db.hasTable( tableName, null );
+            return result.getTableExists();
+        } catch {
+            // Could not retrieve any table, probably because the table doesn't exist
+            case re: RuntimeException => throw re
+            case e: Exception => throw new RuntimeException( e )
         }
     }
 

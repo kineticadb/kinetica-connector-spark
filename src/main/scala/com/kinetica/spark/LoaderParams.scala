@@ -84,7 +84,7 @@ class LoaderParams extends Serializable with LazyLogging {
     var useSnappy: Boolean = true
 
     @BeanProperty
-    var retryCount: Int = 2
+    var retryCount: Int = 0
 
     @BooleanBeanProperty
     var alterTable: Boolean = false
@@ -160,8 +160,9 @@ class LoaderParams extends Serializable with LazyLogging {
         useSnappy = params.get(KINETICA_USESNAPPY_PARAM).getOrElse("false").toBoolean
 
         numPartitions = params.get(CONNECTOR_NUMPARTITIONS_PARAM).getOrElse("4").toInt
-        
-        retryCount = params.get(KINETICA_RETRYCOUNT_PARAM).getOrElse("5").toInt
+
+        // Default setting is 0
+        retryCount = params.get(KINETICA_RETRYCOUNT_PARAM).getOrElse("0").toInt
         jdbcURL = params.get(KINETICA_JDBCURL_PARAM).getOrElse(null)
         createTable = params.get(KINETICA_CREATETABLE_PARAM).getOrElse("false").toBoolean
 
@@ -169,7 +170,8 @@ class LoaderParams extends Serializable with LazyLogging {
         mapToSchema = params.get(KINETICA_MAPTOSCHEMA_PARAM).getOrElse("false").toBoolean
         truncateToSize = params.get(KINETICA_TRUNCATE_TO_SIZE).getOrElse("false").toBoolean
 
-        timeoutMs = params.get(KINETICA_TIMEOUT_PARAM).getOrElse("10000").toInt
+        // 30 mins = 1800 seconds = 1800,000 ms
+        timeoutMs = params.get(KINETICA_TIMEOUT_PARAM).getOrElse("1800000").toInt
         multiHead = params.get(KINETICA_MULTIHEAD_PARAM).getOrElse("false").toBoolean
 
         truncateTable = params.get(KINETICA_TRUNCATETABLE_PARAM).getOrElse("false").toBoolean

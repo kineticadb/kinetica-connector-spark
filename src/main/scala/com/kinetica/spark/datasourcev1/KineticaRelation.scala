@@ -1,29 +1,32 @@
-package com.kinetica.spark.datasourcev1
+package com.kinetica.spark.datasourcev1;
 
-import java.io.IOException
-import java.util.UUID
-import java.util.regex.Pattern
-import com.kinetica.spark.LoaderParams
-import com.kinetica.spark.util.ConfigurationConstants._
-import com.kinetica.spark.util._
-import com.kinetica.spark.util.table._
-import com.typesafe.scalalogging.LazyLogging
-import org.apache.spark.SparkFirehoseListener
-import org.apache.spark.rdd.RDD
-import org.apache.spark.scheduler.{ SparkListenerApplicationEnd, SparkListenerEvent }
-import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
-import org.apache.spark.sql.sources._
-import org.apache.spark.sql.types._
-import org.apache.spark.sql.{ DataFrame, Row, SQLContext, SparkSession }
-import scala.collection.JavaConverters._
-import scala.collection.breakOut
-import scala.collection.mutable.ListBuffer
-import scala.reflect.runtime.universe._
-import scala.util.control.Breaks._
-import com.kinetica.spark.egressutil._
-import java.util.Properties
+import java.io.IOException;
+import java.util.UUID;
+import java.util.regex.Pattern;
+import com.typesafe.scalalogging.LazyLogging;
+import org.apache.spark.SparkFirehoseListener;
+import org.apache.spark.rdd.RDD;
+import org.apache.spark.scheduler.{ SparkListenerApplicationEnd, SparkListenerEvent };
+import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
+import org.apache.spark.sql.sources._;
+import org.apache.spark.sql.types._;
+import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.{ DataFrame, Row, SQLContext, SparkSession };
+import scala.collection.JavaConverters._;
+import scala.collection.breakOut;
+import scala.collection.mutable.ListBuffer;
+import scala.reflect.runtime.universe._;
+import scala.util.control.Breaks._;
+import java.util.Properties;
 
-import com.kinetica.spark.loader._
+import com.kinetica.spark.egressutil._;
+import com.kinetica.spark.loader._;
+import com.kinetica.spark.LoaderParams;
+import com.kinetica.spark.util.ConfigurationConstants._;
+import com.kinetica.spark.util._;
+import com.kinetica.spark.util.table._;
+
+
 
 class KineticaRelation(
     val parameters: Map[String, String],
@@ -49,14 +52,17 @@ class KineticaRelation(
     parameters.foreach { case (k, v) => properties.setProperty(k, v) }
     val conf: LoaderParams = new LoaderParams( Option.apply(sparkSession.sparkContext), parameters)
 
-    lazy val querySchema: StructType = {
-        logger.debug("*********************** KR:querySchema")
-        val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'database.jdbc_url' not specified"))
-        val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'table.name' not specified"))
-        KineticaSchema.getSparkSqlSchema(url, conf, conf.getTablename)
+    // Needed only for egress
+    lazy val tableSchema: Option[StructType] = {
+        logger.debug("*********************** KR:tableSchema");
+        val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'database.jdbc_url' not specified"));
+        val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'table.name' not specified"));
+        val throwIfNotExists : Boolean = false;
+        KineticaSchema.getSparkSqlSchema(url, conf, conf.getTablename, throwIfNotExists );
     }
 
-    override def schema: StructType = querySchema
+    // Member of BaseRelation, so need to keep it around
+    override def schema: StructType = tableSchema.get
 
     override def buildScan(): RDD[Row] = buildScan(Array.empty, Array.empty)
 
@@ -73,17 +79,18 @@ class KineticaRelation(
             emptyRowRDD(filters, url, table, numPartitions)
         } else {
             val parts = com.kinetica.spark.egressutil.KineticaInputFormat.getDataSlicePartition(
-                com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)(), numPartitions.toInt, table, filters)
+                           com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)(),
+                           numPartitions.toInt, table, filters);
             new KineticaRDD(
                 sqlContext.sparkContext,
                 KineticaJdbcUtils.getConnector(url, conf),
-                KineticaSchema.pruneSchema(schema, requiredColumns),
+                KineticaSchema.pruneSchema( tableSchema, requiredColumns ),
                 table,
                 requiredColumns,
                 filters,
                 parts,
                 properties,
-                conf)
+                conf);
         }
     }
 

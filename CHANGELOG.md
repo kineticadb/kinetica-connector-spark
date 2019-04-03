@@ -2,6 +2,20 @@
 
 ## Version 7.0
 
+### Version 7.0.0.2 -- 2019-04-01
+
+#### Changes
+-   Changed the default timeout to 30 minutes
+-   Changed the default retry count to 0
+
+#### Bugfix
+-   Fixed egress issue related to importing string column type with the
+    `datetime` subtype.
+-   Fixed decimal ingestion failure (decimal in Kinetica can be mapped to any
+    of float, double, int, long, string value based on the scale and precision).
+
+
+
 ### Version 7.0.0.1 -- 2019-02-13
 
 ##### Changed

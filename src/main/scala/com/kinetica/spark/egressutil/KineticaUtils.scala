@@ -1,67 +1,93 @@
-package com.kinetica.spark.egressutil
+package com.kinetica.spark.egressutil;
 
 // MUCH OF THIS CODE IS LIFTED FROM SPARK CODEBASE - SRB
 
-import java.sql.ResultSet
+import java.sql.ResultSet;
+import java.text.SimpleDateFormat;
 
-import org.apache.spark.internal.Logging
-import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
-import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.catalyst.util.GenericArrayData
-import org.apache.spark.sql.types.ArrayType
-import org.apache.spark.sql.types.BinaryType
-import org.apache.spark.sql.types.BooleanType
-import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.types.DateType
-import org.apache.spark.sql.types.Decimal
-import org.apache.spark.sql.types.DecimalType
-import org.apache.spark.sql.types.DoubleType
-import org.apache.spark.sql.types.FloatType
-import org.apache.spark.sql.types.IntegerType
-import org.apache.spark.sql.types.LongType
-import org.apache.spark.sql.types.Metadata
-import org.apache.spark.sql.types.ShortType
-import org.apache.spark.sql.types.StringType
-import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.types.TimestampType
-import org.apache.spark.unsafe.types.UTF8String
+import org.apache.spark.internal.Logging;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.encoders.RowEncoder;
+import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow;
+import org.apache.spark.sql.catalyst.util.DateTimeUtils;
+import org.apache.spark.sql.catalyst.util.GenericArrayData;
+import org.apache.spark.sql.types.ArrayType;
+import org.apache.spark.sql.types.BinaryType;
+import org.apache.spark.sql.types.BooleanType;
+import org.apache.spark.sql.types.DataType;
+import org.apache.spark.sql.types.DateType;
+import org.apache.spark.sql.types.Decimal;
+import org.apache.spark.sql.types.DecimalType;
+import org.apache.spark.sql.types.DoubleType;
+import org.apache.spark.sql.types.FloatType;
+import org.apache.spark.sql.types.IntegerType;
+import org.apache.spark.sql.types.LongType;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.ShortType;
+import org.apache.spark.sql.types.StringType;
+import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.types.TimestampType;
+import org.apache.spark.unsafe.types.UTF8String;
+import scala.collection.JavaConverters._;
 
+import com.gpudb.ColumnProperty;
 import com.gpudb.GPUdb;
 import com.gpudb.Record;
+import com.gpudb.Type;
 import com.gpudb.protocol.GetRecordsByColumnRequest;
 import com.gpudb.protocol.GetRecordsByColumnResponse;
 import com.gpudb.protocol.ShowTableRequest;
 import com.gpudb.protocol.ShowTableResponse;
 
-import java.text.SimpleDateFormat;
+import com.kinetica.spark.util.Constants;
+
+
 
 object KineticaUtils extends Logging {
 
-    private type JDBCValueGetter = (ResultSet, Record, InternalRow, Int) => Unit
-
-
+    private type JDBCValueGetter = (ResultSet, Record, InternalRow, Int) => Unit;
 
 
     private[spark] def resultSetToSparkInternalRows(
         resultSet: ResultSet,
-        resp: java.util.List[Record],
-        schema: StructType): Iterator[InternalRow] = {
-        
+        resp:      java.util.List[Record] ): Iterator[InternalRow] = {
+
+
+        // If no Record is passed in, create and return an empty iterator
+        if (resp.isEmpty) {
+            // This has to be lazy, or `finished` will be set to true, which
+            // makes the RDD think there are no records!
+            lazy val emptyIterator : NextIterator[InternalRow] = new  NextIterator[InternalRow] {
+                override protected def close(): Unit = {
+                }
+                
+                override protected def getNext(): InternalRow = {
+                    finished = true
+                    null.asInstanceOf[InternalRow]
+                }
+            }
+            return emptyIterator
+        }
+
+        // Process a non-empty list of Records to get type etc. information
+        val recordType = resp.get( 0 ).getType();
+        val recordSchema = KineticaSchema.getRecordSchema( resp.get( 0 ) );
+
+        // Create and return an iterator over the passed in Record objects
         new NextIterator[InternalRow] {
             private[this] val rs = resultSet
             private[this] val dataArrIt = resp.iterator
-            private[this] val getters: Array[JDBCValueGetter] = makeGetters(schema)
+            private[this] val getters: Array[JDBCValueGetter] = makeGetters( recordType )
+            
             private[this] val mutableRow = {
-                new SpecificInternalRow(schema.fields.map(x => {
-                x.dataType}))
+                new SpecificInternalRow( recordSchema.fields.map(x => {
+                            x.dataType}) );
             }
 
             override protected def close(): Unit = {
             }
-            
+
             // Main fetch loop which is called by Spark to retrieve an internal row
             override protected def getNext(): InternalRow = {
                 if ( dataArrIt.hasNext ) {
@@ -80,13 +106,152 @@ object KineticaUtils extends Logging {
         }
     }
 
+    private def makeGetters(record_type: com.gpudb.Type): Array[JDBCValueGetter] = {
+        // Create getter functions per column
+        val jdbc_value_getters = record_type.getColumns().asScala.toArray.map( column => makeGetter(column) )
+        jdbc_value_getters
+    }
+
+    private def makeGetter( column: com.gpudb.Type.Column): JDBCValueGetter = {
+        // Get column information
+        val columnType = column.getType();
+        val columnProperties = column.getProperties();
+
+        // Create a getter function based on the column's type
+        columnType match {
+
+            // Double
+            case q if (q == classOf[java.lang.Double]) =>
+            (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
+            {
+                // Need to convert to Scala double
+                val value = gr.getDouble( pos ).toDouble;
+                if( value != null ) {
+                    row.setDouble( pos, value );
+                } else {
+                    row.update( pos, null );
+                }
+            }
+
+            // Float
+            case q if (q == classOf[java.lang.Float]) =>
+            (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
+            {
+                // Need to convert to Scala float
+                val value = gr.getFloat( pos ).toFloat;
+                if( value != null ) {
+                    row.setFloat( pos, value );
+                } else {
+                    row.update( pos, null );
+                }
+            }
+
+            // Integer
+            case q if (q == classOf[java.lang.Integer]) =>
+            (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
+            {
+                // Need to convert to Scala integer
+                val value = gr.getInt( pos).toInt;
+                if( value != null ) {
+                    // Check subtypes
+                    if ( columnProperties.contains( ColumnProperty.INT8 ) ) {
+                        // Byte type
+                        row.setByte(pos, (value.byteValue()));
+                    } else if ( columnProperties.contains( ColumnProperty.INT16 ) ) {
+                        // Short type
+                        row.setShort(pos, (value.shortValue()));
+                    } else {
+                        // Regular integer
+                        row.setInt( pos, value );
+                    }
+                } else {
+                    row.update( pos, null );
+                }
+            }
+
+            // Long
+            case q if (q == classOf[java.lang.Long]) =>
+            (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
+            {
+                // Need to convert to Scala long
+                val value = gr.getLong( pos ).toLong;
+                if( value != null ) {
+                    // Check subtypes
+                    if ( columnProperties.contains( ColumnProperty.TIMESTAMP ) ) {
+                        // Timestamp type
+                        val t : java.sql.Timestamp = new java.sql.Timestamp( value );
+                        row.setLong( pos, DateTimeUtils.fromJavaTimestamp(t) );
+                    } else {
+                        // Regular longs
+                        row.setLong( pos, value );
+                    }
+                } else {
+                    row.update( pos, null );
+                }
+            }
+
+            // String
+            case q if (q == classOf[java.lang.String]) =>
+            (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
+            {
+                val value = gr.getString( pos );
+                if( value != null ) {
+                    // Check for subtypes
+                    if ( columnProperties.contains( ColumnProperty.DECIMAL ) ) {
+                        // Decimal type
+                        val bigD = new java.math.BigDecimal( value )
+        		val decimal =  nullSafeConvert2[java.math.BigDecimal, Decimal](bigD, d => Decimal( d,
+                                                                                                           Constants.KINETICA_DECIMAL_PRECISION,
+                                                                                                           Constants.KINETICA_DECIMAL_SCALE ));
+        		if( decimal.isDefined )
+        		{
+                            row.setDecimal( pos, decimal.get, Constants.KINETICA_DECIMAL_PRECISION );
+        		} else if(bigD != null) {
+                            throw new Exception(s"unable to convert $bigD to Spark Decimal")
+        		}
+                    } else if ( columnProperties.contains( ColumnProperty.DATE ) ) {
+                        // Date type (convert to date)
+                        val dateVal = new SimpleDateFormat("yyyy-MM-dd").parse( value ).getTime
+                        val sqlDate = new java.sql.Date(dateVal)
+                        row.setInt(pos, org.apache.spark.sql.catalyst.util.DateTimeUtils.fromJavaDate(sqlDate))
+                    } else if ( columnProperties.contains( ColumnProperty.TIME ) ) {
+                        // Time type (convert to timestamp)
+                        val sqlTS = DateTimeUtils.stringToTimestamp( UTF8String.fromString( value ) );
+                        row.setLong( pos, sqlTS.get );
+                    } else if ( columnProperties.contains( ColumnProperty.DATETIME ) ) {
+                        // Datetime type (convert to timestamp)
+                        val sqlTS = DateTimeUtils.stringToTimestamp( UTF8String.fromString( value ) );
+                        row.setLong( pos, sqlTS.get );
+                    } else {
+                        // All other string types, including charN and WKT
+                        row.update( pos, UTF8String.fromString(value) );
+                    }
+                } else {
+                    row.update( pos, null );
+                }
+            }
+
+            // Bytes
+            case q if (q == classOf[java.nio.ByteBuffer]) =>
+            (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
+            {
+                val value = gr.getBytes( pos ).array();
+                if( value != null ) {
+                    row.update( pos, value);
+                } else {
+                    row.update( pos, null );
+                }
+            }
+        }
+    }
+
+
     private def makeGetters(schema: StructType): Array[JDBCValueGetter] = {
         val jdbcvg = schema.fields.map(sf => makeGetter(sf.dataType, sf.metadata))
         jdbcvg        
     }
 
     private def makeGetter(dt: DataType, metadata: Metadata): JDBCValueGetter = {
-   
         dt match {
    
         case BooleanType =>
@@ -214,7 +379,7 @@ object KineticaUtils extends Logging {
 
         case BinaryType =>
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
-                row.update(pos, gr.getBytes(pos))
+                row.update( pos, gr.getBytes(pos).array() );
 
         case ArrayType(et, _) =>
             val elementConversion = et match {
@@ -266,9 +431,9 @@ object KineticaUtils extends Logging {
 
     private def nullSafeConvert2[T, R](input: T, f: T => R): Option[R] = {
     	if (input == null) {
-    		None
+            None
     	} else {
-    		Some(f(input))
+            Some(f(input))
     	}
     }
 
@@ -359,7 +524,7 @@ object KineticaUtils extends Logging {
         
         // Return the records
         allRecords
-    }
+    }   // end getRecordsFromKinetica
 
 
     /*
@@ -381,10 +546,17 @@ object KineticaUtils extends Logging {
         val allRecords = getRecordsFromKinetica( gpudbConn, tableName, columns,
                                                  startRow, numRows, batchSize )
 
+        // Note: Beware of calling .size or other functions on the rows created below
+        //       (even in a debug print); it may have unintended consequences based
+        //       on where this function is being called from.  For example, KineticaRDD's
+        //       compute() calls this, and due to a debug print with ${myRows.size} in it,
+        //       the RDD was ALWAYS thought to be empty.  Bottom line: do NOT iterate over
+        //       the rows being returned.
+        
         // Convert the records so that spark can understand it
-        val internalRows = resultSetToSparkInternalRows(null, allRecords, schema)
-        val encoder = RowEncoder.apply(schema).resolveAndBind()
-        val myRows = internalRows.map(encoder.fromRow)
+        val internalRows = resultSetToSparkInternalRows( null, allRecords )
+        val encoder = RowEncoder.apply( schema ).resolveAndBind()
+        val myRows = internalRows.map( encoder.fromRow )
         myRows
     }
         

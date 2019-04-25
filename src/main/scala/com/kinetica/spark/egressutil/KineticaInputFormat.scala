@@ -15,11 +15,13 @@ private[kinetica] object KineticaInputFormat {
      * @param conn connection to the database.
      * @return number of of data slices
      */
-    def getTotalNumberOfRows(conn: Connection, table: String, filters: Array[Filter]): Integer = {
+    def getTotalNumberOfRows(conn: Connection, table: String, filters: Array[Filter]): Long = {
 
         // query to get maximum number of data slices in the database.
         val whereClause = KineticaFilters.getWhereClause(filters)
-        var query = s"select count(*) from ${table}"
+        // Need to quote the table name, but quotess don't work with string
+        // interpolation in scala; the following is correct, though ugly
+        var query = s"""select count(*) from "${table}""""
         if (whereClause.length > 0) {
             query += " " + whereClause
         }
@@ -29,7 +31,7 @@ private[kinetica] object KineticaInputFormat {
             val rs = stmt.executeQuery()
             try {
 
-                val numberOfRows = if (rs.next) rs.getInt(1) else 0
+                val numberOfRows = if (rs.next) rs.getLong(1) else 0
                 /* What nonsense - kinetica filter may return 0 rows
                 if (numberOfRows == 0) {
                     // there should always be some data slices with kinetica
@@ -53,25 +55,26 @@ private[kinetica] object KineticaInputFormat {
         val numberOfRows = getTotalNumberOfRows(conn, table, filters)
         var rowsPerPartition = numberOfRows / numPartitions
         
-        if( numberOfRows % numPartitions != 0 ) {
-            rowsPerPartition += 1     
-        }
-        
-        //println(s"Number of rows is ${numberOfRows}") 
-        //println(s"Rows per partition is ${rowsPerPartition}") 
-        //println(s"Number of partitions is ${numPartitions}") 
+        val extra = numberOfRows % numPartitions
+
+        /*
+        println(s"Number of rows is ${numberOfRows}") 
+        println(s"Rows per partition is ${rowsPerPartition}") 
+        println(s"Number of partitions is ${numPartitions}") 
+		*/
         
         if (rowsPerPartition <= 1) {
             Array[Partition](KineticaPartition(0, numberOfRows, 0))
         } else {
             val ans = new ArrayBuffer[Partition]()
-            var partitionIndex = 0
-            var start = 0
-            var numRows = rowsPerPartition
-            for (index <- 1 to numPartitions) {
-                //println(s"Partition is ${start}/${numRows}/${partitionIndex}") 
-                ans += KineticaPartition(start, numRows, partitionIndex)
-                partitionIndex = partitionIndex + 1
+            var start : Long   = 0
+            var numRows : Long = rowsPerPartition
+            for (index <- 0 until numPartitions) {
+                if( index == (numPartitions-1) ) {
+                    numRows = numRows + extra
+                }
+                //println(s"Partition is ${start}/${numRows}/${index}") 
+                ans += KineticaPartition(start, numRows, index)
                 start = start + numRows;
             }
             ans.toArray

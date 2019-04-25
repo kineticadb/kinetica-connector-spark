@@ -476,16 +476,24 @@ object KineticaUtils extends Logging {
         gpudbConn:  com.gpudb.GPUdb,
         tableName:  String,
         columns:    Array[String],
-        startRow:   Int,
-        numRows:    Int,
-        batchSize:  Int ): java.util.ArrayList[Record] = {
+        startRow:   Long,
+        numRows:    Long,
+        batchSize:  Long ): java.util.ArrayList[Record] = {
 
         val blank_options: java.util.Map[String, String] = new java.util.HashMap[String, String]();
 
         // Select the columns to be fetched
         val column_names = new java.util.ArrayList[String]();
-        columns.foreach(f => column_names.add(f));
-        
+
+        // If no column is specified, then we need to get all the columns
+        if ( columns.isEmpty ) {
+            // Get all the column names for the table from Kinetica
+            val tableType = Type.fromTable( gpudbConn, tableName );
+            tableType.getColumns().asScala.foreach( col => column_names.add( col.getName() ) );
+        } else {
+            // Use the given column names
+            columns.foreach( f => column_names.add( f ) );
+        }
         
         // Call /get/records/bycolumn repeatedly with a max rows of batchSize till we have done numRows
         // Collect the list of records in a separate list and pass into resultSetToSparkInternalRows
@@ -504,12 +512,12 @@ object KineticaUtils extends Logging {
         
        
         val allRecords = new java.util.ArrayList[Record]();
-        var ii = 0;                       
+        var ii = 0;
         while ( ii < loopCount ) {
 
             // Set up the request
-            val limit = if( ii == loopCount -1 ) (maxRowsToFetch + extraRows) else maxRowsToFetch;
-            val offset = (startRow + (ii * maxRowsToFetch));
+            val limit  : Long = if( ii == loopCount -1 ) (maxRowsToFetch + extraRows) else maxRowsToFetch;
+            val offset : Long = (startRow + (ii * maxRowsToFetch));
             val getRecordsByColumnReq = new GetRecordsByColumnRequest( tableName, column_names,
                                                                        offset, limit,
                                                                        blank_options );
@@ -538,9 +546,9 @@ object KineticaUtils extends Logging {
         tableName:  String,
         columns:    Array[String],
         schema:     StructType,
-        startRow:   Int,
-        numRows:    Int,
-        batchSize:  Int ): Iterator[Row] = {
+        startRow:   Long,
+        numRows:    Long,
+        batchSize:  Long ): Iterator[Row] = {
 
         // Fetch the records from Kinetica in the native format
         val allRecords = getRecordsFromKinetica( gpudbConn, tableName, columns,

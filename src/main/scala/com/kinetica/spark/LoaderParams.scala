@@ -187,28 +187,20 @@ class LoaderParams extends Serializable with LazyLogging {
         }
 
         // Instead of diverging the behavior for spark-submit vs spark shell etc.,
-        // just check if a collection name is given; if so, honor it (but not
-        // require it)
-        if( tablename contains "." ) {
+        // just check if a collection name is given, which is indicated by the
+        // user (by default, we'll assume that we're to extract a schema name
+        // from the table name)
+        val tableContainsSchemaName = params.get( KINETICA_TABLENAME_CONTAINS_SCHEMA_PARAM )
+                                            .getOrElse("true").toBoolean;
+        if( tableContainsSchemaName && (tablename contains ".") ) {
             val tableParams: Array[String] = tablename.split("\\.")
-            if (tableParams.length > 2) {
-                // Too many periods!!
-                throw new Exception( s"Option 'table.name' value can have at most one '.' separating the collection name from the table ([collection].[table]); given $tablename")
-            }
-            // A collection name IS given
-            if (tableParams.length == 2) {
+            if (tableParams.length > 1) {
+                // A collection name IS given
                 schemaname = tableParams( 0 )
-                tablename = tableParams( 1 )
+                // The remainder is the table name (which is allowed to have periods)
+                tablename = tablename.substring( schemaname.length + 1 )
             }
         }
-        // if( loaderPath ) {
-        //     val tableParams: Array[String] = tablename.split("\\.")
-        //     if (tableParams.length != 2) {
-        //         throw new Exception( "tablename is needed in the form [schema].[table] " + tablename)
-        //     }
-        //     tablename = tableParams(1)
-        //     schemaname = tableParams(0)
-        // }
 
         // SSL
         bypassCert = params.get(KINETICA_SSLBYPASSCERTCJECK_PARAM).getOrElse("false").toBoolean

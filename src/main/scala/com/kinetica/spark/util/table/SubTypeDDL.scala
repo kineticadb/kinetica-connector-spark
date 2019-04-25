@@ -207,7 +207,6 @@ object SubTypeDDL {
             }
         }
         if (isPrimaryKey(columnName)) {
-        
             if (!primarykeyfound) {
                 primarykeyddl.append(" , PRIMARY KEY ( ")
                 primarykeyddl.append(columnName + " ")

@@ -67,7 +67,9 @@ private[kinetica] object KineticaJdbcUtils extends LazyLogging {
         table: String,
         filters: Array[Filter]): Long = {
         val whereClause = KineticaFilters.getFilterClause(filters)
-        val countQuery = s"SELECT count(*) FROM $table $whereClause"
+        // Need to quote the table name, but quotess don't work with string
+        // interpolation in scala; the following is correct, though ugly
+        val countQuery = s"""SELECT count(*) FROM "$table" $whereClause"""
         logger.info(countQuery)
         val conn = KineticaJdbcUtils.getConnector(url, properties)()
         var count: Long = 0

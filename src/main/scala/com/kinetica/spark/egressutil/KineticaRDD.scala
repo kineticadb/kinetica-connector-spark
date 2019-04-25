@@ -28,7 +28,7 @@ import com.typesafe.scalalogging.LazyLogging
 /**
  * Data corresponding to one partition of a Kinetica RDD.
  */
-private[kinetica] case class KineticaPartition(startRow: Int, numRows: Int, idx: Int) extends Partition with LazyLogging {
+private[kinetica] case class KineticaPartition(startRow: Long, numRows: Long, idx: Int) extends Partition with LazyLogging {
     override def index: Int = idx
 }
 
@@ -68,7 +68,7 @@ private[kinetica] class KineticaRDD(
                                                          MAX_ROWS_TO_FETCH );
 
         // Note: Beware of calling .size or other functions on the rows created above
-        //       (even in a debug print); it may have unintended consequences For example,
+        //       (even in a debug print); it may have unintended consequences. For example,
         //       such a debug here with ${myRows.size} in it caused allRows to be iterated;
         //       as a result, the RDD was ALWAYS thought to be empty.  Bottom line: do NOT
         //       iterate over the rows being returned.

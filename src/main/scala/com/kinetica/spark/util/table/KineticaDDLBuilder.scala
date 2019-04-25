@@ -16,25 +16,22 @@ object KineticaDDLBuilder extends LazyLogging {
 
     def init(lp: LoaderParams): Unit = {
         // Get the table creation part of the DDL
-        createTableDDL =
-            if (lp.isTableReplicated) {
-                // Replicated tables must be explicitly declared
-                new StringBuffer().append(
-                    "CREATE REPLICATED TABLE \"" + lp.getTablename +
-                        "\" (")
-            }
-            else {
-                if ( lp.getSchemaname.isEmpty ) {
-                    // Regular table
-                    new StringBuffer()
-                        .append("CREATE TABLE \"" + lp.getTablename + "\" (")
-                }
-                else {
-                    // Table with a collection
-                    new StringBuffer()
-                        .append("CREATE TABLE \"" + lp.getSchemaname + "." + lp.getTablename + "\" (")
-                }
-            }
+        // First check if the table is replicated
+        var replicated = ""
+        if (lp.isTableReplicated) {
+            replicated = "REPLICATED"
+        }
+        
+        createTableDDL = if ( lp.getSchemaname.isEmpty ) {
+            // Regular table (name needs to be quoted)
+            new StringBuffer()
+            .append("CREATE " + replicated + " TABLE \"" + lp.getTablename + "\" (")
+        }
+        else {
+            // Both table and collection names need to be quoted
+            new StringBuffer()
+            .append("CREATE " + replicated + " TABLE \"" + lp.getSchemaname + "\".\"" + lp.getTablename + "\" (")
+        }
         compressDDLs = new ArrayList[String]()
         firstColumn = true
         SubTypeDDL.init()

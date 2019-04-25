@@ -56,10 +56,10 @@ private[kinetica] object KineticaSchema {
         
         val conn: Connection = KineticaJdbcUtils.getConnector(url, properties)()
         try {
-            // Get one row from the table to get the dataframe
-            val query = s"SELECT * FROM $table limit 1"
-            val rs = conn.prepareStatement( query ).executeQuery()
-
+            // Need to quote the table name, but quotess don't work with string
+            // interpolation in scala; the following is correct, though ugly
+            val selectQuery = s"""SELECT * FROM "${table}" limit 1""";
+            val rs = conn.prepareStatement( selectQuery ).executeQuery()
             try {
                 val rsmd = rs.getMetaData
                 val ncols = rsmd.getColumnCount

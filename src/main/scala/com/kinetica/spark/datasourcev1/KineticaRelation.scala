@@ -39,26 +39,29 @@ class KineticaRelation(
     with InsertableRelation
     with LazyLogging {
 
-    logger.debug("*********************** KR:Constructor1")
+    logger.debug("*********************** KR:Constructor1");
 
-    override val sqlContext: SQLContext = sparkSession.sqlContext
+    override val sqlContext: SQLContext = sparkSession.sqlContext;
 
     def this(parameters: Map[String, String], sparkSession: SparkSession) {
         this(parameters, None, sparkSession)
         logger.debug("*********************** KR:Constructor2")
     }
 
-    val properties = new Properties()
-    parameters.foreach { case (k, v) => properties.setProperty(k, v) }
-    val conf: LoaderParams = new LoaderParams( Option.apply(sparkSession.sparkContext), parameters)
+    // Parse the user given parameters
+    val properties = new Properties();
+    parameters.foreach { case (k, v) => properties.setProperty(k, v) };
+    val conf: LoaderParams = new LoaderParams( Option.apply(sparkSession.sparkContext), parameters);
+
+    // Save some user given parameters for use
+    val url = conf.getJdbcURL;
+    val tableName = conf.getTablename;
 
     // Needed only for egress
     lazy val tableSchema: Option[StructType] = {
         logger.debug("*********************** KR:tableSchema");
-        val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'database.jdbc_url' not specified"));
-        val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'table.name' not specified"));
         val throwIfNotExists : Boolean = false;
-        KineticaSchema.getSparkSqlSchema(url, conf, conf.getTablename, throwIfNotExists );
+        KineticaSchema.getSparkSqlSchema(url, conf, tableName, throwIfNotExists );
     }
 
     // Member of BaseRelation, so need to keep it around
@@ -68,24 +71,21 @@ class KineticaRelation(
 
     override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
 
-        logger.debug("*********************** KR:BS ")
+        logger.debug( s"KineticaRelation::buildScan(): Got required columns: '${requiredColumns.mkString(", ")}'" )
 
-        val conf: LoaderParams = new LoaderParams( Option.apply(sparkSession.sparkContext), parameters)
-        val url = parameters.getOrElse(KINETICA_JDBCURL_PARAM, sys.error("Option 'database.jdbc_url' not specified"))
-        val table = parameters.getOrElse(KINETICA_TABLENAME_PARAM, sys.error("Option 'table.name' not specified"))
-        val numPartitions = parameters.getOrElse(CONNECTOR_NUMPARTITIONS_PARAM, "4").toInt
+        val numPartitions = conf.getNumPartitions;
                 
         if (requiredColumns.isEmpty) {
-            emptyRowRDD(filters, url, table, numPartitions)
+            emptyRowRDD(filters, url, tableName, numPartitions)
         } else {
             val parts = com.kinetica.spark.egressutil.KineticaInputFormat.getDataSlicePartition(
                            com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)(),
-                           numPartitions.toInt, table, filters);
+                           numPartitions.toInt, tableName, filters);
             new KineticaRDD(
                 sqlContext.sparkContext,
                 KineticaJdbcUtils.getConnector(url, conf),
                 KineticaSchema.pruneSchema( tableSchema, requiredColumns ),
-                table,
+                tableName,
                 requiredColumns,
                 filters,
                 parts,
@@ -197,9 +197,9 @@ class KineticaRelation(
             KineticaSparkDFManager.KineticaMapWriter(sparkSession.sparkContext, conf);
             logger.info("Map and Write to Kinetica done.");
             // Lets try and print the accumulators
-            println(" Total rows = " + conf.totalRows.value)
-            println(" Converted rows = " + conf.convertedRows.value)
-            println(" Columns failed conversion = " + conf.failedConversion.value)
+            logger.info(" Total rows = " + conf.totalRows.value);
+            logger.info(" Converted rows = " + conf.convertedRows.value);
+            logger.info(" Columns failed conversion = " + conf.failedConversion.value);
         } 
     }
 

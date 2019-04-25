@@ -61,10 +61,11 @@ The connector JAR can be built with *Maven* as follows:
 
     $ git clone https://github.com/kineticadb/kinetica-connector-spark.git -b release/v6.2.0 --single-branch
     $ cd kinetica-connector-spark
-    $ mvn clean package
+    $ mvn clean package -DskipTests
 
 **NOTE:**  Compilation requires Java 1.8. Ensure that ``JAVA_HOME`` is set
 appropriately.
+
 
 This sequence produces the connector JAR, which will be made availble to the
 *Spark* cluster upon submitting the *Spark* job.  It can be found under the
@@ -76,6 +77,16 @@ It will also produce a testing JAR under the same directory, which will be
 referenced later in this guide for use in testing the *Spark* connector:
 
     target/kinetica-spark-6.2.x.y-tests.jar
+
+In order to run the pre-packaged tests, run:
+
+    $ mvn test -Dkurl=http://<KINETICA_IP>:<KINETICA_PORT> \
+        -Dkusername=<kinetica_username> -Dkpassword=<kinetica_password>
+
+**NOTE:** The tests fail with Java 1.9+ due to a known bug in spark
+(https://issues.apache.org/jira/browse/SPARK-24201).  Please use Java 1.8
+for running the tests.
+
 
 
 ## Usage
@@ -1368,6 +1379,7 @@ the access mechanism.
 | ``table.create``                | ``false`` | Automatically create table if missing
 | ``table.is_replicated``         | ``false`` | Whether the target table is replicated or not  **Ingest Processor Only**
 | ``table.name``                  | *<none>*  | *Kinetica* table to access
+| ``table.name_contains_schema``  | ``true``  | Indicates that a schema name should be extracted from the ``table.name``, if one is given (separated by periods).  Any additional periods will remain in the table name
 | ``table.truncate``              | ``false`` | Truncate table if it exists
 | ``table.truncate_to_size``      | ``false`` | Truncate strings when inserting into charN columns  **Data Loader Only**
 | ``table.update_on_existing_pk`` | ``false`` | If the target table, ``table.name``, has a primary key, update records in it with matching primary key values from records being ingested

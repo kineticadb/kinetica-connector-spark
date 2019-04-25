@@ -11,6 +11,38 @@ import com.typesafe.scalalogging.LazyLogging
 
 object ColumnProcessor extends LazyLogging {
 
+    /*
+     * Given a column name, surround it by double quotes and
+     * return it.
+     */
+    def quoteColumnName( columnName: String ) : String = {
+        return ("\"" + columnName + "\"")
+    }
+    
+    /*
+     * Given two column names, compare whether they are equal.  This
+     * is a case INsensitive comparison.  It also ignores any quotation
+     * around the column names.
+     */
+    def areColumnNamesEqual( colName1: String, colName2: String ) : Boolean = {
+
+        // Strip '"' from either end, IFF existing at both ends
+        val quote = "\""
+        var cName1 = colName1
+        var cName2 = colName2
+        if ( colName1.nonEmpty &&
+             (colName1.charAt( 0 ) == colName1.charAt( colName1.length() - 1 ) ) ) {
+            cName1 = colName1.stripPrefix( quote ).stripSuffix( quote )
+        }
+        if ( colName2.nonEmpty &&
+             (colName2.charAt( 0 ) == colName2.charAt( colName2.length() - 1 ) ) ) {
+            cName2 = colName2.stripPrefix( quote ).stripSuffix( quote )
+        }
+
+        // Case insensitive comparison
+        return ( cName1.compareToIgnoreCase( cName2 ) == 0 )
+    }
+    
     def processNumeric(
         dt: DataType,
         columnName: String,

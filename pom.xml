@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.kinetica</groupId>
     <artifactId>kinetica-spark</artifactId>
-    <version>6.2.2.2</version>
+    <version>6.2.2.5</version>
     <packaging>jar</packaging>
     <name>spark-kinetica</name>
     <description>Tools for reading/writing data from/to Spark into Kinetica</description>
@@ -38,6 +38,11 @@
         <git-commit-id-plugin.version>2.2.4</git-commit-id-plugin.version>
         <version.number>${git.commit.time}.${git.commit.id.abbrev}</version.number>
         <version.timestamp>${git.commit.time}</version.timestamp>
+        <!-- Default parameter values for ScalaTest -->
+        <kurl>""</kurl>
+        <kusername>""</kusername>
+        <kpassword>""</kpassword>
+        <!-- End default parameter values for ScalaTest -->
     </properties>
 
     <distributionManagement>
@@ -211,15 +216,19 @@
             </plugin>
 
             <plugin>
-              <groupId>org.apache.maven.plugins</groupId>
-              <artifactId>maven-surefire-plugin</artifactId>
-              <version>3.0.0-M3</version>
-              <configuration>
-                <useSystemClassLoader>false</useSystemClassLoader>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.0.0-M3</version>
+                <configuration>
+                    <!-- Disable the surefire plugin by setting skipTests to true -->
+                    <skipTests>true</skipTests>
+                    <useSystemClassLoader>false</useSystemClassLoader>
                     <excludes>
                         <exclude>**/*.java</exclude>
+                        <!-- We don't want JUnit to run ANY tests  -->
+                        <exclude>**/*.scala</exclude>
                     </excludes>
-              </configuration>
+                </configuration>
             </plugin>
 
             <plugin>
@@ -289,6 +298,28 @@
                 </executions>
             </plugin>
             -->
+
+            <plugin>
+                <groupId>org.scalatest</groupId>
+                <artifactId>scalatest-maven-plugin</artifactId>
+                <version>1.0</version>
+                <configuration>
+                    <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
+                    <junitxml>.</junitxml>
+                    <filereports>WDF TestSuite.txt</filereports>
+                    <argLine>-Durl=${kurl} -Dusername=${kusername} -Dpassword=${kpassword}</argLine>
+                    <!-- <argLine>-Duname=${uname}</argLine> -->
+                    <!--argLine>-Dpassword=${password}</argLine-->
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>test</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
 
         </plugins>
     </build>

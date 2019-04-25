@@ -2,13 +2,42 @@
 
 ## Version 6.2
 
+### Version 6.2.2.5 -- 2019-04-25
+
+#### Changed
+
+-   Kinetica egress to accommodate very large tables (such that partitions
+    can have more than Int.MaxValue rows).
+
+### Version 6.2.2.4 -- 2019-04-21
+
+#### Added
+-   ScalaTest based tests; compilation now requires -DskipTests to compile
+    the package without running tests (which might be necessary if you don't
+    have a running Kinetica instance).
+
+#### Fixed
+-   Quoting table names for egress from Kinetica
+
+
+### Version 6.2.2.3 -- 2019-04-10
+
+#### Changed
+-   Added quotes around schema/collection name, table name, and column names.
+-   Allowing multiple periods in the table name (the first name will still
+    be considered to be a schema/collection and table name separator).
+-   Added a configuration parameter `table.name_contains_schema` with a default
+    value of `true`, which indicates that a schema name should be extracted
+    from the existing `table.name` parameter, if given any.
+
+
 ### Version 6.2.2.2 -- 2019-04-02
 
-#### Changes
+#### Changed
 -   Changed the default timeout to 30 minutes
 -   Changed the default retry count to 0
 
-#### Bugfix
+#### Fixed
 -   Fixed egress issue related to importing string column type with the
     `datetime` subtype.
 -   Fixed decimal ingestion failure (decimal in Kinetica can be mapped to any

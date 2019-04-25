@@ -15,11 +15,13 @@ private[kinetica] object KineticaInputFormat {
      * @param conn connection to the database.
      * @return number of of data slices
      */
-    def getTotalNumberOfRows(conn: Connection, table: String, filters: Array[Filter]): Integer = {
+    def getTotalNumberOfRows(conn: Connection, table: String, filters: Array[Filter]): Long = {
 
         // query to get maximum number of data slices in the database.
         val whereClause = KineticaFilters.getWhereClause(filters)
-        var query = s"select count(*) from ${table}"
+        // Need to quote the table name, but quotess don't work with string
+        // interpolation in scala; the following is correct, though ugly
+        var query = s"""select count(*) from "${table}""""
         if (whereClause.length > 0) {
             query += " " + whereClause
         }
@@ -29,7 +31,7 @@ private[kinetica] object KineticaInputFormat {
             val rs = stmt.executeQuery()
             try {
 
-                val numberOfRows = if (rs.next) rs.getInt(1) else 0
+                val numberOfRows = if (rs.next) rs.getLong(1) else 0
                 /* What nonsense - kinetica filter may return 0 rows
                 if (numberOfRows == 0) {
                     // there should always be some data slices with kinetica
@@ -65,15 +67,18 @@ private[kinetica] object KineticaInputFormat {
             Array[Partition](KineticaPartition(0, numberOfRows, 0))
         } else {
             val ans = new ArrayBuffer[Partition]()
-            var start = 0
-            var numRows = rowsPerPartition
-            for (index <- 0 to numPartitions-1) {
-                if( index == numPartitions-1 ) {
+            var start : Long   = 0
+            var numRows : Long = rowsPerPartition
+            // var index : Long   = 0;
+            // while ( index < numPartitions ) {
+            for (index <- 0 until numPartitions) {
+                if( index == (numPartitions-1) ) {
                     numRows = numRows + extra
                 }
                 //println(s"Partition is ${start}/${numRows}/${index}") 
                 ans += KineticaPartition(start, numRows, index)
                 start = start + numRows;
+                // index += 1;
             }
             ans.toArray
         }

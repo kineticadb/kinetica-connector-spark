@@ -50,7 +50,7 @@ class KineticaDataReader (
         myRows.next()
     }
 
-    override def close(): Unit = {  
+    override def close(): Unit = {
     }
   
     private def buildTableQuery(
@@ -80,7 +80,9 @@ class KineticaDataReader (
                 } else ""
             // val whereClause = ""
 
-            s"SELECT $colStrBuilder FROM $table $whereClause"
+            // Need to quote the table name, but quotess don't work with string
+            // interpolation in scala; the following is correct, though ugly
+            s"""SELECT $colStrBuilder FROM "$table" $whereClause"""
         }
         logger.info("External Table Query: " + baseQuery)
         baseQuery.toString()

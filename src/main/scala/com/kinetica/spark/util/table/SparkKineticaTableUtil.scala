@@ -97,7 +97,7 @@ object SparkKineticaTableUtil extends LazyLogging {
      *
      * @param tableName  The name of the table
      *
-     * @returns true if the table exists, false otherwise
+     * @return true if the table exists, false otherwise
      */
     def hasTable( tableName: String, properties: LoaderParams ): Boolean = {
         val db = properties.getGpudb()
@@ -228,11 +228,15 @@ object SparkKineticaTableUtil extends LazyLogging {
 
             //System.out.println(" sf2 ####################### " + sf2.name)
             //System.out.println(" dt ####################### " + dt)
+
+            // We need to quote the column names
+            val colName = ColumnProcessor.quoteColumnName( sf2.name )
+
             if (dt.isInstanceOf[DecimalType]) {
                 logger.debug("Found DecimalType")
                 ColumnProcessor.processDecimal(
                     dt,
-                    sf2.name,
+                    colName,
                     sf2.nullable,
                     alterDDL)
             }
@@ -240,7 +244,7 @@ object SparkKineticaTableUtil extends LazyLogging {
                 logger.debug("Found NumericType")
                 ColumnProcessor.processNumeric(
                     dt,
-                    sf2.name,
+                    colName,
                     sf2.nullable,
                     alterDDL)
             } else if (dt.isInstanceOf[StringType]) {
@@ -248,29 +252,29 @@ object SparkKineticaTableUtil extends LazyLogging {
                 val dryRun = lp.isDryRun()
                 ColumnProcessor.processString(
                     ds,
-                    sf2.name,
+                    colName,
                     sf2.nullable,
                     alterDDL,
                     false,
                     dryRun)
             } else if (dt.isInstanceOf[TimestampType]) {
                 logger.debug("Found TimestampType")
-                ColumnProcessor.processTS(ds, sf2.name, sf2.nullable, alterDDL)
+                ColumnProcessor.processTS(ds, colName, sf2.nullable, alterDDL)
             } else if (dt.isInstanceOf[DateType]) {
                 logger.debug("Found DateType")
-                ColumnProcessor.processDate(ds, sf2.name, sf2.nullable, alterDDL)
+                ColumnProcessor.processDate(ds, colName, sf2.nullable, alterDDL)
             } else if (dt.isInstanceOf[BooleanType]) {
                 logger.debug("Found BooleanType")
-                ColumnProcessor.processBoolean(ds, sf2.name, sf2.nullable, alterDDL)
+                ColumnProcessor.processBoolean(ds, colName, sf2.nullable, alterDDL)
             } else if (dt.isInstanceOf[BinaryType]) {
                 logger.debug("Found BinaryType")
-                ColumnProcessor.processByteArray(ds, sf2.name, sf2.nullable, alterDDL)
+                ColumnProcessor.processByteArray(ds, colName, sf2.nullable, alterDDL)
             } else {
                 logger.debug("Found complex type perhaps")
                 val dryRun = lp.isDryRun()
                 ColumnProcessor.processString(
                     ds,
-                    sf2.name,
+                    colName,
                     sf2.nullable,
                     alterDDL,
                     false,
@@ -307,63 +311,68 @@ object SparkKineticaTableUtil extends LazyLogging {
                 logger.debug(
                     "Eval if " + sf2.name + "equals Kinetica column: " +
                         column.getName)
-                if (sf2.name.compareToIgnoreCase(column.getName) == 0) {
+                if ( ColumnProcessor.areColumnNamesEqual( sf2.name, column.getName ) ) {
                     columnFound = true
                     logger.debug(column.getName + " column found")
                 }
             }
 
-            //column not found, add column to table
+            // We need to quote the column names
+            val colName = ColumnProcessor.quoteColumnName( sf2.name )
+
+            // Column not found, add column to table
             if (!columnFound) {
-                logger.debug(sf2.name + " column not found, processing")
+
+                logger.debug( s"$colName column not found, processing" )
                 AlterTableAddColumnDDL.init(lp)
                 if (dt.isInstanceOf[NumericType]) {
                     logger.debug("Found NumericType")
                     ColumnProcessor.processNumeric(
                         dt,
-                        sf2.name,
+                        colName,
                         sf2.nullable,
                         alterDDL)
-                    closeAddAlter(sf2.name, lp.getTablename)
+                    closeAddAlter(colName, lp.getTablename)
                 } else if (dt.isInstanceOf[StringType]) {
                     logger.debug("Found StringType")
                     ColumnProcessor.processString(
                         ds,
-                        sf2.name,
+                        colName,
                         sf2.nullable,
                         alterDDL,
                         columnFound,
                         false)
-                    closeAddAlter(sf2.name, lp.getTablename)
+                    closeAddAlter(colName, lp.getTablename)
                 } else if (dt.isInstanceOf[TimestampType]) {
                     logger.debug("Found TimestampType")
-                    ColumnProcessor.processTS(ds, sf2.name, sf2.nullable, alterDDL)
-                    closeAddAlter(sf2.name, lp.getTablename)
+                    ColumnProcessor.processTS(ds, colName, sf2.nullable, alterDDL)
+                    closeAddAlter(colName, lp.getTablename)
                 } else if (dt.isInstanceOf[DateType]) {
                     logger.debug("Found DateType")
-                    ColumnProcessor.processDate(ds, sf2.name, sf2.nullable, alterDDL)
-                    closeAddAlter(sf2.name, lp.getTablename)
+                    ColumnProcessor.processDate(ds, colName, sf2.nullable, alterDDL)
+                    closeAddAlter(colName, lp.getTablename)
                 } else if (dt.isInstanceOf[BooleanType]) {
                     logger.debug("Found BooleanType")
                     ColumnProcessor.processBoolean(
                         ds,
-                        sf2.name,
+                        colName,
                         sf2.nullable,
                         alterDDL)
-                    closeAddAlter(sf2.name, lp.getTablename)
+                    closeAddAlter(colName, lp.getTablename)
                 }
             } else {
+                // Column already exists; we're just modifying it
                 AlterTableModifyColumnDDL.init(lp)
                 if (dt.isInstanceOf[StringType]) {
                     logger.debug("Found StringType")
                     ColumnProcessor.processString(
                         ds,
-                        sf2.name,
+                        colName,
                         sf2.nullable,
                         alterDDL,
                         columnFound,
                         false)
-                    closeModAlter(sf2.name, lp.getTablename)
+                    closeModAlter(colName, lp.getTablename)
                 }
             }
         }

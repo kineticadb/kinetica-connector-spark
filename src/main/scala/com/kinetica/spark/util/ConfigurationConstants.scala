@@ -32,6 +32,7 @@ object ConfigurationConstants {
     val KINETICA_TRUNCATE_TO_SIZE: String = "table.truncate_to_size"
 
     val KINETICA_TABLENAME_PARAM: String = "table.name"
+    val KINETICA_TABLENAME_CONTAINS_SCHEMA_PARAM: String = "table.name_contains_schema"
     val KINETICA_CREATETABLE_PARAM: String = "table.create"
     val KINETICA_TRUNCATETABLE_PARAM: String = "table.truncate"
     val KINETICA_USETEMPLATES_PARAM: String = "table.use_templates"

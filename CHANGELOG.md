@@ -2,10 +2,16 @@
 
 ## Version 7.0
 
+### Version 7.0.3.0 -- 2019-05-03
+
+#### Changed
+-   Updated the Kinetica Java API version to 7.0.3.0 to take advantage of
+    recent changes (support for HA failover for multi-head I/O).
+
+
 ### Version 7.0.2.2 -- 2019-04-25
 
 #### Changed
-
 -   Kinetica egress to accommodate very large tables (such that partitions
     can have more than Int.MaxValue rows).
 

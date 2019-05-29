@@ -2,12 +2,17 @@
 
 ## Version 6.2
 
-### Version 6.2.2.5 -- 2019-04-25
+### Version 6.2.2.5 -- 2019-05-29
 
 #### Changed
 
 -   Kinetica egress to accommodate very large tables (such that partitions
     can have more than Int.MaxValue rows).
+
+#### Fixed
+-   The POM now allows a build even when no git directory exists (to disable
+    the git-commit-id plugin).
+
 
 ### Version 6.2.2.4 -- 2019-04-21
 

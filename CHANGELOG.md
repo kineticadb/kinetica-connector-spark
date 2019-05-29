@@ -2,12 +2,15 @@
 
 ## Version 7.0
 
-### Version 7.0.3.0 -- 2019-05-03
+### Version 7.0.3.0 -- 2019-05-29
 
 #### Changed
 -   Updated the Kinetica Java API version to 7.0.3.0 to take advantage of
     recent changes (support for HA failover for multi-head I/O).
 
+#### Fixed
+-   The POM now allows a build even when no git directory exists (to disable
+    the git-commit-id plugin).
 
 ### Version 7.0.2.2 -- 2019-04-25
 

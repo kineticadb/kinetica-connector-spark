@@ -9,6 +9,7 @@ import com.gpudb.ColumnProperty
 import com.gpudb.GPUdb
 import com.gpudb.GPUdbBase
 import com.gpudb.Type
+import com.kinetica.spark.util.json.KineticaJsonSchemaHelper
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.types.DataTypes
@@ -27,6 +28,7 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
     private val tableName: String = conf.tablename
     private val schemaName: String = conf.schemaname
     private val useTemplates: Boolean = conf.useTemplates
+    private val useJsonTemplate: Boolean = conf.useJsonTemplate
 
     private var isReplicated: Boolean = false
 
@@ -37,6 +39,19 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
 
     def setupSchema(loaderConfig: LoaderConfiguration, sparkSchema: StructType): java.util.HashMap[Integer, Integer] = {
 
+        if(this.useJsonTemplate) {
+            // lookup schema from json template
+            require(loaderConfig.dataPath != null, "Use of Json Template requires a data path")
+            val jsonSchemaHelper = new KineticaJsonSchemaHelper(loaderConfig)
+            val schema = jsonSchemaHelper.loadKineticaSchema(loaderConfig.dataPath).get
+            jsonSchemaHelper.createTableFromSchema(schema)
+            if(schema.isReplicated)
+            {
+                loaderConfig.setTableReplicated(true)
+            }
+            val response: ShowTableResponse = this.gpudb.showTable(this.tableName, null)
+            this.setTypeFromResponse(response, 0)
+        }
         if(this.useTemplates) {
             // lookup schema from template
             this.resolveTemplate()

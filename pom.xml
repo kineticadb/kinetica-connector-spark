@@ -38,6 +38,7 @@
         <git-commit-id-plugin.version>2.2.4</git-commit-id-plugin.version>
         <version.number>${git.commit.time}.${git.commit.id.abbrev}</version.number>
         <version.timestamp>${git.commit.time}</version.timestamp>
+        <play.json.version>2.6.10</play.json.version>
         <!-- Default parameter values for ScalaTest -->
         <kurl>""</kurl>
         <kusername>""</kusername>
@@ -337,6 +338,16 @@
             <groupId>org.joda</groupId>
             <artifactId>joda-convert</artifactId>
             <version>${joda-convert.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.typesafe.play</groupId>
+            <artifactId>play-json_${scala.binary.version}</artifactId>
+            <version>${play.json.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.typesafe.play</groupId>
+            <artifactId>play-json-joda_${scala.binary.version}</artifactId>
+            <version>${play.json.version}</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.scala-logging</groupId>

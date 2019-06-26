@@ -6,28 +6,25 @@ import com.gpudb.GPUdbBase
 import com.gpudb.GenericRecord
 import com.gpudb.protocol.ShowTableRequest
 import com.gpudb.protocol.ShowTableResponse
-
 import java.io.Serializable
-import scala.beans.{ BeanProperty, BooleanBeanProperty }
-import com.typesafe.scalalogging.LazyLogging
-import com.kinetica.spark.util.ConfigurationConstants._
 
+import scala.beans.{BeanProperty, BooleanBeanProperty}
+import com.typesafe.scalalogging.LazyLogging
+import com.kinetica.spark.util.ConfigurationConstants.{KINETICA_DEFAULT_JSON_FILE, _}
 import com.kinetica.spark.ssl.X509KeystoreOverride
 import com.kinetica.spark.ssl.X509TrustManagerOverride
 import com.kinetica.spark.ssl.X509TustManagerBypass
-
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.KeyManager
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
-
 import org.apache.spark.SparkContext
 import org.apache.spark.util.LongAccumulator
 
 import scala.collection.JavaConverters._
 
     
-class LoaderParams extends Serializable with LazyLogging {
+class LoaderParams(@transient val sparkContext: Option[SparkContext]) extends Serializable with LazyLogging {
 
     @BeanProperty
     var timeoutMs: Int = 10000
@@ -131,8 +128,11 @@ class LoaderParams extends Serializable with LazyLogging {
     @BooleanBeanProperty
     var flattenSourceSchema: Boolean = false
 
+    @BeanProperty
+    var jsonSchemaFilename: String = KINETICA_DEFAULT_JSON_FILE
+
     def this(sc: Option[SparkContext], params: Map[String, String]) = {
-        this()
+        this(sc)
 
         // Get a few long accumulators only if the context is given
         sc match {
@@ -186,6 +186,8 @@ class LoaderParams extends Serializable with LazyLogging {
             throw new Exception( "Parameter is required: " + KINETICA_TABLENAME_PARAM)
         }
 
+        jsonSchemaFilename = params.getOrElse(CONNECTOR_JSON_SCHEMA_FILENAME_PARAM, KINETICA_DEFAULT_JSON_FILE)
+
         // Instead of diverging the behavior for spark-submit vs spark shell etc.,
         // just check if a collection name is given, which is indicated by the
         // user (by default, we'll assume that we're to extract a schema name
@@ -196,9 +198,9 @@ class LoaderParams extends Serializable with LazyLogging {
             val tableParams: Array[String] = tablename.split("\\.")
             if (tableParams.length > 1) {
                 // A collection name IS given
-                schemaname = tableParams( 0 )
+                schemaname = tableParams( 0 ).stripSuffix("]").stripPrefix("[")
                 // The remainder is the table name (which is allowed to have periods)
-                tablename = tablename.substring( schemaname.length + 1 )
+                tablename = tablename.substring( schemaname.length + 1 ).stripSuffix("]").stripPrefix("[")
             }
         }
 

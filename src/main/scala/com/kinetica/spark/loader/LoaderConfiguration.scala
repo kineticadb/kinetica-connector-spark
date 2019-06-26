@@ -2,7 +2,7 @@ package com.kinetica.spark.loader
 
 import java.io.Serializable
 
-import scala.beans.BeanProperty
+import scala.beans.{BeanProperty, BooleanBeanProperty}
 import com.kinetica.spark.util.ConfigurationConstants._
 import com.typesafe.scalalogging.LazyLogging
 import com.kinetica.spark.LoaderParams
@@ -29,6 +29,10 @@ class LoaderConfiguration(sc:SparkContext, params: Map[String, String])
 
     @BeanProperty
     val csvHeader: Boolean = params.getOrElse(KINETICA_CSV_HEADER, "false").toBoolean
+
+    // add support for json-based templates
+    @BooleanBeanProperty
+    val useJsonTemplate = params.getOrElse(KINETICA_USE_JSON_SCHEMA, "false").toBoolean
 
     // Use the datasource v1 API path by default
     @BeanProperty

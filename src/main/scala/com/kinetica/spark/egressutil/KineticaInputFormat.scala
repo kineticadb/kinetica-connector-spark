@@ -69,8 +69,6 @@ private[kinetica] object KineticaInputFormat {
             val ans = new ArrayBuffer[Partition]()
             var start : Long   = 0
             var numRows : Long = rowsPerPartition
-            // var index : Long   = 0;
-            // while ( index < numPartitions ) {
             for (index <- 0 until numPartitions) {
                 if( index == (numPartitions-1) ) {
                     numRows = numRows + extra
@@ -78,7 +76,6 @@ private[kinetica] object KineticaInputFormat {
                 //println(s"Partition is ${start}/${numRows}/${index}") 
                 ans += KineticaPartition(start, numRows, index)
                 start = start + numRows;
-                // index += 1;
             }
             ans.toArray
         }

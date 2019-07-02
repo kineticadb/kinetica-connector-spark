@@ -2,6 +2,12 @@
 
 ## Version 7.0
 
+### Version 7.0.3.1 -- 2019-07-02
+
+#### Fixed
+-   Ingestion of string timestamps into long timestamp column
+
+
 ### Version 7.0.3.0 -- 2019-05-29
 
 #### Changed

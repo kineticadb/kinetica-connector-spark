@@ -77,18 +77,39 @@ class KineticaLoaderFunction (
     }
 
     private def convertValue(inValue: Any, destColDef: Column): Any = {
-        if (inValue == null) {
-            return null
-        }
 
-        val destType: Class[_] = destColDef.getType
-        val srcType: Class[_] = inValue.getClass
         val colProps: java.util.List[String] = destColDef.getProperties
         var outValue: Any = null
+        val destType: Class[_] = destColDef.getType
+
+        // check for non-nullable strings and push in empty string in its stead
+        // this may be required when reading from CSV files
+        if(inValue == null) {
+            if(loaderConfig.dataFormat == "csv" &&
+              classOf[java.lang.String].isAssignableFrom(destType) && !destColDef.isNullable)
+            {
+                return ""
+            } else {
+                return null
+            }
+        }
+
+        // srcType may be null, so have to check after others
+        val srcType: Class[_] = inValue.getClass
 
         // need to check timestamp first because it may need normalization
         if (colProps.contains("timestamp")) {
             outValue = convertFromDate(srcType, inValue)
+        }
+        // do datetime first so the other conditions occur without overlap
+        else if(colProps.contains("datetime") && classOf[java.lang.String].isAssignableFrom(destType)) {
+            outValue = convertLongToStringDate(srcType, inValue, FORMAT_DATETIME)
+        }
+        else if(colProps.contains("time") && classOf[java.lang.String].isAssignableFrom(destType)) {
+            outValue = convertLongToStringDate(srcType, inValue, FORMAT_TIME)
+        }
+        else if(colProps.contains("date") && classOf[java.lang.String].isAssignableFrom(destType)) {
+            outValue = convertLongToStringDate(srcType, inValue, FORMAT_DATE)
         }
         else if (destType == srcType) {
             // fast path
@@ -104,10 +125,13 @@ class KineticaLoaderFunction (
             val inBool: java.lang.Boolean = inValue.asInstanceOf[java.lang.Boolean]
             outValue = if (inBool) 1.underlying else 0.underlying
         }
-
+        // automatic string conversion. do this last before failing
+        if (outValue == null && classOf[java.lang.String].isAssignableFrom(destType)) {
+            outValue = inValue.toString()
+        }
         if (outValue == null) {
             throw new Exception(
-                String.format("Could not convert from type: %s", destType.getName))
+                String.format("(%s) Could not convert from type to type: %s -> %s, (%s)... props: (%s)", destColDef.getName, srcType.getName, destType.getName, inValue.toString, colProps.mkString(",")))
         }
 
         if(loaderConfig.truncateToSize && destType == classOf[java.lang.String]) {
@@ -165,4 +189,40 @@ class KineticaLoaderFunction (
         outValue
     }
 
+
+    final private val FORMAT_DATE = "yyyy-MM-dd"
+    final private val FORMAT_TIME = "HH:mm:ss.SSS"
+    final private val FORMAT_DATETIME = s"$FORMAT_DATE $FORMAT_TIME"
+
+    private def convertLongToStringDate(srcType: Class[_], inObject: Any, dateFormat: String = FORMAT_DATE): String = {
+
+        srcType match {
+
+            case l if classOf[java.lang.Long].isAssignableFrom(l) => {
+
+                val inLong = inObject.asInstanceOf[java.lang.Long]
+
+                val date = new java.util.Date(inLong)
+
+                new java.text.SimpleDateFormat(dateFormat).format(date)
+            }
+            case d if classOf[java.sql.Date].isAssignableFrom(d) => {
+
+                val inDate = inObject.asInstanceOf[java.sql.Date]
+
+                val date = new java.util.Date(inDate.getTime)
+
+                new java.text.SimpleDateFormat(dateFormat).format(date)
+            }
+            case t if classOf[java.sql.Timestamp].isAssignableFrom(t) => {
+
+                val inTimestamp = inObject.asInstanceOf[java.sql.Timestamp]
+
+                val date = new java.util.Date(inTimestamp.getTime)
+
+                new java.text.SimpleDateFormat(dateFormat).format(date)
+            }
+            case _ => null.asInstanceOf[String]
+        }
+    }
 }

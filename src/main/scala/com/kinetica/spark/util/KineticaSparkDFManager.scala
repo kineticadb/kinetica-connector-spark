@@ -1,30 +1,31 @@
-package com.kinetica.spark.util
+package com.kinetica.spark.util;
 
-import java.math.BigDecimal
-import java.sql.Date
-import java.sql.Timestamp
-import java.util.Iterator
+import java.math.BigDecimal;
+import java.sql.Date;
+import java.sql.Timestamp;
+import java.util.Iterator;
 
-import scala.beans.BeanProperty
-import scala.collection.JavaConversions.asScalaBuffer
+import scala.beans.BeanProperty;
+import scala.collection.JavaConversions.asScalaBuffer;
 
-import org.apache.spark.SparkContext
-import org.apache.spark.api.java.function.ForeachPartitionFunction
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.Row
+import org.apache.spark.SparkContext;
+import org.apache.spark.api.java.function.ForeachPartitionFunction;
+import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.Row;
 
-import com.gpudb.BulkInserter
-import com.gpudb.GPUdb
-import com.gpudb.GPUdbBase
-import com.gpudb.GPUdbException
-import com.gpudb.GenericRecord
-import com.gpudb.Type
-import com.kinetica.spark.LoaderParams
-import com.typesafe.scalalogging.LazyLogging
+import com.gpudb.BulkInserter;
+import com.gpudb.ColumnProperty;
+import com.gpudb.GPUdb;
+import com.gpudb.GPUdbBase;
+import com.gpudb.GPUdbException;
+import com.gpudb.GenericRecord;
+import com.gpudb.Type;
+import com.kinetica.spark.LoaderParams;
+import com.typesafe.scalalogging.LazyLogging;
 
-import java.nio.ByteBuffer
+import java.nio.ByteBuffer;
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConversions._;
 
 object KineticaSparkDFManager extends LazyLogging {
     
@@ -104,7 +105,7 @@ object KineticaSparkDFManager extends LazyLogging {
                             if (lp.isMapToSchema) {
                                 rtemp = row.getAs(column.getName)
                             }
-                            if( rtemp != null ) { // This means null value - nothing to do.
+                            if( rtemp != null ) { // not a nul value
                                 if (!putInGenericRecord(genericRecord, rtemp, column)) {
                                     lp.failedConversion.add(1)
                                 }
@@ -132,7 +133,11 @@ object KineticaSparkDFManager extends LazyLogging {
             }
         })
     }
-    
+
+
+    /**
+     * Put a given row's given column value in the record compatible with Kinetica.
+     */
     def putInGenericRecord(genericRecord : GenericRecord, rtemp : Any, column : Type.Column ) : Boolean = {
         
         //println(" Adding 1 record 1 field .........")
@@ -142,7 +147,7 @@ object KineticaSparkDFManager extends LazyLogging {
         
         var isARecord: Boolean = false
         if (rtemp != null) {
-            logger.debug("Spark data type {} not null", rtemp.getClass() + " ** column name ** " + columnName)
+            logger.debug("Spark data type {} not null, column '{}'", rtemp.getClass(),  columnName)
             if (rtemp.isInstanceOf[java.lang.Long]) {
                 logger.debug("Long")
                     genericRecord.put(columnName, rtemp)
@@ -167,9 +172,9 @@ object KineticaSparkDFManager extends LazyLogging {
             } else if (rtemp.isInstanceOf[Timestamp]) {
                 logger.debug("Timestamp instance")
                 if (column.getType().toString().contains("java.lang.String")) {
-                    logger.debug("Timestamp to date conversion perhaps.")
-                    if ( column.getProperties.contains("date") ) {
-                        logger.debug("Timestamp to date conversion surely.")
+                    logger.debug("Timestamp to date conversion")
+                    if ( column.hasProperty( ColumnProperty.DATE ) ) {
+                        logger.debug("Timestamp to date conversion")
                         val timelong = classOf[Timestamp].cast(rtemp).getTime 
                         val formatter = new java.text.SimpleDateFormat("YYYY-MM-dd")
                         val dateString = formatter.format(timelong)
@@ -239,11 +244,12 @@ object KineticaSparkDFManager extends LazyLogging {
                     logger.debug("**** Kinetica column type is " + column.getType) 
                 }
             } else if (rtemp.isInstanceOf[java.lang.Double]) {
+                logger.debug("Double")
                 if (column.getType().toString().contains("java.lang.String")) {
-                    logger.debug("String")
                     genericRecord.put(columnName, rtemp.toString())
+                } else if (column.getType().toString().contains("java.lang.Float")) {
+                    genericRecord.put(columnName, classOf[java.lang.Double].cast(rtemp).floatValue())
                 } else {
-                    logger.debug("Double")
                     genericRecord.put(columnName, classOf[java.lang.Double].cast(rtemp).doubleValue())
                 }
                 isARecord = true
@@ -263,7 +269,35 @@ object KineticaSparkDFManager extends LazyLogging {
                 } else if (column.getType().toString().contains("java.lang.Integer")) {
                     genericRecord.put(columnName, rtemp.toString().toInt)
                 } else if (column.getType().toString().contains("java.lang.Long")) {
-                    genericRecord.put(columnName, rtemp.toString().toLong)
+                    if ( column.hasProperty( ColumnProperty.TIMESTAMP ) ) {
+                        logger.debug("String to timestamp conversion")
+                        // The full timestamp format has optional parts
+                        val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd[[ ]['T']HH:mm[:ss][.SSS]]");
+                        // Get the number of milliseconds since the epoch
+                        var timestamp : Long = 0;
+                        try {
+                            // Try parsing a full timestamp with the date and the time
+                            timestamp = java.time.LocalDateTime.parse( rtemp.toString(),
+                                                                       formatter )
+                                .atZone( java.time.ZoneId.systemDefault() )
+                                .toInstant()
+                                .toEpochMilli();
+                        } catch {
+                            case e: java.time.format.DateTimeParseException => {
+                                // Try parsing just the date
+                                timestamp = java.time.LocalDate.parse( rtemp.toString(),
+                                                                       formatter )
+                                .atStartOfDay()
+                                .atZone( java.time.ZoneId.systemDefault() )
+                                .toInstant()
+                                .toEpochMilli();
+                            }
+                        }
+                        genericRecord.put( columnName, timestamp );
+                    } else {
+                       logger.debug("String to long conversion");
+                       genericRecord.put(columnName, rtemp.toString().toLong);
+                    }
                 } else {
                     genericRecord.put(columnName, rtemp.toString())
                 }

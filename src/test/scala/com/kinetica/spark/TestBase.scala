@@ -7,16 +7,21 @@ import com.gpudb.Type;
 import com.gpudb.protocol.ClearTableRequest;
 import com.gpudb.protocol.CreateTableRequest;
 import com.gpudb.protocol.ShowTableResponse;
+
 import com.typesafe.scalalogging.LazyLogging;
+
 import java.net.URL;
+import java.time.LocalDateTime;
+
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.types.{IntegerType, StructField, StructType};
+import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType};
 import org.scalatest.FunSuite;
 import org.scalatest.BeforeAndAfterAll;
 import org.scalatest.BeforeAndAfterEach;
 import org.scalatest.Suite;
+
 import scala.collection.JavaConversions._;
 import scala.collection.JavaConverters._;
 import scala.collection.{mutable, immutable};
@@ -276,6 +281,30 @@ trait SparkConnectorTestFixture
     }
 
 
+    /**
+     * Create a dataframe with one nullable string column 'timestamp' and
+     * generate the given number of rows with random, valid timestamps.
+     */
+    def createDataFrameOneStringTimestampNullableColumn( numRows: Int ) : DataFrame = {
+        logger.debug("Creating a dataframe with random timestamp data in it");
+        // Generate some timestamp data
+        val numColumns = 1;
+        val data = (1 to numRows).map(_ => Seq.fill( numColumns )( LocalDateTime.now().toString() ) );
+
+        // Generate the schema
+        val schema = StructType( StructField( "timestamp", StringType, true ) :: Nil );
+        // Generate the RDD from the data
+        val rdd = m_sparkSession.sparkContext.parallelize( data.map( x => Row(x:_*) ) );
+        // Generate the dataframe from the RDD
+        val df = m_sparkSession.sqlContext.createDataFrame( rdd, schema );
+
+        // Double check the dataframe has the desired number of rows
+        assert(df.count() == numRows);
+
+        return df;
+    }
+
+
     // -------- Kinetica Table Generator Functions for Testing Convenience ---------
 
     /**
@@ -287,7 +316,7 @@ trait SparkConnectorTestFixture
                                                   collectionName: Option[String],
                                                   numRows: Int ) : Unit = {
         
-        // Create a table to read data from
+        // Create the table type
         var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
         columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
         columns += new Type.Column( "y", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
@@ -319,6 +348,53 @@ trait SparkConnectorTestFixture
         m_gpudb.insertRecordsRandom( tableName, numRows, null );
         return;
     }
+
+    /**
+     * Create a Kinetica table with the given name with one nullable long,
+     * timestamp column.  Optionally generate the given number of random
+     * records.  If a collection name is given, ensure that Kinetica puts
+     * it in that collection.
+     */
+    def createKineticaTableOneLongTimestampNullableColumn( tableName: String,
+                                                           collectionName: Option[String],
+                                                           numRows: Int ) : Unit = {
+        
+        // Create the table type
+        var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+        columns += new Type.Column( "timestamp", classOf[java.lang.Long],
+                                    ColumnProperty.NULLABLE,
+                                    ColumnProperty.TIMESTAMP );
+    
+        val type_ = new Type( columns.toList.asJava );
+
+        // Set the collection name option for table creation
+        collectionName match {
+            // A collection name is given; set it
+            case Some( collName ) => {
+                m_createTableInCollectionOptions( CreateTableRequest.Options.COLLECTION_NAME ) = collName;
+            }
+            // No collection name is given, so ensure the relevant property
+            // is absent from the options
+            case None => {
+                m_createTableInCollectionOptions remove CreateTableRequest.Options.COLLECTION_NAME;
+            }
+        }
+        
+        // Delete any pre-existing table with the same name
+        clear_table( tableName );
+
+        // Create the table
+        m_gpudb.createTable( tableName, type_.create( m_gpudb ),
+                             m_createTableInCollectionOptions );
+        logger.debug( s"Created table $tableName via the Java API" );
+
+        // Generate some random data, if desired by the caller
+        if ( numRows > 0) {
+            m_gpudb.insertRecordsRandom( tableName, numRows, null );
+        }
+        return;
+    }
+
 }   // end trait SparkConnectorTestFixture
 
 

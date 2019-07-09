@@ -187,11 +187,12 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
 
                 val sourceDT: Class[_] = sourceCol.getType
                 val destDT: Class[_] = destCol.getType
+                val colProps = destCol.getProperties.toList
 
-                if (!validConversion(sourceDT, destDT)) {
+                if (!validConversion(sourceDT, destDT, colProps)) {
                     throw new Exception(
-                        String.format("Could not convert datatype for column <%s>: %s -> %s",
-                            sourceCol.getName, sourceDT.getName, destDT.getName))
+                        String.format("Could not convert datatype for column <%s>: %s -> %s (%s)",
+                            sourceCol.getName, sourceDT.getName, destDT.getName, colProps.mkString("|")))
                 }
 
                 val destIdx: Int = this.destType.getColumnIndex(destCol.getName)
@@ -289,7 +290,11 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
         new Type(columns)
     }
 
-    private def validConversion(sourceDT: Class[_], destDT: Class[_]): Boolean = {
+    private def validConversion(sourceDT: Class[_], destDT: Class[_], colProps: List[String]): Boolean = {
+
+        val hasDateTime = List("date","datetime","time").exists(colProps.contains(_))
+        val hasString = colProps.contains("string")
+
         if (destDT == sourceDT) {
             // same types
             true
@@ -306,7 +311,9 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
             // timestamp conversion
             true
         } else {
-          false
+            classOf[java.lang.String].isAssignableFrom(destDT) &&
+              classOf[java.lang.Long].isAssignableFrom(sourceDT) &&
+              hasDateTime
         }
     }
 }

@@ -149,11 +149,8 @@ object SparkKineticaTableUtil extends LazyLogging {
 
     def tableExists(lp: LoaderParams): Boolean = {
         logger.debug("tableExists")
-        verifyJdbcUrl(lp)
-        JDBCConnectionUtils.Init(lp)
-        val te = JDBCConnectionUtils.tableExists(lp.tablename)
-        JDBCConnectionUtils.close()
-        te
+
+        hasTable(lp.tablename, lp)
     }
 
     /**

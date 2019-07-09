@@ -128,9 +128,6 @@ class LoaderParams(@transient val sparkContext: Option[SparkContext]) extends Se
     @BooleanBeanProperty
     var flattenSourceSchema: Boolean = false
 
-    @BeanProperty
-    var jsonSchemaFilename: String = KINETICA_DEFAULT_JSON_FILE
-
     def this(sc: Option[SparkContext], params: Map[String, String]) = {
         this(sc)
 
@@ -185,8 +182,6 @@ class LoaderParams(@transient val sparkContext: Option[SparkContext]) extends Se
         if(tablename == null) {
             throw new Exception( "Parameter is required: " + KINETICA_TABLENAME_PARAM)
         }
-
-        jsonSchemaFilename = params.getOrElse(CONNECTOR_JSON_SCHEMA_FILENAME_PARAM, KINETICA_DEFAULT_JSON_FILE)
 
         // Instead of diverging the behavior for spark-submit vs spark shell etc.,
         // just check if a collection name is given, which is indicated by the

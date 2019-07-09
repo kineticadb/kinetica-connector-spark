@@ -5,6 +5,7 @@ import java.io.BufferedOutputStream
 import com.gpudb.GPUdbBase
 import com.gpudb.protocol.{CreateTableRequest, CreateTableResponse, CreateTypeRequest, ShowTableRequest}
 import com.kinetica.spark.LoaderParams
+import com.kinetica.spark.loader.LoaderConfiguration
 import com.kinetica.spark.util.ConfigurationConstants._
 import com.kinetica.spark.util.json.KineticaJsonSchema.{KineticaSchemaMetadata, KineticaSchemaRoot}
 import com.typesafe.scalalogging.LazyLogging
@@ -14,39 +15,74 @@ import org.apache.spark.sql.SparkSession
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.collection.mutable.Map
 import scala.util.Try
 
-class KineticaJsonSchemaHelper(val lp: LoaderParams) extends LazyLogging {
+class KineticaJsonSchemaHelper(val loaderConfig: LoaderConfiguration) extends LazyLogging {
 
   logger.debug("*********************** Constructor: SchemaHandler")
 
   def this(parameters: scala.collection.immutable.Map[String, String], @transient sparkSession: SparkSession)
   {
-    this(new LoaderParams(Some(sparkSession.sparkContext), parameters))
+    this(new LoaderConfiguration(sparkSession.sparkContext, parameters))
   }
 
-  require(lp.kineticaURL != null, s"Parameter $KINETICA_URL_PARAM cannot be null")
+  require(loaderConfig.kineticaURL != null, s"Parameter $KINETICA_URL_PARAM cannot be null")
 
-  val jsonDataFileName = lp.jsonSchemaFilename
+  private var jsonDataFileName = loaderConfig.jsonSchemaFilename
+
+
+  /**
+    * reading a path requires that we either have an absolute path to the json file, or can infer one from the provided path
+    */
+  def getValidPath(stringPath: String): Path = {
+    stringPath match {
+      case x if x == null || x.trim.isEmpty => getValidPath(None)
+      case s => getValidPath(Some(new Path(s)))
+    }
+  }
+
+  /**
+    * reading a path requires that we either have an absolute path to the json file, or can infer one from the provided path
+    */
+  def getValidPath(path: Option[Path]): Path = {
+    path match {
+
+      // if path ends with .json use it
+      case Some(p) if p.getName.endsWith(".json") => p
+
+      // otherwise, if json file name is absolute use that
+      case _ if new Path(jsonDataFileName).isUriPathAbsolute =>
+        new Path(jsonDataFileName)
+
+      // create a new path with the json filename appended
+      case Some(p) => new Path(p,jsonDataFileName)
+
+      // we've exhausted all options
+      case _ => {
+        throw new IllegalArgumentException("use of Kinetica Json Template requires either a data path or an absolute json filename")
+      }
+    }
+  }
 
   def getKineticaTableSchema(): KineticaSchemaMetadata = {
 
-    val gpudb = lp.getGpudb()
+    val gpudb = loaderConfig.getGpudb()
 
     val st = new ShowTableRequest()
-    st.setTableName(lp.tablename)
-    st.setOptions(Map(ShowTableRequest.Options.GET_COLUMN_INFO -> ShowTableRequest.Options.TRUE))
+    st.setTableName(loaderConfig.tablename)
+    st.setOptions(mutable.Map(ShowTableRequest.Options.GET_COLUMN_INFO -> ShowTableRequest.Options.TRUE))
     val table = gpudb.showTable(st)
-    val isReplicated = Try(table.getTableDescriptions.asScala(0).contains("REPLICATED")).getOrElse(false)
-    val typeId = table.getTypeIds.asScala(0)
+    val isReplicated = Try(table.getTableDescriptions.asScala.head.contains("REPLICATED")).getOrElse(false)
+    val typeId = table.getTypeIds.asScala.head
     val typeInfo = gpudb.showTypes(typeId,null,null)
     KineticaJsonSchema.toKineticaSchemaMetadata(typeInfo, isReplicated)
   }
 
   private def getFileSystem(path: Path): FileSystem = {
 
-    val hadoopConfig = Try(lp.sparkContext.get.hadoopConfiguration).getOrElse(new Configuration())
+    val hadoopConfig = Try(loaderConfig.sparkContext.get.hadoopConfiguration).getOrElse(new Configuration())
 
     if(path.isUriPathAbsolute)
     {
@@ -57,13 +93,13 @@ class KineticaJsonSchemaHelper(val lp: LoaderParams) extends LazyLogging {
   }
 
 
-  def saveKineticaSchema(path: String, kineticaSchemaMetadata: KineticaSchemaMetadata): Unit = saveKineticaSchema(new Path(path), kineticaSchemaMetadata)
+  def saveKineticaSchema(path: String, kineticaSchemaMetadata: KineticaSchemaMetadata): Unit = saveKineticaSchema(getValidPath(path), kineticaSchemaMetadata)
 
   def saveKineticaSchema(path: Path, kineticaSchemaMetadata: KineticaSchemaMetadata): Unit = {
 
     val schemaJson = KineticaJsonSchema.encodeSchemaToJson(KineticaSchemaRoot(Some(kineticaSchemaMetadata)))
 
-    val targetPath = if(path.getName.endsWith(".json")) path else new Path(path,jsonDataFileName)
+    val targetPath = getValidPath(Some(path))
 
     val hdfs = getFileSystem(targetPath)
 
@@ -81,11 +117,13 @@ class KineticaJsonSchemaHelper(val lp: LoaderParams) extends LazyLogging {
 
   }
 
+  def loadKineticaSchema(): Option[KineticaSchemaMetadata] = loadKineticaSchema(getValidPath(loaderConfig.dataPath))
+
   def loadKineticaSchema(path: String): Option[KineticaSchemaMetadata] = loadKineticaSchema(new Path(path))
 
   def loadKineticaSchema(path: Path): Option[KineticaSchemaMetadata] = {
 
-    val targetPath = if(path.getName.endsWith(".json")) path else new Path(path,jsonDataFileName)
+    val targetPath = getValidPath(Some(path))
 
     val hdfs = getFileSystem(targetPath)
 
@@ -109,29 +147,34 @@ class KineticaJsonSchemaHelper(val lp: LoaderParams) extends LazyLogging {
     newType
   }
 
-  def createTableFromSchema(kineticaSchemaMetadata: KineticaSchemaMetadata): CreateTableResponse = createTableFromSchema(lp.tablename, kineticaSchemaMetadata)
 
+  def createTableFromSchema(): CreateTableResponse = {
+    loadKineticaSchema() match {
+      case Some(s) =>  createTableFromSchema(s)
+      case _ => {
+        throw new IllegalArgumentException(s"Cannot create kinetica table ${loaderConfig.tablename} because a schema could not be properly loaded from the json file")
+      }
+    }
+  }
 
-  def createTableFromSchema(tableName: String, kineticaSchemaMetadata: KineticaSchemaMetadata) = {
+  def createTableFromSchema(kineticaSchemaMetadata: KineticaSchemaMetadata): CreateTableResponse = createTableFromSchema(loaderConfig.tablename, loaderConfig.schemaname, kineticaSchemaMetadata)
 
-    val gpudb = lp.getGpudb()
-    val tableParams: Array[String] = tableName.split("\\.")
+  def createTableFromSchema(tableName: String, schemaName: String, kineticaSchemaMetadata: KineticaSchemaMetadata) = {
 
-    var schemaName: String = if (tableParams.length == 2) { tableParams(0).stripPrefix("[").stripSuffix("]") } else lp.schemaname
-    val table: String = if (tableParams.length == 2) { tableParams(1).stripPrefix("[").stripSuffix("]") } else tableName
+    val gpudb = loaderConfig.getGpudb()
 
-    logger.info( "Creating new type for table <{}.{}>", schemaName, table)
+    logger.info( "Creating new type for table <{}.{}>", schemaName, tableName)
 
     val newTypeId = gpudb.createType(getCreateTypeRequest(kineticaSchemaMetadata)).getTypeId
 
     // does table already exist? drop if so
-    if(gpudb.hasTable(table, null).getTableExists)
+    if(gpudb.hasTable(tableName, null).getTableExists)
     {
-      gpudb.clearTable(table, gpudb.getUsername, null)
+      gpudb.clearTable(tableName, gpudb.getUsername, null)
     }
 
     val createTable = new CreateTableRequest()
-    createTable.setTableName(table)
+    createTable.setTableName(tableName)
     createTable.setTypeId(newTypeId)
     createTable.setOptions(GPUdbBase.options(CreateTableRequest.Options.COLLECTION_NAME, schemaName))
 
@@ -143,10 +186,11 @@ class KineticaJsonSchemaHelper(val lp: LoaderParams) extends LazyLogging {
           CreateTableRequest.Options.IS_REPLICATED, CreateTableRequest.Options.TRUE))
 
       // force replicated table to not use multihead
-      lp.setMultiHead(false)
+      loaderConfig.setMultiHead(false)
+      loaderConfig.setTableReplicated(true)
     }
 
-    logger.info( "Creating table <{}.{}> for type()", schemaName, table, newTypeId)
+    logger.info( "Creating table <{}.{}> for type()", schemaName, tableName, newTypeId)
     gpudb.createTable(createTable)
   }
 

@@ -34,6 +34,9 @@ class LoaderConfiguration(sc:SparkContext, params: Map[String, String])
     @BooleanBeanProperty
     val useJsonTemplate = params.getOrElse(KINETICA_USE_JSON_SCHEMA, "false").toBoolean
 
+    @BeanProperty
+    val jsonSchemaFilename = params.getOrElse(CONNECTOR_JSON_SCHEMA_FILENAME_PARAM, KINETICA_DEFAULT_JSON_FILE)
+
     // Use the datasource v1 API path by default
     @BeanProperty
     val datasourceVersion: String = params.getOrElse(SPARK_DATASOURCE_VERSION, "v1")

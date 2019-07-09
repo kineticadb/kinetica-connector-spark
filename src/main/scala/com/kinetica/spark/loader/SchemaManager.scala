@@ -41,18 +41,13 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
 
         if(this.useJsonTemplate) {
             // lookup schema from json template
-            require(loaderConfig.dataPath != null, "Use of Json Template requires a data path")
             val jsonSchemaHelper = new KineticaJsonSchemaHelper(loaderConfig)
-            val schema = jsonSchemaHelper.loadKineticaSchema(loaderConfig.dataPath).get
-            jsonSchemaHelper.createTableFromSchema(schema)
-            if(schema.isReplicated)
-            {
-                loaderConfig.setTableReplicated(true)
-            }
+            jsonSchemaHelper.createTableFromSchema()
+
             val response: ShowTableResponse = this.gpudb.showTable(this.tableName, null)
             this.setTypeFromResponse(response, 0)
         }
-        if(this.useTemplates) {
+        else if(this.useTemplates) {
             // lookup schema from template
             this.resolveTemplate()
             if (loaderConfig.hasTable()) {

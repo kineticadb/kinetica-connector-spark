@@ -2,45 +2,46 @@ package com.kinetica.spark.egressutil;
 
 // MUCH OF THIS CODE IS LIFTED FROM SPARK CODEBASE - SRB
 
-import java.sql.ResultSet;
-import java.text.SimpleDateFormat;
+import java.sql.ResultSet
+import java.text.SimpleDateFormat
 
-import org.apache.spark.internal.Logging;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.encoders.RowEncoder;
-import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow;
-import org.apache.spark.sql.catalyst.util.DateTimeUtils;
-import org.apache.spark.sql.catalyst.util.GenericArrayData;
-import org.apache.spark.sql.types.ArrayType;
-import org.apache.spark.sql.types.BinaryType;
-import org.apache.spark.sql.types.BooleanType;
-import org.apache.spark.sql.types.DataType;
-import org.apache.spark.sql.types.DateType;
-import org.apache.spark.sql.types.Decimal;
-import org.apache.spark.sql.types.DecimalType;
-import org.apache.spark.sql.types.DoubleType;
-import org.apache.spark.sql.types.FloatType;
-import org.apache.spark.sql.types.IntegerType;
-import org.apache.spark.sql.types.LongType;
-import org.apache.spark.sql.types.Metadata;
-import org.apache.spark.sql.types.ShortType;
-import org.apache.spark.sql.types.StringType;
-import org.apache.spark.sql.types.StructType;
-import org.apache.spark.sql.types.TimestampType;
-import org.apache.spark.unsafe.types.UTF8String;
-import scala.collection.JavaConverters._;
+import org.apache.spark.internal.Logging
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.catalyst.util.GenericArrayData
+import org.apache.spark.sql.types.ArrayType
+import org.apache.spark.sql.types.BinaryType
+import org.apache.spark.sql.types.BooleanType
+import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.types.DateType
+import org.apache.spark.sql.types.Decimal
+import org.apache.spark.sql.types.DecimalType
+import org.apache.spark.sql.types.DoubleType
+import org.apache.spark.sql.types.FloatType
+import org.apache.spark.sql.types.IntegerType
+import org.apache.spark.sql.types.LongType
+import org.apache.spark.sql.types.Metadata
+import org.apache.spark.sql.types.ShortType
+import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.TimestampType
+import org.apache.spark.unsafe.types.UTF8String
 
-import com.gpudb.ColumnProperty;
-import com.gpudb.GPUdb;
-import com.gpudb.Record;
-import com.gpudb.Type;
-import com.gpudb.protocol.GetRecordsByColumnRequest;
-import com.gpudb.protocol.GetRecordsByColumnResponse;
-import com.gpudb.protocol.ShowTableRequest;
-import com.gpudb.protocol.ShowTableResponse;
+import scala.collection.JavaConverters._
+import com.gpudb.ColumnProperty
+import com.gpudb.GPUdb
+import com.gpudb.Record
+import com.gpudb.Type
+import com.gpudb.protocol.GetRecordsByColumnRequest
+import com.gpudb.protocol.GetRecordsByColumnResponse
+import com.gpudb.protocol.ShowTableRequest
+import com.gpudb.protocol.ShowTableResponse
+import com.kinetica.spark.util.Constants
 
-import com.kinetica.spark.util.Constants;
+import scala.util.{Success, Try};
 
 
 
@@ -114,84 +115,79 @@ object KineticaUtils extends Logging {
 
     private def makeGetter( column: com.gpudb.Type.Column): JDBCValueGetter = {
         // Get column information
-        val columnType = column.getType();
-        val columnProperties = column.getProperties();
+        val columnType = column.getType
+        val columnProperties = column.getProperties
 
         // Create a getter function based on the column's type
         columnType match {
 
             // Double
-            case q if (q == classOf[java.lang.Double]) =>
+            case q if q == classOf[java.lang.Double] =>
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
             {
                 // Need to convert to Scala double
-                val value = gr.getDouble( pos ).toDouble;
-                if( value != null ) {
-                    row.setDouble( pos, value );
-                } else {
-                    row.update( pos, null );
+                Try(gr.getDouble( pos )) match {
+                    case Success(value) if value != null => row.setDouble( pos, value.toDouble )
+                    case _ => row.update( pos, null )
                 }
             }
 
             // Float
-            case q if (q == classOf[java.lang.Float]) =>
+            case q if q == classOf[java.lang.Float] =>
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
             {
                 // Need to convert to Scala float
-                val value = gr.getFloat( pos ).toFloat;
-                if( value != null ) {
-                    row.setFloat( pos, value );
-                } else {
-                    row.update( pos, null );
+                Try(gr.getFloat( pos )) match {
+                    case Success(value) if value != null => row.setFloat( pos, value.toFloat )
+                    case _ => row.update( pos, null )
                 }
             }
 
             // Integer
-            case q if (q == classOf[java.lang.Integer]) =>
+            case q if q == classOf[java.lang.Integer] =>
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
             {
                 // Need to convert to Scala integer
-                val value = gr.getInt( pos).toInt;
-                if( value != null ) {
-                    // Check subtypes
-                    if ( columnProperties.contains( ColumnProperty.INT8 ) ) {
-                        // Byte type
-                        row.setByte(pos, (value.byteValue()));
-                    } else if ( columnProperties.contains( ColumnProperty.INT16 ) ) {
-                        // Short type
-                        row.setShort(pos, (value.shortValue()));
-                    } else {
-                        // Regular integer
-                        row.setInt( pos, value );
+                Try(gr.getInt( pos )) match {
+                    case Success(value) if value != null => {
+                        // Check subtypes// Check subtypes
+                        if (columnProperties.contains(ColumnProperty.INT8)) { // Byte type
+                            row.setByte(pos, value.byteValue)
+                        }
+                        else if (columnProperties.contains(ColumnProperty.INT16)) { // Short type
+                            row.setShort(pos, value.shortValue)
+                        }
+                        else { // Regular integer
+                            row.setInt(pos, value)
+                        }
                     }
-                } else {
-                    row.update( pos, null );
+                    case _ => row.update( pos, null )
                 }
             }
 
             // Long
-            case q if (q == classOf[java.lang.Long]) =>
+            case q if q == classOf[java.lang.Long] =>
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
             {
                 // Need to convert to Scala long
-                val value = gr.getLong( pos ).toLong;
-                if( value != null ) {
-                    // Check subtypes
-                    if ( columnProperties.contains( ColumnProperty.TIMESTAMP ) ) {
-                        // Timestamp type
-                        val t : java.sql.Timestamp = new java.sql.Timestamp( value );
-                        row.setLong( pos, DateTimeUtils.fromJavaTimestamp(t) );
-                    } else {
-                        // Regular longs
-                        row.setLong( pos, value );
+                Try(gr.getLong( pos )) match {
+                    case Success(value) if value != null => {
+                        // Check subtypes
+                        if ( columnProperties.contains( ColumnProperty.TIMESTAMP ) ) {
+                            // Timestamp type
+                            val t : java.sql.Timestamp = new java.sql.Timestamp( value );
+                            row.setLong( pos, DateTimeUtils.fromJavaTimestamp(t) );
+                        } else {
+                            // Regular longs
+                            row.setLong( pos, value );
+                        }
                     }
-                } else {
-                    row.update( pos, null );
+                    case _ => row.update( pos, null )
                 }
             }
 
             // String
-            case q if (q == classOf[java.lang.String]) =>
+            case q if q == classOf[java.lang.String] =>
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
             {
                 val value = gr.getString( pos );
@@ -232,14 +228,12 @@ object KineticaUtils extends Logging {
             }
 
             // Bytes
-            case q if (q == classOf[java.nio.ByteBuffer]) =>
+            case q if q == classOf[java.nio.ByteBuffer] =>
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
             {
-                val value = gr.getBytes( pos ).array();
-                if( value != null ) {
-                    row.update( pos, value);
-                } else {
-                    row.update( pos, null );
+                Try(gr.getBytes( pos )) match {
+                    case Success(value) if value != null => row.update( pos, value.array() )
+                    case _ => row.update( pos, null )
                 }
             }
         }

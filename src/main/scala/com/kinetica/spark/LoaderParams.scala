@@ -193,9 +193,12 @@ class LoaderParams(@transient val sparkContext: Option[SparkContext]) extends Se
             val tableParams: Array[String] = tablename.split("\\.")
             if (tableParams.length > 1) {
                 // A collection name IS given
-                schemaname = tableParams( 0 ).stripSuffix("]").stripPrefix("[")
+                schemaname = tableParams( 0 )
                 // The remainder is the table name (which is allowed to have periods)
                 tablename = tablename.substring( schemaname.length + 1 ).stripSuffix("]").stripPrefix("[")
+
+                // remove brackets
+                schemaname = schemaname.stripSuffix("]").stripPrefix("[")
             }
         }
 

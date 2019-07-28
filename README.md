@@ -676,6 +676,7 @@ val username = "<Username>"
 val password = "<Password>"
 val url = s"http://${host}:9191"
 val options = Map(
+   "database.url" -> url,
    "database.jdbc_url" -> s"jdbc:kinetica://${host}:9191",
    "database.username" -> username,
    "database.password" -> password,
@@ -1064,14 +1065,18 @@ Launch *Spark Shell*:
 
 ```shell
 $ spark-shell --jars \
-    /opt/gpudb/connectors/spark/kinetica-spark-7.0.*-jar-with-dependencies.jar, \
+    /opt/gpudb/connectors/spark/kinetica-spark-7.0.*-jar-with-dependencies.jar \
     /opt/gpudb/connectors/jdbc/kinetica-jdbc-7.0.*-jar-with-dependencies.jar
 ```
 
 Configure JDBC for source database and specify query for map key ``dbtable``;
 be sure to provide an appropriate value for ``<KineticaHostName/IP>``, as
 well as ``<Username>`` & ``<Password>``, if the database is configured to
-require authentication:
+require authentication.
+   
+**NOTE:**  When using the JDBC driver directly, make sure to use the JDBC
+           authentication parameter names ``UID`` & ``PWD`` for username &
+           password, respectively.
 
 ```scala
 val host = "<KineticaHostName/IP>"
@@ -1081,14 +1086,14 @@ val url = s"http://${host}:9191"
 val options = Map(
    "url" -> s"jdbc:kinetica://${host}:9191",
    "driver" -> "com.kinetica.jdbc.Driver",
-   "database.username" -> username,
-   "database.password" -> password,
+   "UID" -> username,
+   "PWD" -> password,
    "dbtable" -> s"""(
       SELECT
          vendor_id,
-         MIN(geo_miles) AS min_geo_miles,
-         AVG(geo_miles) AS avg_geo_miles,
-         MAX(geo_miles) AS max_geo_miles
+         DECIMAL(MIN(geo_miles)) AS min_geo_miles,
+         DECIMAL(AVG(geo_miles)) AS avg_geo_miles,
+         DECIMAL(MAX(geo_miles)) AS max_geo_miles
       FROM
       (
          SELECT
@@ -1124,9 +1129,9 @@ Verify output:
 
     root
      |-- vendor_id: string (nullable = false)
-     |-- min_geo_miles: decimal(18,4) (nullable = false)
-     |-- avg_geo_miles: decimal(18,4) (nullable = false)
-     |-- max_geo_miles: decimal(18,4) (nullable = false)
+     |-- min_geo_miles: double (nullable = false)
+     |-- avg_geo_miles: double (nullable = false)
+     |-- max_geo_miles: double (nullable = false)
 
 Output query result set:
 
@@ -1139,11 +1144,11 @@ Verify output (may contain additional records from streaming test):
     +---------+-------------+-------------+-------------+
     |vendor_id|min_geo_miles|avg_geo_miles|max_geo_miles|
     +---------+-------------+-------------+-------------+
-    |      CMT|       0.0100|       2.0952|      80.8667|
-    |      DDS|       0.0148|       2.7350|      64.2943|
-    |      NYC|       0.0101|       2.1548|      36.9235|
-    |      VTS|       0.0100|       2.0584|      94.5212|
-    |     YCAB|       0.0100|       2.1049|      36.0565|
+    |      CMT|         0.01|       2.0952|      80.8669|
+    |      DDS|       0.0148|        2.735|      64.2944|
+    |      NYC|       0.0101|       2.1548|      36.9236|
+    |      VTS|         0.01|       2.0584|      94.5213|
+    |     YCAB|         0.01|       2.1049|      36.0565|
     +---------+-------------+-------------+-------------+
 
 
@@ -1237,8 +1242,8 @@ Specify taxi trip and taxi zone JDBC query for map key ``dbtable``:
 val options = Map(
    "url" -> jdbcUrl,
    "driver" -> "com.kinetica.jdbc.Driver",
-   "database.username" -> username,
-   "database.password" -> password,
+   "UID" -> username,
+   "PWD" -> password,
    "dbtable" -> s"""(
       SELECT *
       FROM

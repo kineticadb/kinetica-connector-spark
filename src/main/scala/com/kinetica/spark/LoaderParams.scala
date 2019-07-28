@@ -1,30 +1,31 @@
-package com.kinetica.spark
+package com.kinetica.spark;
 
-import com.gpudb.Type
-import com.gpudb.GPUdb
-import com.gpudb.GPUdbBase
-import com.gpudb.GenericRecord
-import com.gpudb.protocol.ShowTableRequest
-import com.gpudb.protocol.ShowTableResponse
+import com.gpudb.Type;
+import com.gpudb.GPUdb;
+import com.gpudb.GPUdbBase;
+import com.gpudb.GenericRecord;
+import com.gpudb.protocol.ShowTableRequest;
+import com.gpudb.protocol.ShowTableResponse;
 
-import java.io.Serializable
-import scala.beans.{ BeanProperty, BooleanBeanProperty }
-import com.typesafe.scalalogging.LazyLogging
-import com.kinetica.spark.util.ConfigurationConstants._
+import java.io.Serializable;
+import java.util.TimeZone;
+import scala.beans.{ BeanProperty, BooleanBeanProperty };
+import com.typesafe.scalalogging.LazyLogging;
+import com.kinetica.spark.util.ConfigurationConstants._;
 
-import com.kinetica.spark.ssl.X509KeystoreOverride
-import com.kinetica.spark.ssl.X509TrustManagerOverride
-import com.kinetica.spark.ssl.X509TustManagerBypass
+import com.kinetica.spark.ssl.X509KeystoreOverride;
+import com.kinetica.spark.ssl.X509TrustManagerOverride;
+import com.kinetica.spark.ssl.X509TustManagerBypass;
 
-import javax.net.ssl.HttpsURLConnection
-import javax.net.ssl.KeyManager
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManager
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
 
-import org.apache.spark.SparkContext
-import org.apache.spark.util.LongAccumulator
+import org.apache.spark.SparkContext;
+import org.apache.spark.util.LongAccumulator;
 
-import scala.collection.JavaConverters._
+import scala.collection.JavaConverters._;
 
     
 class LoaderParams extends Serializable with LazyLogging {
@@ -82,6 +83,12 @@ class LoaderParams extends Serializable with LazyLogging {
 
     @BooleanBeanProperty
     var useSnappy: Boolean = true
+
+    @BeanProperty
+    var timeZoneStr: String = null;
+
+    @BeanProperty
+    var timeZone: java.util.TimeZone = null;
 
     @BeanProperty
     var retryCount: Int = 0
@@ -158,6 +165,7 @@ class LoaderParams extends Serializable with LazyLogging {
         tableReplicated = params.get(KINETICA_REPLICATEDTABLE_PARAM).getOrElse("false").toBoolean
         KdbIpRegex = params.get(KINETICA_IPREGEX_PARAM).getOrElse("")
         useSnappy = params.get(KINETICA_USESNAPPY_PARAM).getOrElse("false").toBoolean
+        timeZoneStr = params.get(KINETICA_USETIMEZONE_PARAM).getOrElse( null )
 
         numPartitions = params.get(CONNECTOR_NUMPARTITIONS_PARAM).getOrElse("4").toInt
 
@@ -202,6 +210,14 @@ class LoaderParams extends Serializable with LazyLogging {
             }
         }
 
+        // Parse the timezone, if any
+        if (timeZoneStr != null ) {
+            timeZone = TimeZone.getTimeZone( timeZoneStr );
+        } else {
+            timeZone = TimeZone.getDefault();
+        }
+        
+        
         // SSL
         bypassCert = params.get(KINETICA_SSLBYPASSCERTCJECK_PARAM).getOrElse("false").toBoolean
         trustStorePath =  params.get(KINETICA_TRUSTSTOREJKS_PARAM).getOrElse(null)

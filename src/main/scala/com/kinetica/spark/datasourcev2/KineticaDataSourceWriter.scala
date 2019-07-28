@@ -19,7 +19,7 @@ class KineticaDataSourceWriter (schema: StructType, options: DataSourceOptions)
     with LazyLogging {
 
     // Parse the options (need a Scala immutable map)--need for table creation
-    val conf: LoaderParams = new LoaderParams(None, options.asMap().asScala.toMap )
+    val conf: LoaderParams = new LoaderParams(None, options.asMap().asScala.toMap );
 
     setup( schema );
 
@@ -27,6 +27,12 @@ class KineticaDataSourceWriter (schema: StructType, options: DataSourceOptions)
 
         logger.info("Executing spark ingest ingest_analysis = {}", conf.isDryRun());
 
+        // We can't proceed if the schema is empty
+        if ( schema.isEmpty ) {
+            logger.warn("The dataframe has no schema; skipping ingestion");
+            return;
+        }
+        
         if (conf.isCreateTable && conf.isAlterTable) {
             throw new RuntimeException("Create table and alter table option set to true. Only one must be set to true ");
         }

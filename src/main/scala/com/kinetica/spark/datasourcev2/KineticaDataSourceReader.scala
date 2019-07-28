@@ -35,8 +35,7 @@ class KineticaDataSourceReader (options: DataSourceOptions)
     
     // Get the schema of the table; throw if it doesn't exist
     lazy val tableSchema: StructType = {
-        logger.debug("*********************** KR:querySchema");
-        val url   = if (conf.getJdbcURL   != null ) conf.getJdbcURL   else sys.error("Option 'database.jdbc_url' not specified");
+        val url = if (conf.getJdbcURL != null ) conf.getJdbcURL   else sys.error("Option 'database.jdbc_url' not specified");
         val throwIfNotExists : Boolean = true;
         KineticaSchema.getSparkSqlSchema(url, conf, tableName, throwIfNotExists).get;
     }

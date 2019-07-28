@@ -3,13 +3,18 @@ package com.kinetica.spark;
 import com.gpudb.GPUdb;
 import com.gpudb.GPUdbBase;
 import com.gpudb.ColumnProperty;
+import com.gpudb.Record;
 import com.gpudb.Type;
 import com.gpudb.protocol.ClearTableRequest;
 import com.gpudb.protocol.CreateTableRequest;
+import com.gpudb.protocol.DeleteRecordsRequest;
+import com.gpudb.protocol.GetRecordsByColumnRequest;
+import com.gpudb.protocol.GetRecordsByColumnResponse;
 import com.gpudb.protocol.ShowTableResponse;
 
 import com.typesafe.scalalogging.LazyLogging;
 
+import java.io.File;
 import java.net.URL;
 import java.time.LocalDateTime;
 
@@ -72,6 +77,13 @@ trait SparkConnectorTestFixture
     val m_createTableInCollectionOptions = GPUdbBase.options( CreateTableRequest.Options.NO_ERROR_IF_EXISTS,
                                                               CreateTableRequest.Options.TRUE ).asScala;
 
+    val m_dropAllRecordsOptions = GPUdbBase.options( DeleteRecordsRequest.Options.DELETE_ALL_RECORDS,
+                                                     DeleteRecordsRequest.Options.TRUE );
+
+    // For temporary test data
+    val m_temporary_directory_path: String = "_temp_test_data";
+    val m_temporary_directory = new File( m_temporary_directory_path );
+
     // User given properties
     var m_host : String = "";
     var m_username : String = "";
@@ -79,6 +91,7 @@ trait SparkConnectorTestFixture
     var m_jdbc_url : String = "";
 
     var m_sparkSession : SparkSession = _;
+
 
     // Names of tables that need to be deleted
     var m_tablesToClear : mutable.ListBuffer[String] = mutable.ListBuffer[String]();
@@ -129,8 +142,18 @@ trait SparkConnectorTestFixture
         m_username = System.getProperty("username", "");
         m_password = System.getProperty("password", "");
         logger.info( s"User given parameter username value: ${m_username}" );
+
+        // Create a directory for any test files that may need to be generated
+        // m_temporary_directory = new File( m_temporary_directory_path );
+        m_temporary_directory.mkdir();
     }   // end beforeAll
 
+
+    override def afterAll() {
+        // Delete all files created in the temporary test data diretcotry
+        remove_directory( m_temporary_directory );
+    }
+    
 
     // Given the GPUdb connection, get the JDBC URL
     def get_jdbc_url(): String = {
@@ -168,6 +191,7 @@ trait SparkConnectorTestFixture
                                        "ingester.batch_size" -> "10000",
                                        "ingester.flatten_source_schema" -> "false",
                                        "ingester.ip_regex" -> "",
+                                       // "ingester.multi_head" -> "true",
                                        "ingester.multi_head" -> "false",
                                        "ingester.num_threads" -> "4",
                                        "ingester.use_snappy" -> "false",
@@ -183,6 +207,37 @@ trait SparkConnectorTestFixture
                                        "table.map_columns_by_name" -> "true"
                                        );
         return options;
+    }
+
+    // --------------- Methods for Test Data Related Files -----------------
+
+    /**
+     * Delete all the files and directories in the given path.
+     */
+    def remove_directory( directory: File ) : Unit = {
+        if ( directory.isDirectory()  ) {
+            // Clean up all files and directories insides
+            val files = directory.listFiles();
+            if ( (files != null) && (files.length > 0) ) {
+                for ( file <- files ) {
+                    remove_directory( file );
+                }
+            }
+            // Delete the directory
+            directory.delete();
+        } else {
+            directory.delete();
+        }
+    }
+
+
+    /**
+     * Create a directory path with the given directory name in the testing framework's
+     * temporary data directory.  Does not create the new directory.
+     */
+    def get_temp_directory_path( dirPath: String ) : String = {
+        val directory = new File( m_temporary_directory, dirPath );
+        return directory.getAbsolutePath();
     }
 
     // ------- Methods for Testing Kinetica Tables etc. via the Java API -------
@@ -204,6 +259,18 @@ trait SparkConnectorTestFixture
         request.setTableName( tableName );
         request.setOptions( m_clearTableOptions );
         m_gpudb.clearTable( request );
+        return;
+    }
+
+
+    /**
+     * Delete all the records in the given table.
+     */
+    def drop_all_records( tableName: String ) : Unit = {
+        val request = new DeleteRecordsRequest();
+        request.setTableName( tableName );
+        request.setOptions( m_dropAllRecordsOptions );
+        m_gpudb.deleteRecords( request );
         return;
     }
 
@@ -254,8 +321,78 @@ trait SparkConnectorTestFixture
         // Table does not exist return an empty string
         return None;
     }
-        
+
+
+    /**
+     * Fetch the given columns of the given records (based on indices)
+     * from the given table.  Optionally give a sort column and order.
+     */
+    def get_records_by_column( table_name: String, column_names: List[String],
+                               offset: Int, numRecords: Int,
+                               sortByColumn: Option[String],
+                               sortOrder: Option[String] )
+        : java.util.List[Record] = {
+
+        val options: java.util.Map[String, String] = new java.util.HashMap[String, String]();
+        if ( !sortByColumn.isEmpty ) {
+            options.put( GetRecordsByColumnRequest.Options.SORT_BY,
+                         sortByColumn.get );
+            options.put( GetRecordsByColumnRequest.Options.SORT_ORDER, sortOrder.get );
+        }
+        logger.info(s"Sending options to /get/records/bycolumn: ${options.toString()}"); // debug~~~~~~`
+
+        // Set up the request
+        val getRecordsByColumnReq = new GetRecordsByColumnRequest( table_name, column_names,
+                                                                   offset, numRecords,
+                                                                   options );
+        // Make the request
+        val getRecordsByColumnResponse = m_gpudb.getRecordsByColumn( getRecordsByColumnReq );
+        return getRecordsByColumnResponse.getData();
+    }
+    
+
+    /**
+     * Delete all existing records of the given table
+     */
+    def delete_all_records( table_name: String ) : Unit = {
+        m_gpudb.deleteRecords( s"${table_name}",
+                               null,
+                               immutable.Map[String, String]("delete_all_records" -> "true").asJava );
+        return;
+    }
+    
     // --------- DataFrame Generator Functions for Testing Convenience ---------
+
+    /**
+     * Create a dataframe with two nullable integer columns 'x' and 'y' and
+     * generate the given number of random rows.
+     */
+    def createDataFrame( data: IndexedSeq[Seq[Any]],
+    // def createDataFrame( data: scala.collection.immutable.IndexedSeq[Seq[Any]],
+                         schema: StructType ) : DataFrame = {
+        // Generate the RDD from the data
+        val rddRows = m_sparkSession.sparkContext.parallelize( data.map( x => Row(x:_*) ) );
+        // Generate the dataframe from the RDD
+        val df = m_sparkSession.sqlContext.createDataFrame( rddRows, schema );
+
+        return df;
+    }
+
+
+    /**
+     * Create a dataframe with two nullable integer columns 'x' and 'y' and
+     * generate the given number of random rows.
+     */
+    def createDataFrame( data: Seq[Row],
+                         schema: StructType ) : DataFrame = {
+        // Generate the RDD from the data
+        val rddRows = m_sparkSession.sparkContext.parallelize( data );
+        // Generate the dataframe from the RDD
+        val df = m_sparkSession.sqlContext.createDataFrame( rddRows, schema );
+
+        return df;
+    }
+
 
     /**
      * Create a dataframe with two nullable integer columns 'x' and 'y' and
@@ -281,32 +418,28 @@ trait SparkConnectorTestFixture
     }
 
 
-    /**
-     * Create a dataframe with one nullable string column 'timestamp' and
-     * generate the given number of rows with random, valid timestamps.
-     */
-    def createDataFrameOneStringTimestampNullableColumn( numRows: Int ) : DataFrame = {
-        logger.debug("Creating a dataframe with random timestamp data in it");
-        // Generate some timestamp data
-        val numColumns = 1;
-        val data = (1 to numRows).map(_ => Seq.fill( numColumns )( LocalDateTime.now().toString() ) );
-
-        // Generate the schema
-        val schema = StructType( StructField( "timestamp", StringType, true ) :: Nil );
-        // Generate the RDD from the data
-        val rdd = m_sparkSession.sparkContext.parallelize( data.map( x => Row(x:_*) ) );
-        // Generate the dataframe from the RDD
-        val df = m_sparkSession.sqlContext.createDataFrame( rdd, schema );
-
-        // Double check the dataframe has the desired number of rows
-        assert(df.count() == numRows);
-
-        return df;
-    }
-
 
     // -------- Kinetica Table Generator Functions for Testing Convenience ---------
 
+    /**
+     * Create a Kinetica table with the given name with two nullable int columns.
+     * Generate the given number of random records.  If a collection name is given,
+     * ensure that Kinetica puts it in that collection.
+     */
+    def createKineticaTableOneIntNullableColumn( tableName: String,
+                                                 collectionName: Option[String],
+                                                 numRows: Int ) : Unit = {
+        
+        // Create the table type
+        var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+        columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
+
+        // Create the table
+        createKineticaTableWithGivenColumns( tableName, collectionName, columns, numRows );
+        return;
+    }
+
+    
     /**
      * Create a Kinetica table with the given name with two nullable int columns.
      * Generate the given number of random records.  If a collection name is given,
@@ -320,53 +453,29 @@ trait SparkConnectorTestFixture
         var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
         columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
         columns += new Type.Column( "y", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
-    
-        val type_ = new Type( columns.toList.asJava );
-
-        // Set the collection name option for table creation
-        collectionName match {
-            // A collection name is given; set it
-            case Some( collName ) => {
-                m_createTableInCollectionOptions( CreateTableRequest.Options.COLLECTION_NAME ) = collName;
-            }
-            // No collection name is given, so ensure the relevant property
-            // is absent from the options
-            case None => {
-                m_createTableInCollectionOptions remove CreateTableRequest.Options.COLLECTION_NAME;
-            }
-        }
-        
-        // Delete any pre-existing table with the same name
-        clear_table( tableName );
 
         // Create the table
-        m_gpudb.createTable( tableName, type_.create( m_gpudb ),
-                             m_createTableInCollectionOptions );
-        logger.debug( s"Created table $tableName via the Java API" );
-
-        // Generate some random data
-        m_gpudb.insertRecordsRandom( tableName, numRows, null );
+        createKineticaTableWithGivenColumns( tableName, collectionName, columns, numRows );
         return;
     }
 
-    /**
-     * Create a Kinetica table with the given name with one nullable long,
-     * timestamp column.  Optionally generate the given number of random
-     * records.  If a collection name is given, ensure that Kinetica puts
-     * it in that collection.
-     */
-    def createKineticaTableOneLongTimestampNullableColumn( tableName: String,
-                                                           collectionName: Option[String],
-                                                           numRows: Int ) : Unit = {
-        
-        // Create the table type
-        var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
-        columns += new Type.Column( "timestamp", classOf[java.lang.Long],
-                                    ColumnProperty.NULLABLE,
-                                    ColumnProperty.TIMESTAMP );
     
-        val type_ = new Type( columns.toList.asJava );
 
+
+    /**
+     * Create a Kinetica table with the given name with the given type.
+     * Optionally generate the given number of random records.  If a
+     * collection name is given, ensure that Kinetica puts
+     * it in that collection.  Clear any pre-existing table with the same
+     * name first.
+     */
+    def createKineticaTableWithGivenColumns( tableName: String,
+                                             collectionName: Option[String],
+                                             columns: mutable.ListBuffer[Type.Column],
+                                             numRows: Int ) : Unit = {
+        // Create a type object from the columns
+        val type_ = new Type( columns.toList.asJava );
+        
         // Set the collection name option for table creation
         collectionName match {
             // A collection name is given; set it
@@ -399,6 +508,8 @@ trait SparkConnectorTestFixture
 
 
 
+
+
 /**
  * The base class for all Kinetica Spark connector tests.  Read comments above
  * trait `SparkConnectorTestFixture` to see how to write tests.
@@ -412,6 +523,7 @@ class SparkConnectorTestBase
 
     // Create the spark session before each test
     override def beforeEach() {
+        // Obtain the spark session
         m_sparkSession = SparkSession.builder().appName("Kinetica Spark Connector Tests")
             .master("local")
             .config("", "")

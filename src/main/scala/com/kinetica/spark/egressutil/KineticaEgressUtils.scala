@@ -5,13 +5,14 @@ package com.kinetica.spark.egressutil;
 import java.sql.ResultSet;
 import java.text.SimpleDateFormat;
 
-import org.apache.spark.internal.Logging;
+import com.typesafe.scalalogging.LazyLogging;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.encoders.RowEncoder;
 import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow;
 import org.apache.spark.sql.catalyst.util.DateTimeUtils;
 import org.apache.spark.sql.catalyst.util.GenericArrayData;
+import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.BinaryType;
 import org.apache.spark.sql.types.BooleanType;
@@ -30,6 +31,7 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.unsafe.types.UTF8String;
 import scala.collection.JavaConverters._;
+import scala.util.Random;
 
 import com.gpudb.ColumnProperty;
 import com.gpudb.GPUdb;
@@ -44,7 +46,210 @@ import com.kinetica.spark.util.Constants;
 
 
 
-object KineticaUtils extends Logging {
+
+/**
+ * Utility functions for retrieving records via the JDBC connector.  To be
+ * used when filters need to be pushed down to the database.
+ */
+object KineticaEgressUtilsJdbc extends LazyLogging {
+
+    private type JDBCValueGetter = (ResultSet, InternalRow, Int) => Unit
+
+    private[spark] def resultSetToSparkInternalRows(
+        resultSet: ResultSet,
+        schema: StructType): Iterator[InternalRow] = {
+
+        new NextIterator[InternalRow] {
+            private[this] val rs = resultSet
+            private[this] val getters: Array[JDBCValueGetter] = makeGetters(schema)
+            private[this] val mutableRow = new SpecificInternalRow(schema.fields.map(x => x.dataType))
+
+            override protected def close(): Unit = {
+                try {
+                    rs.close()
+                } catch {
+                    case e: Exception => logger.warn("Exception closing resultset", e)
+                }
+            }
+            
+            override protected def getNext(): InternalRow = {
+                if (rs.next()) {
+                      var i = 0
+                      while (i < getters.length) {
+                           getters(i).apply(rs, mutableRow, i)
+                           if (rs.wasNull) mutableRow.setNullAt(i)
+                           i = i + 1
+                      }
+                      mutableRow
+                } else {
+                      finished = true
+                      null.asInstanceOf[InternalRow]
+                }
+            }
+        }
+    }
+
+    private def makeGetters(schema: StructType): Array[JDBCValueGetter] =
+        schema.fields.map(sf => makeGetter(sf.dataType, sf.metadata))
+
+    private def makeGetter(dt: DataType, metadata: Metadata): JDBCValueGetter = dt match {
+        case BooleanType =>
+            (rs: ResultSet, row: InternalRow, pos: Int) =>
+                row.setBoolean(pos, rs.getBoolean(pos + 1))
+
+        case DateType =>
+            (rs: ResultSet, row: InternalRow, pos: Int) =>
+                // DateTimeUtils.fromJavaDate does not handle null value, so we need to check it.
+                val dateVal = rs.getDate(pos + 1)
+                if (dateVal != null) {
+                    row.setInt(pos, DateTimeUtils.fromJavaDate(dateVal))
+                } else {
+                    row.update(pos, null)
+                }
+
+        // When connecting with Oracle DB through JDBC, the precision and scale of BigDecimal
+        // object returned by ResultSet.getBigDecimal is not correctly matched to the table
+        // schema reported by ResultSetMetaData.getPrecision and ResultSetMetaData.getScale.
+        // If inserting values like 19999 into a column with NUMBER(12, 2) type, you get through
+        // a BigDecimal object with scale as 0. But the dataframe schema has correct type as
+        // DecimalType(12, 2). Thus, after saving the dataframe into parquet file and then
+        // retrieve it, you will get wrong result 199.99.
+        // So it is needed to set precision and scale for Decimal based on JDBC metadata.
+
+        case decimalType: DecimalType =>
+        	(rs: ResultSet, row: InternalRow, pos: Int) =>
+    	{
+    		val bigD = rs.getBigDecimal(pos + 1)
+    		val decimal =  nullSafeConvert2[java.math.BigDecimal, Decimal](bigD, d => Decimal(d, decimalType.precision, decimalType.scale))
+    		if(decimal.isDefined)
+    		{
+    			row.setDecimal(pos, decimal.get, decimalType.precision)
+    		} else if(bigD != null) {
+    			throw new Exception(s"unable to convert $bigD to Spark Decimal")
+    		}
+    	}
+                
+        case DoubleType =>
+            (rs: ResultSet, row: InternalRow, pos: Int) =>
+                row.setDouble(pos, rs.getDouble(pos + 1))
+
+        case FloatType =>
+            (rs: ResultSet, row: InternalRow, pos: Int) =>
+                row.setFloat(pos, rs.getFloat(pos + 1))
+
+        case IntegerType =>
+            (rs: ResultSet, row: InternalRow, pos: Int) =>
+                row.setInt(pos, rs.getInt(pos + 1))
+
+        case LongType if metadata.contains("binarylong") =>
+            (rs: ResultSet, row: InternalRow, pos: Int) =>
+                val bytes = rs.getBytes(pos + 1)
+                var ans = 0L
+                var j = 0
+                while (j < bytes.length) {
+                    ans = 256 * ans + (255 & bytes(j))
+                    j = j + 1
+                }
+                row.setLong(pos, ans)
+
+        case LongType =>
+            (rs: ResultSet, row: InternalRow, pos: Int) =>
+                row.setLong(pos, rs.getLong(pos + 1))
+
+        case ShortType =>
+            (rs: ResultSet, row: InternalRow, pos: Int) =>
+                row.setShort(pos, rs.getShort(pos + 1))
+
+        case StringType =>
+            (rs: ResultSet, row: InternalRow, pos: Int) =>
+                // TODO(davies): use getBytes for better performance, if the encoding is UTF-8
+                row.update(pos, UTF8String.fromString(rs.getString(pos + 1)))
+
+        case TimestampType =>
+            (rs: ResultSet, row: InternalRow, pos: Int) =>
+                val t = rs.getTimestamp(pos + 1)
+                if (t != null) {
+                    row.setLong(pos, DateTimeUtils.fromJavaTimestamp(t))
+                } else {
+                    row.update(pos, null)
+                }
+
+        case BinaryType =>
+            (rs: ResultSet, row: InternalRow, pos: Int) =>
+                row.update(pos, rs.getBytes(pos + 1))
+
+        case ArrayType(et, _) =>
+            val elementConversion = et match {
+                case TimestampType =>
+                    (array: Object) =>
+                        array.asInstanceOf[Array[java.sql.Timestamp]].map { timestamp =>
+                            nullSafeConvert(timestamp, DateTimeUtils.fromJavaTimestamp)
+                        }
+
+                case StringType =>
+                    (array: Object) =>
+                        // some underling types are not String such as uuid, inet, cidr, etc.
+                        array.asInstanceOf[Array[java.lang.Object]]
+                            .map(obj => if (obj == null) null else UTF8String.fromString(obj.toString))
+
+                case DateType =>
+                    (array: Object) =>
+                        array.asInstanceOf[Array[java.sql.Date]].map { date =>
+                            nullSafeConvert(date, DateTimeUtils.fromJavaDate)
+                        }
+
+                case dt: DecimalType =>
+                    (array: Object) =>
+                        array.asInstanceOf[Array[java.math.BigDecimal]].map { decimal =>
+                            nullSafeConvert[java.math.BigDecimal](
+                                decimal, d => Decimal(d, dt.precision, dt.scale))
+                        }
+
+                case LongType if metadata.contains("binarylong") =>
+                    throw new IllegalArgumentException(s"Unsupported array element " +
+                        s"type ${dt.simpleString} based on binary")
+
+                case ArrayType(_, _) =>
+                    throw new IllegalArgumentException("Nested arrays unsupported")
+
+                case _ => (array: Object) => array.asInstanceOf[Array[Any]]
+            }
+
+            (rs: ResultSet, row: InternalRow, pos: Int) =>
+                val array = nullSafeConvert[java.sql.Array](
+                    input = rs.getArray(pos + 1),
+                    array => new GenericArrayData(elementConversion.apply(array.getArray)))
+                row.update(pos, array)
+
+        case _ => throw new IllegalArgumentException(s"Unsupported type ${dt.simpleString}")
+    }
+
+    private def nullSafeConvert2[T, R](input: T, f: T => R): Option[R] = {
+    	if (input == null) {
+    		None
+    	} else {
+    		Some(f(input))
+    	}
+    }
+
+    
+    private def nullSafeConvert[T](input: T, f: T => Any): Any = {
+        if (input == null) {
+            null
+        } else {
+            f(input)
+        }
+    }
+}   // end KineticaEgressUtilsJdbc
+
+
+
+/**
+ * Utility functions for retrieving records via the JDBC connector.  To be
+ * used when NO filters need to be pushed down to the database.  This path
+ * is a lot faster than going through the JDBC connector.
+ */
+object KineticaEgressUtilsNativeClient extends LazyLogging {
 
     private type JDBCValueGetter = (ResultSet, Record, InternalRow, Int) => Unit;
 
@@ -195,38 +400,41 @@ object KineticaUtils extends Logging {
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
             {
                 val value = gr.getString( pos );
-                if( value != null ) {
+                if( value != null )
+                {
                     // Check for subtypes
-                    if ( columnProperties.contains( ColumnProperty.DECIMAL ) ) {
+                    if ( columnProperties.contains( ColumnProperty.DECIMAL ) )
+                    {
                         // Decimal type
-                        val bigD = new java.math.BigDecimal( value )
-        		val decimal =  nullSafeConvert2[java.math.BigDecimal, Decimal](bigD, d => Decimal( d,
+                        val bigD = new java.math.BigDecimal( value );
+                        val decimal =  nullSafeConvert2[java.math.BigDecimal, Decimal](bigD, d => Decimal( d,
                                                                                                            Constants.KINETICA_DECIMAL_PRECISION,
                                                                                                            Constants.KINETICA_DECIMAL_SCALE ));
-        		if( decimal.isDefined )
-        		{
+                        if( decimal.isDefined )
+                        {
                             row.setDecimal( pos, decimal.get, Constants.KINETICA_DECIMAL_PRECISION );
-        		} else if(bigD != null) {
-                            throw new Exception(s"unable to convert $bigD to Spark Decimal")
-        		}
-                    } else if ( columnProperties.contains( ColumnProperty.DATE ) ) {
+                        } else if(bigD != null)
+                        {
+                            throw new Exception(s"unable to convert $bigD to Spark Decimal");
+                        }
+                    } else if ( columnProperties.contains( ColumnProperty.DATE ) )
+                    {
                         // Date type (convert to date)
-                        val dateVal = new SimpleDateFormat("yyyy-MM-dd").parse( value ).getTime
-                        val sqlDate = new java.sql.Date(dateVal)
-                        row.setInt(pos, org.apache.spark.sql.catalyst.util.DateTimeUtils.fromJavaDate(sqlDate))
-                    } else if ( columnProperties.contains( ColumnProperty.TIME ) ) {
-                        // Time type (convert to timestamp)
-                        val sqlTS = DateTimeUtils.stringToTimestamp( UTF8String.fromString( value ) );
-                        row.setLong( pos, sqlTS.get );
-                    } else if ( columnProperties.contains( ColumnProperty.DATETIME ) ) {
+                        val dateVal = new SimpleDateFormat("yyyy-MM-dd").parse( value ).getTime;
+                        val sqlDate = new java.sql.Date(dateVal);
+                        row.setInt(pos, org.apache.spark.sql.catalyst.util.DateTimeUtils.fromJavaDate(sqlDate));
+                    } else if ( columnProperties.contains( ColumnProperty.DATETIME ) )
+                    {
                         // Datetime type (convert to timestamp)
                         val sqlTS = DateTimeUtils.stringToTimestamp( UTF8String.fromString( value ) );
                         row.setLong( pos, sqlTS.get );
-                    } else {
-                        // All other string types, including charN and WKT
+                    } else
+                    {
+                        // All other string types, including charN, time and WKT
                         row.update( pos, UTF8String.fromString(value) );
                     }
-                } else {
+                } else
+                {
                     row.update( pos, null );
                 }
             }
@@ -468,9 +676,10 @@ object KineticaUtils extends Logging {
 
 
     /*
-     * Given a GPUdb connection, table name, offset, total number of rows to fetch
+     * Given a GPUdb connection, table name, offset, total number of rows to fetch,
      * and an internal batch size, fetch records from Kinetica using its native
-     * Java client API and return the records.
+     * Java client API and return the records.  Any given filter will be applied java
+     * side.
      */
     def getRecordsFromKinetica(
         gpudbConn:  com.gpudb.GPUdb,
@@ -487,10 +696,12 @@ object KineticaUtils extends Logging {
 
         // If no column is specified, then we need to get all the columns
         if ( columns.isEmpty ) {
+            logger.debug("getRecordsFromKinetica(): No required columns given; fetching all columns in table");
             // Get all the column names for the table from Kinetica
             val tableType = Type.fromTable( gpudbConn, tableName );
             tableType.getColumns().asScala.foreach( col => column_names.add( col.getName() ) );
         } else {
+            logger.debug("getRecordsFromKinetica(): required columns given: {}", columns );
             // Use the given column names
             columns.foreach( f => column_names.add( f ) );
         }
@@ -509,12 +720,15 @@ object KineticaUtils extends Logging {
             loopCount = 1;
             maxRowsToFetch = 0;
         }
-        
+
+        // Get an ID for this invocation of this function (useful for logging)
+        val id = Random.nextInt();
        
         val allRecords = new java.util.ArrayList[Record]();
         var ii = 0;
         while ( ii < loopCount ) {
 
+            logger.debug("getRecordsFromKinetica(): Function ID {}; while loop iteration #{}", id, ii);
             // Set up the request
             val limit  : Long = if( ii == loopCount -1 ) (maxRowsToFetch + extraRows) else maxRowsToFetch;
             val offset : Long = (startRow + (ii * maxRowsToFetch));
@@ -550,6 +764,8 @@ object KineticaUtils extends Logging {
         numRows:    Long,
         batchSize:  Long ): Iterator[Row] = {
 
+        logger.debug("KineticaEgressUtilsNativeClient::getRowsFromKinetica() startRow {} numRows {}", startRow, numRows);
+        
         // Fetch the records from Kinetica in the native format
         val allRecords = getRecordsFromKinetica( gpudbConn, tableName, columns,
                                                  startRow, numRows, batchSize )
@@ -569,5 +785,4 @@ object KineticaUtils extends Logging {
     }
         
 
-}
-
+}   // end KineticaEgressUtilsNativeClient

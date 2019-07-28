@@ -2,16 +2,39 @@
 
 ## Version 6.2
 
-### Version 6.2.2.6 -- 2019-07-02
+### Version 6.2.2.7 -- 2019-07-27
+
+#### Added
+-   A new configuration property called `ingester.use_timezone` which allows
+    the user to set a timezone for parsing date/time/datetime with respect
+    to it.  Omitting it uses the system's default timezone.
+
+#### Changed
+-   When the dataframe to be ingested has a schema but is empty, create
+    the table.
+-   For egress from Kinetica, changed Kinetica time-type (base string) mapping
+    to spark sql StringType--instead of TimestampType--so that times don't get
+    prepended with the current date.
+
 
 #### Fixed
--   Ingestion of string timestamps into long timestamp column
+-   Filters for egress are now pushed down correctly.
+
+
+### Version 6.2.2.6 -- 2019-07-05
+
+#### Changed
+-   When the dataframe is empty for ingestion, log a warning instead of
+    throwing an exception, and return without attempting ingestion.
+
+#### Fixed
+-   Ingestion of string timestamps into long timestamp columns
+-   Ingestion of non-float numbers into float columns
 
 
 ### Version 6.2.2.5 -- 2019-05-29
 
 #### Changed
-
 -   Kinetica egress to accommodate very large tables (such that partitions
     can have more than Int.MaxValue rows).
 

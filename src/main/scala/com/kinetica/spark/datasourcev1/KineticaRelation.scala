@@ -135,8 +135,10 @@ class KineticaRelation(
 
         logger.info("Executing spark ingest ingest_analysis = {}", conf.isDryRun());
 
-        if (df.rdd.isEmpty()) {
-            throw new KineticaException("Dataframe/Dataset is empty, try again");
+        // Skip ingestion only if the schema is empty
+        if ( df.schema.isEmpty ) {
+            logger.warn("The dataframe has no schema; skipping ingestion");
+            return;
         }
 
         if (conf.isCreateTable && conf.isAlterTable) {

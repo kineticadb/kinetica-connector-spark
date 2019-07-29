@@ -2,12 +2,17 @@
 
 ## Version 6.2
 
-### Version 6.2.2.7 -- 2019-07-27
+### Version 6.2.2.7 -- 2019-07-29
 
 #### Added
 -   A new configuration property called `ingester.use_timezone` which allows
     the user to set a timezone for parsing date/time/datetime with respect
     to it.  Omitting it uses the system's default timezone.
+-   A new configuration property call `ingester.fail_on_errors` which allows
+    the ingester process to continue when encountering bad rows.  With the
+    default value of `false`, the process will only log warnings and continue.
+    With the value of `true`, it will throw an exception on the first
+    encountering of an error.
 
 #### Changed
 -   When the dataframe to be ingested has a schema but is empty, create

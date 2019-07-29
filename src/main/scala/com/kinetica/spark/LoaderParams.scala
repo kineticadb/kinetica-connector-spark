@@ -138,6 +138,10 @@ class LoaderParams extends Serializable with LazyLogging {
     @BooleanBeanProperty
     var flattenSourceSchema: Boolean = false
 
+    @BooleanBeanProperty
+    var failOnError: Boolean = false
+
+        
     def this(sc: Option[SparkContext], params: Map[String, String]) = {
         this()
 
@@ -180,7 +184,9 @@ class LoaderParams extends Serializable with LazyLogging {
 
         // 30 mins = 1800 seconds = 1800,000 ms
         timeoutMs = params.get(KINETICA_TIMEOUT_PARAM).getOrElse("1800000").toInt
-        multiHead = params.get(KINETICA_MULTIHEAD_PARAM).getOrElse("false").toBoolean
+
+        multiHead   = params.get(KINETICA_MULTIHEAD_PARAM).getOrElse("false").toBoolean
+        failOnError = params.get(KINETICA_ERROR_HANDLING_PARAM).getOrElse("false").toBoolean
 
         truncateTable = params.get(KINETICA_TRUNCATETABLE_PARAM).getOrElse("false").toBoolean
 

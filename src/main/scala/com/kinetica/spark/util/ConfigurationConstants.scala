@@ -18,6 +18,7 @@ object ConfigurationConstants {
     val KINETICA_BATCHSIZE_PARAM: String = "ingester.batch_size";
     val KINETICA_USESNAPPY_PARAM: String = "ingester.use_snappy";
     val KINETICA_USETIMEZONE_PARAM: String = "ingester.use_timezone";
+    val KINETICA_ERROR_HANDLING_PARAM: String = "ingester.fail_on_errors";
 
 
     val CONNECTOR_NUMPARTITIONS_PARAM: String = "spark.num_partitions";

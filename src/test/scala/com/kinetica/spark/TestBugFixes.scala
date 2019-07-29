@@ -779,8 +779,112 @@ trait SparkConnectorBugFixes
             }
         }  // end test for KECO-1419
 
-        
 
+        
+        /**
+         * Test for graceful failures not throwing exceptions
+         */
+        test(s"""$package_description KECO-1457: Graceful failure mode should
+             | not throw exceptions""".stripMargin.replaceAll("\n", "") ) {
+
+            // We need a table with a float column
+            val int_col_name = "int_col";
+            val str_col_name1 = "str_col1";
+            val str_col_name2 = "str_col2";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( int_col_name,
+                                        classOf[java.lang.Integer],
+                                        ColumnProperty.NULLABLE );
+            columns += new Type.Column( str_col_name1,
+                                        classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE );
+            columns += new Type.Column( str_col_name2,
+                                        classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE );
+
+            // Create the table
+            val tableName = s"keco_1457_${package_description}";
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+
+            // // Need to mark the table name for post-test clean-up
+            // mark_table_for_deletion_at_test_end( tableName );
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create"               ) = "false";
+            options( "table.name"                 ) = tableName;
+
+            // Get some test data with a bad row
+            // ---------------------------------
+            // Note that the column with type int in the table is a string in
+            // the schema here; also, the last column is a string in the table,
+            // but an int here.  The connector should be able to parse strings
+            // into ints and ints into strings; BUT the second row is bad because
+            // "ABCD" cannot be parsed as an integer.
+            val data = Seq( Row( "1", "defg", 42 ),
+                            // Bad row: the first value can't be parsed as int
+                            Row( "ABCD", "DEFG", null ),
+                            Row( "3", "asdf", 24    ) );
+            // The expected values have only two rows (the middle one
+            // having been discarded)
+            val expected_values = Seq( Map( int_col_name  -> 1,
+                                            str_col_name1 -> "defg",
+                                            str_col_name2 -> "42" ),
+                                       Map( int_col_name  -> 3,
+                                            str_col_name1 -> "asdf",
+                                            str_col_name2 -> "24" )
+                                       );
+
+            // Generate the appropriate schema create the test data
+            // Note that the column with type int in the table is a string in
+            // the schema here; also, the last column is a string in the table,
+            // but an int here
+            val schema = StructType( StructField( int_col_name,  StringType, true ) ::
+                                     StructField( str_col_name1, StringType,  true ) ::
+                                     StructField( str_col_name2, IntegerType,  true ) :: Nil );
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe with a bad row in it (${df.count} rows)");
+            
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            var table_size = get_table_size( tableName );
+            assert( (table_size == expected_values.length),
+                    s"Table size ($table_size) should be ${expected_values.length}" );
+
+            // Check correctness of the data
+            val columns_to_fetch = int_col_name :: str_col_name1 :: str_col_name2 :: Nil;
+            val fetched_records = get_records_by_column( tableName,
+                                                         columns_to_fetch,
+                                                         0, 100,
+                                                         Option.apply(int_col_name),
+                                                         Option.apply("ascending") );
+            for ( i <- 0 until expected_values.length ) {
+                // int column
+                var expected = expected_values(i)( int_col_name );
+                var actual   = fetched_records.get(i).get( int_col_name );
+                assert( (expected == actual),
+                        s"Fetched value of record #$i '$actual' should be '$expected' for '$int_col_name'" );
+                // First string column
+                expected = expected_values(i)( str_col_name1 );
+                actual   = fetched_records.get(i).get( str_col_name1 );
+                assert( (expected == actual),
+                        s"Fetched value of record #$i '$actual' should be '$expected' for '$str_col_name1'" );
+                // Second string column
+                expected = expected_values(i)( str_col_name2 );
+                actual   = fetched_records.get(i).get( str_col_name2 );
+                assert( (expected == actual),
+                        s"Fetched value of record #$i '$actual' should be '$expected' for '$str_col_name2'" );
+            }
+            
+        }  // end test for KECO-1457
+
+
+        
     }   // end tests for bugFixes
 
 

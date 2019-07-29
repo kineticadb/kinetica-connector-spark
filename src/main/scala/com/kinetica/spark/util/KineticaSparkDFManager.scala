@@ -111,6 +111,10 @@ object KineticaSparkDFManager extends LazyLogging {
                     val row: Row = t.next()
                     val genericRecord: GenericRecord = new GenericRecord(typef)
                     var i: Int = 0
+
+                    var isRecordGood = true;
+                    
+                    // Convert all the column values and put in the record
                     for (column <- typef.getColumns) {
                         try {
                             var rtemp: Any = row.get({ i += 1; i - 1 })
@@ -119,27 +123,40 @@ object KineticaSparkDFManager extends LazyLogging {
                             }
                             if( rtemp != null ) { // not a nul value
                                 if (!putInGenericRecord(genericRecord, rtemp, column)) {
-                                    lp.failedConversion.add(1)
+                                    lp.failedConversion.add(1);
+                                    isRecordGood = false;
                                 }
                             }
                         } catch {
                             case e: Exception => {
                                 //e.printStackTrace()
                                 lp.failedConversion.add(1);
+                                isRecordGood = false;
                                 logger.warn(s"Found non-matching column DS.column --> KineticaTable.column, moving on; Issue: '${e.getMessage()}'" );
-                                throw e;
+                                logger.debug(s"Found non-matching column DS.column --> KineticaTable.column, moving on; Issue: ", e );
+                                if ( lp.failOnError ) {
+                                    // Throw exception only for fail-fast mode
+                                    throw e;
+                                }
                             }
                         }
                     }
-                    lp.convertedRows.add(1)
-                    bi.insert(genericRecord)
+
+                    if ( isRecordGood ) {
+                        lp.convertedRows.add( 1 );
+                        bi.insert( genericRecord );
+                    }
                 }
                 try {
                     bi.flush();
                 } catch {
                     case e: Exception => {
-                        logger.error("Flush error", e)
-                        e.printStackTrace()
+                        if ( lp.failOnError ) {
+                            logger.error("Flush error", e);
+                            throw e;
+                        } else {
+                            logger.error( s"Failed to ingest a batch of records; issue: '${e.getMessage()}" );
+                        }
                     }
                 }
             }
@@ -149,6 +166,8 @@ object KineticaSparkDFManager extends LazyLogging {
 
     /**
      * Put a given row's given column value in the record compatible with Kinetica.
+     *
+     * Returns if the column value was successfully converted and placed in the record.
      */
     def putInGenericRecord(genericRecord : GenericRecord, rtemp : Any, column : Type.Column ) : Boolean = {
         
@@ -158,7 +177,7 @@ object KineticaSparkDFManager extends LazyLogging {
         val columnTypeStr = columnType.toString();
 
         
-        var isARecord: Boolean = false
+        var isColumnValid: Boolean = false
         if (rtemp != null) {
             // logger.debug("Spark data type {} not null, column '{}'", rtemp.getClass(),  columnName)
             if (rtemp.isInstanceOf[java.lang.Long]) {
@@ -167,32 +186,32 @@ object KineticaSparkDFManager extends LazyLogging {
                 if (columnTypeStr.contains("java.lang.Float")) {
                     logger.debug("Column type float");
                     genericRecord.put(columnName, classOf[java.lang.Long].cast(rtemp).floatValue());
-                    isARecord = true;
+                    isColumnValid = true;
                 } else {
                     genericRecord.put(columnName, rtemp)
-                    isARecord = true
+                    isColumnValid = true
                 }
             } else if (rtemp.isInstanceOf[java.lang.Integer]) {
                 // Spark data type is integer
                 // logger.debug("handling Integer")
                 if (columnTypeStr.contains("java.lang.Integer")) {
                     genericRecord.put(columnName, rtemp)
-                    isARecord = true
+                    isColumnValid = true
                 } else if (columnTypeStr.contains("java.lang.Long")) {
                     genericRecord.put(columnName, toLong(rtemp))
-                    isARecord = true
+                    isColumnValid = true
                 } else if (columnTypeStr.contains("java.lang.String")) {
                     genericRecord.put(columnName, rtemp.toString())
-                    isARecord = true
+                    isColumnValid = true
                 } else if (columnTypeStr.contains("java.lang.Double")) {
                     genericRecord.put(columnName, toDouble(rtemp))
-                    isARecord = true
+                    isColumnValid = true
                 } else if (columnTypeStr.contains("java.lang.Float")) {
                     logger.debug("Column type float");
                     genericRecord.put(columnName, classOf[java.lang.Integer].cast(rtemp).floatValue());
-                    isARecord = true;
+                    isColumnValid = true;
                 } else {
-                    logger.debug("***** Kinetica column type is " + column.getType) 
+                    logger.debug("Unknown column type: " + column.getType) 
                 }
             } else if (rtemp.isInstanceOf[Timestamp]) {
                 // Spark data type is timestamp
@@ -210,17 +229,17 @@ object KineticaSparkDFManager extends LazyLogging {
                     logger.debug(" ################ " + sinceepoch)
                     genericRecord.put(columnName, sinceepoch)
                 }
-                isARecord = true
+                isColumnValid = true
             } else if (rtemp.isInstanceOf[java.sql.Date]) {
                 // Spark data type is date
                 logger.debug("Date instance")
                 genericRecord.put(columnName, rtemp.toString)
-                isARecord = true
+                isColumnValid = true
             } else if (rtemp.isInstanceOf[java.lang.Boolean]) {
                 // Spark data type is bool
                 logger.debug("Boolean instance xxx " + toBoolean(rtemp))
                 genericRecord.put(columnName, bool2int(toBoolean(rtemp)))
-                isARecord = true
+                isColumnValid = true
             } else if (rtemp.isInstanceOf[BigDecimal]) {
                 // Spark data type is BigDecimal
                 logger.debug("BigDecimal")
@@ -243,24 +262,24 @@ object KineticaSparkDFManager extends LazyLogging {
                         genericRecord.put( columnName, rtemp.toString );
                     }
                 }
-                isARecord = true
+                isColumnValid = true
             } else if (rtemp.isInstanceOf[java.lang.Short]) {
                 // Spark data type is short
                 logger.debug("Short")
                 genericRecord.put(columnName, classOf[java.lang.Short].cast(rtemp).intValue())
-                isARecord = true
+                isColumnValid = true
             } else if (rtemp.isInstanceOf[java.lang.Float]) {
                 // Spark data type is float
                 logger.debug("Float")
                 if (columnTypeStr.contains("java.lang.Float")) {
                     genericRecord.put(columnName, classOf[java.lang.Float].cast(rtemp).floatValue())
-                    isARecord = true
+                    isColumnValid = true
                 } else if (columnTypeStr.contains("java.lang.Double")) {
                     genericRecord.put(columnName, toDouble(rtemp))
-                    isARecord = true
+                    isColumnValid = true
                 } else if (columnTypeStr.contains("java.lang.String")) {
                     genericRecord.put(columnName, rtemp.toString())
-                    isARecord = true
+                    isColumnValid = true
                 } else {
                     logger.debug("**** Kinetica column type is " + column.getType) 
                 }
@@ -274,14 +293,14 @@ object KineticaSparkDFManager extends LazyLogging {
                 } else {
                     genericRecord.put(columnName, classOf[java.lang.Double].cast(rtemp).doubleValue())
                 }
-                isARecord = true
+                isColumnValid = true
             } else if (rtemp.isInstanceOf[java.lang.Byte]) {
                 // Spark data type is byte
                 logger.debug("Byte")
                 genericRecord.put( columnName,
                                    classOf[java.lang.Byte].cast(rtemp).intValue());
                 // classOf[Byte].cast(rtemp).intValue())
-                isARecord = true
+                isColumnValid = true
             } else if (rtemp.isInstanceOf[java.lang.String]) {
                 // Spark data type is string
                 logger.debug("String found, column type is " + column.getType)
@@ -328,13 +347,13 @@ object KineticaSparkDFManager extends LazyLogging {
                     // any processing
                     genericRecord.putDateTime( columnName, rtemp.toString(), timeZone );
                 }
-                isARecord = true
+                isColumnValid = true
             } else if (rtemp.isInstanceOf[Array[Byte]]) {
                 // Spark data type is byte array
                 logger.debug("Byte array found, column type is " + column.getType)
                 logger.debug("Byte array lnegth = " + rtemp.asInstanceOf[Array[Byte]].length)
                 genericRecord.put(columnName, ByteBuffer.wrap(rtemp.asInstanceOf[Array[Byte]]))
-                isARecord = true
+                isColumnValid = true
             } else {
         	 
                 logger.debug("Spark type {} Kin instance type is {} ", rtemp.getClass(), column.getType)
@@ -342,10 +361,10 @@ object KineticaSparkDFManager extends LazyLogging {
                                   columnName,
                                   //column.getType.cast(rtemp))
                                   rtemp.toString())
-                isARecord = true
+                isColumnValid = true
             }
         } 
-        isARecord
+        isColumnValid
     }
         
 }

@@ -168,7 +168,6 @@ object SparkKineticaTableUtil extends LazyLogging {
      * @throws KineticaException
      */
     def AlterTable(ds: DataFrame, lp: LoaderParams): Unit = {
-        logger.info("KineticaMapWriter")
         logger.debug("Mapping DataFrame columns to Kinetica")
         try if (lp.getJdbcURL.trim().isEmpty)
             throw new RuntimeException("Missing JDBC URL or invalid")

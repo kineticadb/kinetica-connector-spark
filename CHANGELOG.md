@@ -2,6 +2,16 @@
 
 ## Version 6.2
 
+### Version 6.2.2.8 -- 2019-08-03
+
+#### Added
+-   Support for the `table.truncate_to_size` parameter to the ingester process
+
+#### Fixed
+-   Ingestor log to correctly show the number of records converted when
+    errors occur upon ingestion.
+
+
 ### Version 6.2.2.7 -- 2019-07-29
 
 #### Added

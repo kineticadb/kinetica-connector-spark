@@ -28,12 +28,14 @@ import java.time.ZoneId;
 
 import scala.collection.JavaConversions._;
 
-object KineticaSparkDFManager extends LazyLogging {
+class KineticaSparkDFManager extends LazyLogging
+    with Serializable {
     
     val MAX_DATE = 29379542399999L;
     val MIN_DATE = -30610224000000L;
 
     @BeanProperty
+    @transient
     var df: DataFrame = null;
 
     @BeanProperty
@@ -41,9 +43,30 @@ object KineticaSparkDFManager extends LazyLogging {
 
     @BeanProperty
     var zoneID: java.time.ZoneId = null;
-    
-    var myType: Type = null
 
+    @BeanProperty
+    var loaderParams : LoaderParams = null;
+    
+    var myType: Type = null;
+
+
+    /// Constructor
+    def this( lp: LoaderParams ) = {
+        this();
+
+        // Save the configuration parameters
+        this.loaderParams = lp;
+
+        // Set the type
+        setType( lp );
+
+        // Set the time zone to be used for any datetime ingestion
+        timeZone = lp.getTimeZone;
+        zoneID   = timeZone.toZoneId();
+    }
+        
+
+        
     /**
      * Methods returns kinetica table type
      * If table type is not set, method will call setType
@@ -99,14 +122,22 @@ object KineticaSparkDFManager extends LazyLogging {
         // Set the time zone to be used for any datetime ingestion
         timeZone = lp.getTimeZone;
         zoneID   = timeZone.toZoneId();
+
+        // Set the parameters to be used by other functions
+        loaderParams = lp;
         
         logger.debug("Mapping Dataset columns to Kinetica")
         df.foreachPartition(new ForeachPartitionFunction[Row]() {
             def call(t: Iterator[Row]): Unit = {
                 val kbl: KineticaBulkLoader = new KineticaBulkLoader(bkp)
                 val bi: BulkInserter[GenericRecord] = kbl.GetBulkInserter()
+
+                var numRecordsProcessed = 0;
+                var numRecordsFailed = 0;
+                
                 while (t.hasNext) {
-                    
+
+                    numRecordsProcessed += 1;
                     lp.totalRows.add(1)
                     val row: Row = t.next()
                     val genericRecord: GenericRecord = new GenericRecord(typef)
@@ -130,6 +161,7 @@ object KineticaSparkDFManager extends LazyLogging {
                         } catch {
                             case e: Exception => {
                                 //e.printStackTrace()
+                                numRecordsFailed += 1;
                                 lp.failedConversion.add(1);
                                 isRecordGood = false;
                                 logger.warn(s"Found non-matching column DS.column --> KineticaTable.column, moving on; Issue: '${e.getMessage()}'" );
@@ -151,11 +183,21 @@ object KineticaSparkDFManager extends LazyLogging {
                     bi.flush();
                 } catch {
                     case e: Exception => {
+                        // Update the count of successful conversions to reflect
+                        // this failure
+                        val totalConvertedRows = lp.convertedRows.value;
+                        lp.convertedRows.reset();
+                        lp.convertedRows.add( totalConvertedRows - numRecordsProcessed );
+
+                        // Update the failed conversions
+                        lp.failedConversion.add( numRecordsProcessed - numRecordsFailed );
+                        
                         if ( lp.failOnError ) {
                             logger.error("Flush error", e);
                             throw e;
                         } else {
                             logger.error( s"Failed to ingest a batch of records; issue: '${e.getMessage()}" );
+                            logger.debug( s"Failed to ingest a batch of records; stacktrace for debugging: ", e );
                         }
                     }
                 }
@@ -172,62 +214,80 @@ object KineticaSparkDFManager extends LazyLogging {
     def putInGenericRecord(genericRecord : GenericRecord, rtemp : Any, column : Type.Column ) : Boolean = {
         
         //println(" Adding 1 record 1 field .........")
-        val columnName    = column.getName();
-        val columnType    = column.getType();
-        val columnTypeStr = columnType.toString();
+        val columnName     = column.getName();
+        val columnType     = column.getColumnType();
+        val columnBaseType = column.getColumnBaseType();
+        val columnTypeStr  = column.getType().toString();
 
+        logger.debug(s"Column name: '${columnName}'; Kinetica type: '${columnType}'; Kinetica base type: '${columnBaseType}'");
         
         var isColumnValid: Boolean = false
         if (rtemp != null) {
             // logger.debug("Spark data type {} not null, column '{}'", rtemp.getClass(),  columnName)
             if (rtemp.isInstanceOf[java.lang.Long]) {
                 // Spark data type is long
-                logger.debug("Long");
-                if (columnTypeStr.contains("java.lang.Float")) {
-                    logger.debug("Column type float");
-                    genericRecord.put(columnName, classOf[java.lang.Long].cast(rtemp).floatValue());
-                    isColumnValid = true;
-                } else {
-                    genericRecord.put(columnName, rtemp)
-                    isColumnValid = true
+                logger.debug(s"Type: long; column name '$columnName'");
+                columnBaseType match {
+                    case Type.Column.ColumnBaseType.FLOAT => {
+                        logger.debug("Column type float");
+                        genericRecord.put(columnName, classOf[java.lang.Long].cast(rtemp).floatValue());
+                        isColumnValid = true;
+                    }
+                    case _ => {
+                        genericRecord.put(columnName, rtemp)
+                        isColumnValid = true
+                    }
                 }
             } else if (rtemp.isInstanceOf[java.lang.Integer]) {
                 // Spark data type is integer
-                // logger.debug("handling Integer")
-                if (columnTypeStr.contains("java.lang.Integer")) {
-                    genericRecord.put(columnName, rtemp)
-                    isColumnValid = true
-                } else if (columnTypeStr.contains("java.lang.Long")) {
-                    genericRecord.put(columnName, toLong(rtemp))
-                    isColumnValid = true
-                } else if (columnTypeStr.contains("java.lang.String")) {
-                    genericRecord.put(columnName, rtemp.toString())
-                    isColumnValid = true
-                } else if (columnTypeStr.contains("java.lang.Double")) {
-                    genericRecord.put(columnName, toDouble(rtemp))
-                    isColumnValid = true
-                } else if (columnTypeStr.contains("java.lang.Float")) {
-                    logger.debug("Column type float");
-                    genericRecord.put(columnName, classOf[java.lang.Integer].cast(rtemp).floatValue());
-                    isColumnValid = true;
-                } else {
-                    logger.debug("Unknown column type: " + column.getType) 
+                logger.debug(s"Spark type: Integer; Kinetica base type: '${columnBaseType}'");
+                // Check the column's base/avro type
+                columnBaseType match {
+                    case Type.Column.ColumnBaseType.INTEGER => {
+                        genericRecord.put(columnName, rtemp);
+                        isColumnValid = true;
+                    }
+                    case Type.Column.ColumnBaseType.LONG => {
+                        genericRecord.put(columnName, toLong(rtemp));
+                        isColumnValid = true;
+                    }
+                    case Type.Column.ColumnBaseType.STRING => {
+                        genericRecord.put(columnName, rtemp.toString());
+                        isColumnValid = true;
+                    }
+                    case Type.Column.ColumnBaseType.DOUBLE => {
+                        genericRecord.put(columnName, toDouble(rtemp));
+                        isColumnValid = true;
+                    }
+                    case Type.Column.ColumnBaseType.FLOAT => {
+                        logger.debug("Column type float");
+                        genericRecord.put(columnName, classOf[java.lang.Integer].cast(rtemp).floatValue());
+                        isColumnValid = true;
+                    }
+                    case _ => {
+                        logger.debug(s"Unknown column type: ${columnTypeStr}");
+                    }
                 }
             } else if (rtemp.isInstanceOf[Timestamp]) {
                 // Spark data type is timestamp
-                if (columnTypeStr.contains("java.lang.String")) {
-                    // Put in the value as a string
-                    var stringValue: String = rtemp.toString();
-                    genericRecord.putDateTime( columnName, stringValue, timeZone );
-                } else {
-                    var sinceepoch = classOf[Timestamp].cast(rtemp).getTime
-                    if( sinceepoch > MAX_DATE ) {
-                        sinceepoch = MAX_DATE;
-                    } else if( sinceepoch < MIN_DATE ) {
-                        sinceepoch = MIN_DATE;
-                    }           
-                    logger.debug(" ################ " + sinceepoch)
-                    genericRecord.put(columnName, sinceepoch)
+                logger.debug(s"Spark type: Timestamp; Kinetica base type: '${columnBaseType}'; Kinetica type: '${columnType}'");
+                // Check againt base type
+                columnBaseType match {
+                    case Type.Column.ColumnBaseType.STRING => {
+                        // Put in the value as a string
+                        var stringValue: String = rtemp.toString();
+                        genericRecord.putDateTime( columnName, stringValue, timeZone );
+                    }
+                    case _ => {
+                        var sinceepoch = classOf[Timestamp].cast(rtemp).getTime
+                        if( sinceepoch > MAX_DATE ) {
+                            sinceepoch = MAX_DATE;
+                        } else if( sinceepoch < MIN_DATE ) {
+                            sinceepoch = MIN_DATE;
+                        }           
+                        logger.debug(" ################ " + sinceepoch)
+                        genericRecord.put(columnName, sinceepoch)
+                    }
                 }
                 isColumnValid = true
             } else if (rtemp.isInstanceOf[java.sql.Date]) {
@@ -242,24 +302,27 @@ object KineticaSparkDFManager extends LazyLogging {
                 isColumnValid = true
             } else if (rtemp.isInstanceOf[BigDecimal]) {
                 // Spark data type is BigDecimal
-                logger.debug("BigDecimal")
+                logger.debug(s"Spark type: BigDecimal; Kinetica base type: '${columnBaseType}'; Kinetica type: '${columnType}'");
                 // The SQL decimal type can be mapped to a variety of Kinetica
-                // types; so we need to check the column's type
-                columnType match {
-                    case q if (q == classOf[java.lang.Double]) => {
+                // types; so we need to check the column's BASE type
+                columnBaseType match {
+                    case Type.Column.ColumnBaseType.DOUBLE => {
                         genericRecord.put( columnName, classOf[java.math.BigDecimal].cast(rtemp).doubleValue() );
                     }
-                    case q if (q == classOf[java.lang.Float]) => {
+                    case Type.Column.ColumnBaseType.FLOAT => {
                         genericRecord.put( columnName, classOf[java.math.BigDecimal].cast(rtemp).floatValue() );
                     }
-                    case q if (q == classOf[java.lang.Integer]) => {
+                    case Type.Column.ColumnBaseType.INTEGER => {
                         genericRecord.put( columnName, classOf[java.math.BigDecimal].cast(rtemp).intValue() );
                     }
-                    case q if (q == classOf[java.lang.Long]) => {
+                    case Type.Column.ColumnBaseType.LONG => {
                         genericRecord.put( columnName, classOf[java.math.BigDecimal].cast(rtemp).longValue() );
                     }
-                    case q if (q == classOf[java.lang.String]) => {
+                    case Type.Column.ColumnBaseType.STRING => {
                         genericRecord.put( columnName, rtemp.toString );
+                    }
+                    case _ => {
+                        logger.debug(s"Unhandled type '$columnTypeStr' for column '$columnName' for dataframe type 'BigDecimal'");
                     }
                 }
                 isColumnValid = true
@@ -270,30 +333,40 @@ object KineticaSparkDFManager extends LazyLogging {
                 isColumnValid = true
             } else if (rtemp.isInstanceOf[java.lang.Float]) {
                 // Spark data type is float
-                logger.debug("Float")
-                if (columnTypeStr.contains("java.lang.Float")) {
-                    genericRecord.put(columnName, classOf[java.lang.Float].cast(rtemp).floatValue())
-                    isColumnValid = true
-                } else if (columnTypeStr.contains("java.lang.Double")) {
-                    genericRecord.put(columnName, toDouble(rtemp))
-                    isColumnValid = true
-                } else if (columnTypeStr.contains("java.lang.String")) {
-                    genericRecord.put(columnName, rtemp.toString())
-                    isColumnValid = true
-                } else {
-                    logger.debug("**** Kinetica column type is " + column.getType) 
+                logger.debug(s"Spark type: Float; Kinetica base type: '${columnBaseType}'; Kinetica type: '${columnType}'");
+                // Check against the base type
+                columnBaseType match {
+                    case Type.Column.ColumnBaseType.FLOAT => {
+                        genericRecord.put(columnName, classOf[java.lang.Float].cast(rtemp).floatValue());
+                        isColumnValid = true;
+                    }
+                    case Type.Column.ColumnBaseType.DOUBLE => {
+                        genericRecord.put(columnName, toDouble(rtemp));
+                        isColumnValid = true;
+                    }
+                    case Type.Column.ColumnBaseType.STRING => {
+                        genericRecord.put(columnName, rtemp.toString());
+                        isColumnValid = true;
+                    }
+                    case _ => {
+                        logger.debug(s"Unhandled Kinetica column type: '${columnType}'") ;
+                    }
                 }
             } else if (rtemp.isInstanceOf[java.lang.Double]) {
                 // Spark data type is double
-                logger.debug("Double")
-                if (columnTypeStr.contains("java.lang.String")) {
-                    genericRecord.put(columnName, rtemp.toString())
-                } else if (columnTypeStr.contains("java.lang.Float")) {
-                    genericRecord.put(columnName, classOf[java.lang.Double].cast(rtemp).floatValue())
-                } else {
-                    genericRecord.put(columnName, classOf[java.lang.Double].cast(rtemp).doubleValue())
+                logger.debug(s"Spark type: Double; Kinetica base type: '${columnBaseType}'; Kinetica type: '${columnType}'");
+                columnBaseType match {
+                    case Type.Column.ColumnBaseType.STRING => {
+                        genericRecord.put(columnName, rtemp.toString());
+                    }
+                    case Type.Column.ColumnBaseType.FLOAT => {
+                        genericRecord.put(columnName, classOf[java.lang.Double].cast(rtemp).floatValue());
+                    }
+                    case _ => {
+                        genericRecord.put(columnName, classOf[java.lang.Double].cast(rtemp).doubleValue());
+                    }
                 }
-                isColumnValid = true
+                isColumnValid = true;
             } else if (rtemp.isInstanceOf[java.lang.Byte]) {
                 // Spark data type is byte
                 logger.debug("Byte")
@@ -303,68 +376,139 @@ object KineticaSparkDFManager extends LazyLogging {
                 isColumnValid = true
             } else if (rtemp.isInstanceOf[java.lang.String]) {
                 // Spark data type is string
-                logger.debug("String found, column type is " + column.getType)
                 // This is the path most travelled....
-                if (columnTypeStr.contains("java.lang.Double")) {
-                    genericRecord.put(columnName, rtemp.toString().toDouble)
-                } else if (columnTypeStr.contains("java.lang.Float")) {
-                    genericRecord.put(columnName, rtemp.toString().toFloat)
-                } else if (columnTypeStr.contains("java.lang.Integer")) {
-                    genericRecord.put(columnName, rtemp.toString().toInt)
-                } else if (columnTypeStr.contains("java.lang.Long")) {
-                    if ( column.hasProperty( ColumnProperty.TIMESTAMP ) ) {
-                        logger.debug("String to timestamp conversion")
-                        // The full timestamp format has optional parts
-                        val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy[-][/][.]MM[-][/][.]dd[[ ]['T']HH:mm[:ss][.SSS][ ][XXX][Z][z][VV][x]]");
-                        // Get the number of milliseconds since the epoch
-                        var timestamp : Long = 0;
-                        try {
-                            // Try parsing a full timestamp with the date and the time
-                            timestamp = java.time.LocalDateTime.parse( rtemp.toString(),
-                                                                       formatter )
-                                .atZone( zoneID )
-                                .toInstant()
-                                .toEpochMilli();
-                        } catch {
-                            case e: java.time.format.DateTimeParseException => {
-                                // Try parsing just the date
-                                timestamp = java.time.LocalDate.parse( rtemp.toString(),
-                                                                       formatter )
-                                .atStartOfDay()
-                                .atZone( zoneID )
-                                .toInstant()
-                                .toEpochMilli();
+                logger.debug(s"Spark type: String; Kinetica base type: '${columnBaseType}'; Kinetica type: '${columnType}'");
+                columnBaseType match {
+                    case Type.Column.ColumnBaseType.DOUBLE => {
+                        genericRecord.put(columnName, rtemp.toString().toDouble);
+                    }
+                    case Type.Column.ColumnBaseType.FLOAT => {
+                        genericRecord.put(columnName, rtemp.toString().toFloat);
+                    }
+                    case Type.Column.ColumnBaseType.INTEGER => {
+                        genericRecord.put(columnName, rtemp.toString().toInt);
+                    }
+                    case Type.Column.ColumnBaseType.LONG => {
+                        // Need to handle different sub-types of long
+                        columnType match {
+                            case Type.Column.ColumnType.TIMESTAMP => {
+                                logger.debug("String to timestamp conversion");
+                                // The full timestamp format has optional parts
+                                val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy[-][/][.]MM[-][/][.]dd[[ ]['T']HH:mm[:ss][.SSS][ ][XXX][Z][z][VV][x]]");
+                                // Get the number of milliseconds since the epoch
+                                var timestamp : Long = 0;
+                                try {
+                                    // Try parsing a full timestamp with the date and the time
+                                    timestamp = java.time.LocalDateTime.parse( rtemp.toString(),
+                                                                               formatter )
+                                        .atZone( zoneID )
+                                        .toInstant()
+                                        .toEpochMilli();
+                                } catch {
+                                    case e: java.time.format.DateTimeParseException => {
+                                        // Try parsing just the date
+                                        timestamp = java.time.LocalDate.parse( rtemp.toString(),
+                                                                               formatter )
+                                        .atStartOfDay()
+                                        .atZone( zoneID )
+                                        .toInstant()
+                                        .toEpochMilli();
+                                    }
+                                }
+                                genericRecord.put( columnName, timestamp );
+                            }
+                            case Type.Column.ColumnType.LONG => {
+                                logger.debug("String to long conversion");
+                                genericRecord.put(columnName, rtemp.toString().toLong);
+                            }
+                            case _ => {
+                                logger.debug(s"Unhandled Kinetica type: '${columnType}'");
                             }
                         }
-                        genericRecord.put( columnName, timestamp );
-                    } else {
-                       logger.debug("String to long conversion");
-                       genericRecord.put(columnName, rtemp.toString().toLong);
                     }
-                } else {
-                    // Parse date, time, datetime values for non-Kinetica formats
-                    // as well as Kinetica formats; other types get inserted without
-                    // any processing
-                    genericRecord.putDateTime( columnName, rtemp.toString(), timeZone );
-                }
-                isColumnValid = true
+                    case Type.Column.ColumnBaseType.STRING => {
+                        logger.debug(s"Base type string, column type is ${columnType}; column name '$columnName'");
+                        // Need to handle different sub-types of string
+                        columnType match {
+                            case Type.Column.ColumnType.CHAR1 => {
+                                val value = TextUtils.truncateToSize( loaderParams.truncateToSize,
+                                                                      rtemp.toString(), 1 );
+                                genericRecord.put( columnName, value );
+                            }
+                            case Type.Column.ColumnType.CHAR2 => {
+                                val value = TextUtils.truncateToSize( loaderParams.truncateToSize,
+                                                                      rtemp.toString(), 2 );
+                                genericRecord.put( columnName, value );
+                            }
+                            case Type.Column.ColumnType.CHAR4 => {
+                                val value = TextUtils.truncateToSize( loaderParams.truncateToSize,
+                                                                      rtemp.toString(), 4 );
+                                genericRecord.put( columnName, value );
+                            }
+                            case Type.Column.ColumnType.CHAR8 => {
+                                val value = TextUtils.truncateToSize( loaderParams.truncateToSize,
+                                                                      rtemp.toString(), 8 );
+                                genericRecord.put( columnName, value );
+                            }
+                            case Type.Column.ColumnType.CHAR16 => {
+                                val value = TextUtils.truncateToSize( loaderParams.truncateToSize,
+                                                                      rtemp.toString(), 16 );
+                                genericRecord.put( columnName, value );
+                            }
+                            case Type.Column.ColumnType.CHAR32 => {
+                                val value = TextUtils.truncateToSize( loaderParams.truncateToSize,
+                                                                      rtemp.toString(), 32 );
+                                genericRecord.put( columnName, value );
+                            }
+                            case Type.Column.ColumnType.CHAR64 => {
+                                val value = TextUtils.truncateToSize( loaderParams.truncateToSize,
+                                                                      rtemp.toString(), 64 );
+                                genericRecord.put( columnName, value );
+                            }
+                            case Type.Column.ColumnType.CHAR128 => {
+                                val value = TextUtils.truncateToSize( loaderParams.truncateToSize,
+                                                                      rtemp.toString(), 128 );
+                                genericRecord.put( columnName, value );
+                            }
+                            case Type.Column.ColumnType.CHAR256 => {
+                                val value = TextUtils.truncateToSize( loaderParams.truncateToSize,
+                                                                      rtemp.toString(), 256 );
+                                genericRecord.put( columnName, value );
+                            }
+                            case Type.Column.ColumnType.DATE     |
+                                 Type.Column.ColumnType.DATETIME |
+                                 Type.Column.ColumnType.TIME => {
+                                // Need to specify the timezone
+                                genericRecord.putDateTime( columnName, rtemp.toString(), timeZone );
+                            }
+                            case _ => {
+                                genericRecord.put( columnName, rtemp.toString() );
+                            }
+                        }   // end match column type (sub-type)
+                    }   // end base type string
+                    case Type.Column.ColumnBaseType.BYTES => {
+                        genericRecord.put( columnName, ByteBuffer.wrap( rtemp.toString().getBytes() ) );
+                    }
+                }   // end match base type
+                isColumnValid = true;
             } else if (rtemp.isInstanceOf[Array[Byte]]) {
                 // Spark data type is byte array
-                logger.debug("Byte array found, column type is " + column.getType)
-                logger.debug("Byte array lnegth = " + rtemp.asInstanceOf[Array[Byte]].length)
-                genericRecord.put(columnName, ByteBuffer.wrap(rtemp.asInstanceOf[Array[Byte]]))
-                isColumnValid = true
+                logger.debug(s"Byte array found, column type is ${columnType}");
+                logger.debug("Byte array length = " + rtemp.asInstanceOf[Array[Byte]].length);
+                genericRecord.put(columnName, ByteBuffer.wrap(rtemp.asInstanceOf[Array[Byte]]));
+                isColumnValid = true;
             } else {
         	 
-                logger.debug("Spark type {} Kin instance type is {} ", rtemp.getClass(), column.getType)
+                logger.debug("Spark type {} Kin instance type is {} ", rtemp.getClass(), column.getType);
                 genericRecord.put(
                                   columnName,
                                   //column.getType.cast(rtemp))
-                                  rtemp.toString())
-                isColumnValid = true
+                                  rtemp.toString());
+                isColumnValid = true;
             }
         } 
-        isColumnValid
+
+        isColumnValid;
     }
         
 }

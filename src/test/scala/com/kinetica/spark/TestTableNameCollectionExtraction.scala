@@ -1,5 +1,8 @@
 package com.kinetica.spark;
 
+import com.gpudb.Type;
+import com.gpudb.ColumnProperty;
+
 import org.scalatest.FunSuite;
 import org.apache.spark.sql.SparkSession;
 import com.typesafe.scalalogging.LazyLogging;
@@ -50,6 +53,7 @@ trait TableNameCollectionExtractionBehavior
             // Write to the table
             logger.debug( s"Writing to table ${dstTableName} via the connector" );
             df.write.format( package_to_test ).options( options ).save();
+            logger.debug( s"After writing to table ${dstTableName} via the connector" );
 
             // Check that the table size is correct
             val table_size = get_table_size( dstTableName );
@@ -164,6 +168,7 @@ trait TableNameCollectionExtractionBehavior
 
             // Need to mark the table name for post-test clean-up
             mark_table_for_deletion_at_test_end( expectedTableName );
+            mark_table_for_deletion_at_test_end( expectedCollectionName );
 
             // Clear any existing table with this name
             clear_table( fullTableName );
@@ -210,10 +215,9 @@ trait TableNameCollectionExtractionBehavior
             val numRows = 10;
             val tableName = "keco_1232_table";
             logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableTwoIntNullableColumns( tableName, None, numRows );
-
-            // Need to mark the table name for post-test clean-up
-            mark_table_for_deletion_at_test_end( tableName );
+            var columns : ListBuffer[Type.Column] = new ListBuffer[Type.Column]();
+            columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
+            createKineticaTableWithGivenColumns( tableName, None, columns, numRows );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -244,13 +248,9 @@ trait TableNameCollectionExtractionBehavior
             val collectionName = "keco_1232_collection";
             logger.debug( s"Table name '${tableName}'" );
             logger.debug( s"Collection name '${collectionName}'" );
-            createKineticaTableTwoIntNullableColumns( tableName,
-                                                      Option.apply( collectionName ),
-                                                      numRows );
-
-            // Need to mark the table name for post-test clean-up
-            mark_table_for_deletion_at_test_end( tableName );
-            mark_table_for_deletion_at_test_end( collectionName );
+            var columns : ListBuffer[Type.Column] = new ListBuffer[Type.Column]();
+            columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
+            createKineticaTableWithGivenColumns( tableName, Option.apply( collectionName ), columns, numRows );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -279,10 +279,9 @@ trait TableNameCollectionExtractionBehavior
             val numRows = 10;
             val tableName = "keco_1232_table";
             logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableTwoIntNullableColumns( tableName, None, numRows );
-
-            // Need to mark the table name for post-test clean-up
-            mark_table_for_deletion_at_test_end( tableName );
+            var columns : ListBuffer[Type.Column] = new ListBuffer[Type.Column]();
+            columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
+            createKineticaTableWithGivenColumns( tableName, None, columns, numRows );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -313,13 +312,9 @@ trait TableNameCollectionExtractionBehavior
             val collectionName = "keco_1232_collection";
             logger.debug( s"Table name '${tableName}'" );
             logger.debug( s"Collection name '${collectionName}'" );
-            createKineticaTableTwoIntNullableColumns( tableName,
-                                                      Option.apply( collectionName ),
-                                                      numRows );
-
-            // Need to mark the table name for post-test clean-up
-            mark_table_for_deletion_at_test_end( tableName );
-            mark_table_for_deletion_at_test_end( collectionName );
+            var columns : ListBuffer[Type.Column] = new ListBuffer[Type.Column]();
+            columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
+            createKineticaTableWithGivenColumns( tableName, Option.apply( collectionName ), columns, numRows );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -348,10 +343,9 @@ trait TableNameCollectionExtractionBehavior
             val numRows = 10;
             val tableName = "keco.1232_table";
             logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableTwoIntNullableColumns( tableName, None, numRows );
-
-            // Need to mark the table name for post-test clean-up
-            mark_table_for_deletion_at_test_end( tableName );
+            var columns : ListBuffer[Type.Column] = new ListBuffer[Type.Column]();
+            columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
+            createKineticaTableWithGivenColumns( tableName, None, columns, numRows );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -382,13 +376,9 @@ trait TableNameCollectionExtractionBehavior
             val collectionName = "keco_1232_collection";
             logger.debug( s"Table name '${tableName}'" );
             logger.debug( s"Collection name '${collectionName}'" );
-            createKineticaTableTwoIntNullableColumns( tableName,
-                                                      Option.apply( collectionName ),
-                                                      numRows );
-
-            // Need to mark the table name for post-test clean-up
-            mark_table_for_deletion_at_test_end( tableName );
-            mark_table_for_deletion_at_test_end( collectionName );
+            var columns : ListBuffer[Type.Column] = new ListBuffer[Type.Column]();
+            columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
+            createKineticaTableWithGivenColumns( tableName, Option.apply( collectionName ), columns, numRows );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -420,13 +410,9 @@ trait TableNameCollectionExtractionBehavior
             val tableNameWithCollection = s"$collectionName.$tableName";
             logger.debug( s"Table name '${tableName}'" );
             logger.debug( s"Collection name '${collectionName}'" );
-            createKineticaTableTwoIntNullableColumns( tableName,
-                                                      Option.apply( collectionName ),
-                                                      numRows );
-
-            // Need to mark the table name for post-test clean-up
-            mark_table_for_deletion_at_test_end( tableName );
-            mark_table_for_deletion_at_test_end( collectionName );
+            var columns : ListBuffer[Type.Column] = new ListBuffer[Type.Column]();
+            columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
+            createKineticaTableWithGivenColumns( tableName, Option.apply( collectionName ), columns, numRows );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -457,10 +443,9 @@ trait TableNameCollectionExtractionBehavior
             // Create a Kinetica table (with NO period in the name) NOT in a collection
             val numRows = 10;
             val tableName = "keco_1241_table";
-            createKineticaTableTwoIntNullableColumns( tableName, None, numRows );
-
-            // // Need to mark the table name for post-test clean-up
-            // mark_table_for_deletion_at_test_end( tableName );
+            var columns : ListBuffer[Type.Column] = new ListBuffer[Type.Column]();
+            columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
+            createKineticaTableWithGivenColumns( tableName, None, columns, numRows );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();

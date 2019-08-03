@@ -180,14 +180,15 @@ class KineticaRelation(
                     case e: Throwable => throw new RuntimeException("Failed with errors ", e);
                 }
             }
+            
             logger.debug("Get Kinetica Table Type");
-            KineticaSparkDFManager.setType(conf);
+            val ingestionUtils = new KineticaSparkDFManager(conf);
 
             logger.debug("Set LoaderParms Table Type");
-            conf.setTableType(KineticaSparkDFManager.getType(conf));
+            conf.setTableType( ingestionUtils.getType(conf) );
 
             logger.debug("Set DataFrame");
-            KineticaSparkDFManager.setDf(dfSource);
+            ingestionUtils.setDf( dfSource );
 
             if (conf.isTableReplicated) {
                 logger.info("Table is replicated");
@@ -196,7 +197,7 @@ class KineticaRelation(
             }
 
             logger.info("Map and Write to Kinetica...");
-            KineticaSparkDFManager.KineticaMapWriter(sparkSession.sparkContext, conf);
+            ingestionUtils.KineticaMapWriter(sparkSession.sparkContext, conf);
             logger.info("Map and Write to Kinetica done.");
             // Lets try and print the accumulators
             logger.info(" Total rows = " + conf.totalRows.value);

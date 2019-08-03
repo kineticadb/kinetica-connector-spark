@@ -4,6 +4,7 @@ import com.gpudb.ColumnProperty;
 import com.gpudb.Record;
 import com.gpudb.Type;
 
+import java.nio.ByteBuffer;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
@@ -69,12 +70,8 @@ trait SparkConnectorBugFixes
             logger.debug( s"Table name '${tableName}'" );
             createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
 
-            // Need to mark the table name for post-test clean-up
-            mark_table_for_deletion_at_test_end( tableName );
-
-            // // Set the default timezone appropriately
+            // Set the default timezone appropriately
             val timeZone = "GMT+0600";
-            // TimeZone.setDefault( TimeZone.getTimeZone( timeZone ) );
 
             // The expected values would be of Kinetica format and be local to the specified timezone
             def getExpectedLongTimeStampValue ( value: String, timeZone : String ) : Long = {
@@ -170,9 +167,6 @@ trait SparkConnectorBugFixes
             logger.debug( s"Table name '${tableName}'" );
             createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
 
-            // Need to mark the table name for post-test clean-up
-            mark_table_for_deletion_at_test_end( tableName );
-
             // Create some test data
             val dateFormat = new SimpleDateFormat( "yyyy/MM/dd" );
             // Set the default timezone appropriately
@@ -245,7 +239,7 @@ trait SparkConnectorBugFixes
 
             // Check that the table size is correct
             val table_size = get_table_size( tableName );
-            assert( (table_size == df.count), s"Table size ($table_size) should be $df.count" );
+            assert( (table_size == df.count), s"Table size ($table_size) should be ${df.count}" );
 
             // Check the data
             val columns_to_fetch = col1_name :: col2_name :: col3_name :: Nil;
@@ -359,11 +353,11 @@ trait SparkConnectorBugFixes
             } catch {
                 case e: com.kinetica.spark.util.table.KineticaException => {
                     logger.debug( s"Got KINETICA exception {}", e );
-                    assert( (false), s"Re-ingesting data obtained by egree via the connector from Kinetica should not fail (without filters)" );
+                    assert( (false), s"Re-ingesting data obtained by egress via the connector from Kinetica should not fail (without filters)" );
                 }
                 case e2: java.lang.RuntimeException => {
                     logger.debug( s"Got RUNTIME exception {}", e2 );
-                    assert( (false), s"Re-ingesting data obtained by egree via the connector from Kinetica should not fail (without filters)" );
+                    assert( (false), s"Re-ingesting data obtained by egress via the connector from Kinetica should not fail (without filters)" );
                 }
             }
             
@@ -435,9 +429,6 @@ trait SparkConnectorBugFixes
             val tableName = "keco_1355";
             logger.debug( s"Table name '${tableName}'" );
             createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
-
-            // Need to mark the table name for post-test clean-up
-            mark_table_for_deletion_at_test_end( tableName );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -559,6 +550,257 @@ trait SparkConnectorBugFixes
 
         
         /**
+         * Tests for `table.truncate_to_size`
+         */
+        test(s"""$package_description KECO-1371: `table.truncate_to_size`
+             | should work""".stripMargin.replaceAll("\n", "") ) {
+
+            // We need a table with a float column
+            val sort_col_name = "i";
+            val char1_name    = "char1";
+            val char2_name    = "char2";
+            val char4_name    = "char4";
+            val char8_name    = "char8";
+            val char16_name   = "char16";
+            val char32_name   = "char32";
+            val char64_name   = "char64";
+            val char128_name  = "char128";
+            val char256_name  = "char256";
+            val str_name      = "str";
+            val bytes_name    = "bytes";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( sort_col_name,
+                                        classOf[java.lang.Integer] );
+            columns += new Type.Column( char1_name,
+                                        classOf[java.lang.String],
+                                        ColumnProperty.CHAR1 );
+            columns += new Type.Column( char2_name,
+                                        classOf[java.lang.String],
+                                        ColumnProperty.CHAR2 );
+            columns += new Type.Column( char4_name,
+                                        classOf[java.lang.String],
+                                        ColumnProperty.CHAR4 );
+            columns += new Type.Column( char8_name,
+                                        classOf[java.lang.String],
+                                        ColumnProperty.CHAR8 );
+            columns += new Type.Column( char16_name,
+                                        classOf[java.lang.String],
+                                        ColumnProperty.CHAR16 );
+            columns += new Type.Column( char32_name,
+                                        classOf[java.lang.String],
+                                        ColumnProperty.CHAR32 );
+            columns += new Type.Column( char64_name,
+                                        classOf[java.lang.String],
+                                        ColumnProperty.CHAR64 );
+            columns += new Type.Column( char128_name,
+                                        classOf[java.lang.String],
+                                        ColumnProperty.CHAR128 );
+            columns += new Type.Column( char256_name,
+                                        classOf[java.lang.String],
+                                        ColumnProperty.CHAR256 );
+            columns += new Type.Column( str_name,
+                                        classOf[java.lang.String] );
+            columns += new Type.Column( bytes_name,
+                                        classOf[java.nio.ByteBuffer] );
+
+            // Create the table
+            val tableName = s"keco_1371_${package_description}";
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create"           ) = "false";
+            options( "table.name"             ) = tableName;
+            options( "table.truncate_to_size" ) = "true";
+
+            // Get some test data with a bad row
+            // ---------------------------------
+            val data = Seq(
+                            // Precisely N characters (for charN values)
+                            Row( 1, "a", "bb", "cccc", "ccccdddd", "ccccddddccccdddd",
+                                 "This is 32 characters long......",
+                                 "This is 64 characters long......This is 64 characters long......",
+                                 "This is 128 characters long.....This is 128 characters long.....This is 128 characters long.....This is 128 characters long.....",
+                                 "This is 256 characters long.....This is 256 characters long.....This is 256 characters long.....This is 256 characters long.....This is 256 characters long.....This is 256 characters long.....This is 256 characters long.....This is 256 characters long.....",
+                                 "Some random string value...........",
+                                 "Some random bytes value..........." ),
+                            // Less than N characters (for charN values)
+                            Row( 2, "", "b", "cc", "ccdd", "ccccdddd",
+                                 "This is less than 32 chars",
+                                 "This is less than 64 characters...",
+                                 "This is less than 128 characters...",
+                                 "This is less than 256 characters long...",
+                                 "Some random string value...........",
+                                 "Some random bytes value..........." ),
+                            // More than N characters (for charN values)
+                            Row( 3, "aeeee", "bbeeeee", "cccceeeee", "ccccddddeeeeeeeeeee", "ccccddddccccddddeeeeeeeeeee",
+                                 "The 33rd characters has a pipe..|extra extra extra",
+                                 "The 65th character has a pipe; before then, it's periods........|extra extra extra",
+                                 "The 129th character has a pipe; before then, it's periods.......................................................................|extra extra extra",
+                                 "The 257th character has a pipe; before then, it's periods.......................................................................................................................................................................................................|extra extra extra",
+                                 "Some random string value...........| this should make it in, too",
+                                 "Some random bytes value...........| this should make it in, too" ) );
+            // The expected values have only two rows (the middle one
+            // having been discarded)
+            val expected_values = Seq( Map( sort_col_name -> 1,
+                                            char1_name    -> "a",
+                                            char2_name    -> "bb",
+                                            char4_name    -> "cccc",
+                                            char8_name    -> "ccccdddd",
+                                            char16_name   -> "ccccddddccccdddd",
+                                            char32_name   -> "This is 32 characters long......",
+                                            char64_name   -> "This is 64 characters long......This is 64 characters long......",
+                                            char128_name  -> "This is 128 characters long.....This is 128 characters long.....This is 128 characters long.....This is 128 characters long.....",
+                                            char256_name  -> "This is 256 characters long.....This is 256 characters long.....This is 256 characters long.....This is 256 characters long.....This is 256 characters long.....This is 256 characters long.....This is 256 characters long.....This is 256 characters long.....",
+                                            str_name      -> "Some random string value...........",
+                                            bytes_name    -> ByteBuffer.wrap( "Some random bytes value...........".getBytes() ) ),
+                                       Map( sort_col_name  -> 2,
+                                            char1_name    -> "",
+                                            char2_name    -> "b",
+                                            char4_name    -> "cc",
+                                            char8_name    -> "ccdd",
+                                            char16_name   -> "ccccdddd",
+                                            char32_name   -> "This is less than 32 chars",
+                                            char64_name   -> "This is less than 64 characters...",
+                                            char128_name  -> "This is less than 128 characters...",
+                                            char256_name  -> "This is less than 256 characters long...",
+                                            str_name      -> "Some random string value...........",
+                                            bytes_name    -> ByteBuffer.wrap( "Some random bytes value...........".getBytes() ) ),
+                                       Map( sort_col_name  -> 3,
+                                            char1_name    -> "a",
+                                            char2_name    -> "bb",
+                                            char4_name    -> "cccc",
+                                            char8_name    -> "ccccdddd",
+                                            char16_name   -> "ccccddddccccdddd",
+                                            char32_name   -> "The 33rd characters has a pipe..",
+                                            char64_name   -> "The 65th character has a pipe; before then, it's periods........",
+                                            char128_name  -> "The 129th character has a pipe; before then, it's periods.......................................................................",
+                                            char256_name  -> "The 257th character has a pipe; before then, it's periods.......................................................................................................................................................................................................",
+                                            str_name      -> "Some random string value...........| this should make it in, too",
+                                            bytes_name    -> ByteBuffer.wrap( "Some random bytes value...........| this should make it in, too".getBytes() ) )
+                                       );
+
+            // Generate the appropriate schema create the test data
+            val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
+                                     StructField( char1_name,    StringType,  true ) ::
+                                     StructField( char2_name,    StringType,  true ) ::
+                                     StructField( char4_name,    StringType,  true ) ::
+                                     StructField( char8_name,    StringType,  true ) ::
+                                     StructField( char16_name,   StringType,  true ) ::
+                                     StructField( char32_name,   StringType,  true ) ::
+                                     StructField( char64_name,   StringType,  true ) ::
+                                     StructField( char128_name,  StringType,  true ) ::
+                                     StructField( char256_name,  StringType,  true ) ::
+                                     StructField( str_name,      StringType,  true ) ::
+                                     StructField( bytes_name,    StringType,  true ) :: Nil );
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe with a bad row in it (${df.count} rows)");
+            
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            var table_size = get_table_size( tableName );
+            assert( (table_size == expected_values.length),
+                    s"Table size ($table_size) should be ${expected_values.length}" );
+
+            // Check correctness of the data
+            val columns_to_fetch = sort_col_name :: char1_name :: char2_name ::
+                                   char4_name :: char8_name :: char16_name ::
+                                   char32_name :: char64_name :: char128_name ::
+                                   char256_name :: str_name :: bytes_name :: Nil;
+            val fetched_records = get_records_by_column( tableName,
+                                                         columns_to_fetch,
+                                                         0, 100,
+                                                         Option.apply( sort_col_name ),
+                                                         Option.apply( "ascending" ) );
+            val charNValues = 1 :: 2 :: 4 :: 8 :: 16 :: 32 :: 64 :: 128 :: 256 :: Nil;
+            for ( i <- 0 until expected_values.length ) {
+                // int column
+                var expected = expected_values(i)( sort_col_name );
+                var actual   = fetched_records.get(i).get( sort_col_name );
+                assert( (expected == actual),
+                        s"Fetched value of record #$i '$actual' should be '$expected' for '$sort_col_name'" );
+
+                // CharN columns
+                for ( N <- charNValues ) {
+                    val columnName = s"char$N";
+                    expected = expected_values(i)( columnName );
+                    actual   = fetched_records.get(i).get( columnName );
+                    assert( (expected == actual),
+                            s"Fetched value of record #$i '$actual' should be '$expected' for '$columnName'" );
+                }
+
+                // Regular string column
+                expected = expected_values(i)( str_name );
+                actual   = fetched_records.get(i).get( str_name );
+                assert( (expected == actual),
+                        s"Fetched value of record #$i '$actual' should be '$expected' for '$str_name'" );
+
+                // Regular bytes column
+                expected = expected_values(i)( bytes_name );
+                actual   = fetched_records.get(i).get( bytes_name );
+                assert( (expected == actual),
+                        s"Fetched value of record #$i '$actual' should be '$expected' for 'bytes_name'" );
+            }
+            
+        }  // end test for KECO-1371
+
+
+
+        /**
+         * Test for egress honoring filters.
+         */
+        test(s"""$package_description KECO-1402: Egress needs to honor any filters
+             | passed to the connector""".stripMargin.replaceAll("\n", "") ) {
+
+            // Create a table (but clear any pre-existing ones)
+            val tableName = "keco_1402";
+            logger.debug( s"Table name '${tableName}'" );
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            // createKineticaTableOneIntNullableColumn( tableName, None, 0 );
+
+            // // Need to mark the table name for post-test clean-up
+            // mark_table_for_deletion_at_test_end( tableName );
+
+            // Create some test data for a single int column where the first
+            // row has a value of 0 and it increases by one per row
+            val numTotalRecords = 100000;
+            val records = for (i <- 0 until numTotalRecords) yield (i :: Nil);
+
+            // Generate the schema with a integer type
+            val schema = StructType( StructField( "x", IntegerType, true ) :: Nil );
+            val df_in = createDataFrame( records, schema );
+            logger.debug(s"Created a dataframe with sequential integers in it (${df_in.count} rows)");
+            
+            // Get the appropriate options for fetching data
+            var options = get_default_spark_connector_options();
+            options( "table.name"           ) = tableName;
+            options( "spark.num_partitions" ) = "8";
+
+            // Write the data to the table
+            df_in.write.format( package_to_test ).options( options ).save();
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+
+            // Read from the table with an expression
+            val expectedNumRecords = 70000;
+            val filter_expression = s"x < ${expectedNumRecords}";
+            logger.debug( s"Reading from table ${tableName} via the connector" );
+            val fetched_records = m_sparkSession.sqlContext.read.format( package_to_test ).options( options ).load().filter( filter_expression );
+            logger.debug( s"------------Read from table ${tableName} via the connector; got ${fetched_records.count} records" );
+
+            // Check that the table size is correct
+            assert( (fetched_records.count == expectedNumRecords),
+                    s"Should have fetched ${expectedNumRecords}, got ${fetched_records.count}" );
+        }  // end test for KECO-1402
+
+
+        /**
          * Test for ingesting an empty dataframe (should not crash)
          */
         test(s"""$package_description KECO-1405: Empty dataframe should not
@@ -638,52 +880,159 @@ trait SparkConnectorBugFixes
         }  // end test for KECO-1405
 
 
+        
         /**
-         * Test for egress honoring filters.
+         * Test for fail-fase mode actually failing
          */
-        test(s"""$package_description KECO-1402: Egress needs to honor any filters
-             | passed to the connector""".stripMargin.replaceAll("\n", "") ) {
+        test(s"""$package_description KECO-1415: NULL value for non-nullable
+             | column should fail for failfast
+             | mode""".stripMargin.replaceAll("\n", "") ) {
 
-            // Create a table (but clear any pre-existing ones)
-            val tableName = "keco_1402";
+            // We need a table with a float column
+            val sort_col_name = "i";
+            val str_col_name = "str_col";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
+            columns += new Type.Column( str_col_name,
+                                        classOf[java.lang.String],
+                                        ColumnProperty.PRIMARY_KEY,
+                                        ColumnProperty.DATE );
+
+            // Create the table
+            val tableName = s"keco_1415_${package_description}";
             logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableOneIntNullableColumn( tableName, None, 0 );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
 
-            // Need to mark the table name for post-test clean-up
-            mark_table_for_deletion_at_test_end( tableName );
-
-            // Create some test data for a single int column where the first
-            // row has a value of 0 and it increases by one per row
-            val numTotalRecords = 100000;
-            val records = for (i <- 0 until numTotalRecords) yield (i :: Nil);
-
-            // Generate the schema with a integer type
-            val schema = StructType( StructField( "x", IntegerType, true ) :: Nil );
-            val df_in = createDataFrame( records, schema );
-            logger.debug(s"Created a dataframe with sequential integers in it (${df_in.count} rows)");
-            
-            // Get the appropriate options for fetching data
+            // Get the appropriate options
             var options = get_default_spark_connector_options();
-            options( "table.name"           ) = tableName;
-            options( "spark.num_partitions" ) = "8";
+            options( "table.create" ) = "false";
+            options( "table.name"   ) = tableName;
 
-            // Write the data to the table
-            df_in.write.format( package_to_test ).options( options ).save();
+            // Get some test data with a bad row
+            // ---------------------------------
+            val data = Seq( Row( 1, "1960-01-01" ),
+                            Row( 2, "1965-03-03 12:00:00" ),
+                            // Bad row: can't have a null!
+                            Row( 3, null ),
+                            Row( 4, "1970-12-13" ) );
+
+            // Generate the appropriate schema create the test data
+            val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
+                                     StructField( str_col_name,  StringType,  true ) :: Nil );
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe with a bad row in it (${df.count} rows)");
+            
+
+
+            // Test Case 1: Write to the table with fail-fast mode
+            logger.info( s"Test Case 1: Write to the table with fail-fast mode" );
+            options( "table.fail_on_errors" ) = "true";
             logger.debug( s"Writing to table ${tableName} via the connector" );
 
-            // Read from the table with an expression
-            val expectedNumRecords = 70000;
-            val filter_expression = s"x < ${expectedNumRecords}";
-            logger.debug( s"Reading from table ${tableName} via the connector" );
-            val fetched_records = m_sparkSession.sqlContext.read.format( package_to_test ).options( options ).load().filter( filter_expression );
-            logger.debug( s"------------Read from table ${tableName} via the connector; got ${fetched_records.count} records" );
+            try {
+                df.write.format( package_to_test ).options( options ).save();
+                assert( (false), s"Nul value for non-nullable column should fail for failfast mode" );
+            } catch {
+                case e: com.kinetica.spark.util.table.KineticaException => {
+                    logger.debug( s"Got KINETICA exception {}", e );
+                    assert( (true), s"Nul value for non-nullable column should fail for failfast mode" );
+                }
+                case e2: java.lang.RuntimeException => {
+                    logger.debug( s"Got RUNTIME exception {}", e2 );
+                    assert( (true), s"Nul value for non-nullable column should fail for failfast mode" );
+                }
+            }
+
+        }  // end test for KECO-1415
+
+
+
+        
+        /**
+         * Test for data with bad format being handled properly
+         */
+        test(s"""$package_description KECO-1415: Date column with non-conforming format
+             | should be handled properly""".stripMargin.replaceAll("\n", "") ) {
+
+            // We need a table with a float column
+            val sort_col_name = "i";
+            val str_col_name = "str_col";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
+            columns += new Type.Column( str_col_name,
+                                        classOf[java.lang.String],
+                                        ColumnProperty.PRIMARY_KEY,
+                                        ColumnProperty.DATE );
+
+            // Create the table
+            val tableName = s"keco_1415_${package_description}";
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create" ) = "false";
+            options( "table.name"   ) = tableName;
+
+            // Get some test data with a bad row
+            // ---------------------------------
+            val data = Seq( Row( 1, "1960-01-01" ),
+                            // Date with time component
+                            Row( 2, "1965-03-03 12:00:00" ),
+                            // Date with time component
+                            Row( 3, "1970-12-13T13:13:13.123" ) );
+            // The expected values have only two rows (the middle one
+            // having been discarded)
+            val expected_values = Seq( Map( sort_col_name -> 1,
+                                            str_col_name -> "1960-01-01" ),
+                                       Map( sort_col_name -> 2,
+                                            str_col_name -> "1965-03-03" ),
+                                       Map( sort_col_name -> 3,
+                                            str_col_name -> "1970-12-13" )
+                                       );
+
+            // Generate the appropriate schema create the test data
+            val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
+                                     StructField( str_col_name,  StringType,  true ) :: Nil );
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe with a bad row in it (${df.count} rows)");
+            
+
+            // Test Case 2: Write to the table with graceful failure
+            logger.info( s"Test Case 2: Write to the table with graceful failure mode" );
+            options( "table.fail_on_errors" ) = "false";
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
 
             // Check that the table size is correct
-            assert( (fetched_records.count == expectedNumRecords),
-                    s"Should have fetched ${expectedNumRecords}, got ${fetched_records.count}" );
-        }  // end test for KECO-1402
+            var table_size = get_table_size( tableName );
+            assert( (table_size == expected_values.length),
+                    s"Table size ($table_size) should be ${expected_values.length}" );
+
+            // Check correctness of the data
+            val columns_to_fetch = sort_col_name :: str_col_name :: Nil;
+            val fetched_records = get_records_by_column( tableName,
+                                                         columns_to_fetch,
+                                                         0, 100,
+                                                         Option.apply( sort_col_name ),
+                                                         Option.apply( "ascending" ) );
+            for ( i <- 0 until expected_values.length ) {
+                // int column
+                var expected = expected_values(i)( sort_col_name );
+                var actual   = fetched_records.get(i).get( sort_col_name );
+                assert( (expected == actual),
+                        s"Fetched value of record #$i '$actual' should be '$expected' for '$sort_col_name'" );
+                // First string column
+                expected = expected_values(i)( str_col_name );
+                actual   = fetched_records.get(i).get( str_col_name );
+                assert( (expected == actual),
+                        s"Fetched value of record #$i '$actual' should be '$expected' for '$str_col_name'" );
+            }
+        }  // end test for KECO-1415
 
 
+
+        
         /**
          * Test for egressing string time values.
          */
@@ -703,9 +1052,6 @@ trait SparkConnectorBugFixes
             val tableName = "keco_1419_string_time";
             logger.debug( s"Table name '${tableName}'" );
             createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
-
-            // Need to mark the table name for post-test clean-up
-            mark_table_for_deletion_at_test_end( tableName );
 
             // Create some test data
             // Set the default timezone appropriately
@@ -743,7 +1089,7 @@ trait SparkConnectorBugFixes
 
             // Check that the table size is correct
             val table_size = get_table_size( tableName );
-            assert( (table_size == df.count), s"Table size ($table_size) should be $df.count" );
+            assert( (table_size == df.count), s"Table size ($table_size) should be ${df.count}" );
 
             // Get the data out using the connecotr via the Java API (when no filtering is necessary)
             // Get the appropriate options
@@ -893,7 +1239,6 @@ trait SparkConnectorBugFixes
 
 
 
-
 /**
  *  Test bug fixes using the DataSource v1 package.
  */
@@ -904,7 +1249,6 @@ class TestBugFixes_V1
     override val m_package_descr   = m_v1_package_descr;
     override val m_package_to_test = m_v1_package;
 
-    
     // Run the tests
     testsFor( bugFixes( m_package_to_test, m_package_descr ) );
     

@@ -1388,7 +1388,7 @@ the access mechanism.
 | ``table.name``                  | *<none>*  | *Kinetica* table to access
 | ``table.name_contains_schema``  | ``true``  | Indicates that a schema name should be extracted from the ``table.name``, if one is given (separated by periods).  Any additional periods will remain in the table name
 | ``table.truncate``              | ``false`` | Truncate table if it exists
-| ``table.truncate_to_size``      | ``false`` | Truncate strings when inserting into charN columns  **Data Loader Only**
+| ``table.truncate_to_size``      | ``false`` | Truncate strings when inserting into charN columns
 | ``table.update_on_existing_pk`` | ``false`` | If the target table, ``table.name``, has a primary key, update records in it with matching primary key values from records being ingested
 | ``table.use_templates``         | ``false`` | Enable *template tables*; see [Template Tables](#template-tables) section for details  **Data Loader Only**
 

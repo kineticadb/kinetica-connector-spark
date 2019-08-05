@@ -292,7 +292,7 @@ object SparkKineticaTableUtil extends LazyLogging {
         AlterTableAddColumnDDL.init(lp)
         AlterTableModifyColumnDDL.init(lp)
         iniAlterStatements()
-        val mytype: Type = KineticaSparkDFManager.getType(lp)
+        val mytype: Type = lp.getTableType();
         val alterDDL: Boolean = true
 
         // Get the field iterator
@@ -416,31 +416,6 @@ object SparkKineticaTableUtil extends LazyLogging {
         KineticaDDLBuilder.getCreateTableDDL
     }
 
-    def getExistingColumnCharN(columnName: String): Int = synchronized {
-        var iterator: Iterator[String] = null
-        var charValue: Int = 0
-
-        try {
-            iterator = KineticaSparkDFManager.getType.getColumn(columnName).getProperties.iterator()
-        } catch {
-            case e: Exception => throw new KineticaException("Column does not exist");
-        }
-
-        while (iterator.hasNext) {
-            val metaValue: String = iterator.next()
-            if (CharMatcher.JAVA_LETTER
-                .retainFrom(metaValue)
-                .toLowerCase()
-                .matches(".*char.*")) {
-                logger.debug("Field is char")
-                logger.debug(
-                    "Char Length: " + CharMatcher.JAVA_DIGIT.retainFrom(metaValue))
-                charValue = java.lang.Integer
-                    .parseInt(CharMatcher.JAVA_DIGIT.retainFrom(metaValue))
-            }
-        }
-        charValue
-    }
 
     /**
      * Return kinetica Alter DDL from dataframe

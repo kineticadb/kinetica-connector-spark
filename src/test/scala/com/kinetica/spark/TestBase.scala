@@ -258,7 +258,9 @@ trait SparkConnectorTestFixture
         val request = new ClearTableRequest();
         request.setTableName( tableName );
         request.setOptions( m_clearTableOptions );
+        logger.debug( s"Attempting to clear table '$tableName'" );
         m_gpudb.clearTable( request );
+        logger.debug( s"Cleared table '$tableName'" );
         return;
     }
 
@@ -421,45 +423,6 @@ trait SparkConnectorTestFixture
 
     // -------- Kinetica Table Generator Functions for Testing Convenience ---------
 
-    /**
-     * Create a Kinetica table with the given name with two nullable int columns.
-     * Generate the given number of random records.  If a collection name is given,
-     * ensure that Kinetica puts it in that collection.
-     */
-    def createKineticaTableOneIntNullableColumn( tableName: String,
-                                                 collectionName: Option[String],
-                                                 numRows: Int ) : Unit = {
-        
-        // Create the table type
-        var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
-        columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
-
-        // Create the table
-        createKineticaTableWithGivenColumns( tableName, collectionName, columns, numRows );
-        return;
-    }
-
-    
-    /**
-     * Create a Kinetica table with the given name with two nullable int columns.
-     * Generate the given number of random records.  If a collection name is given,
-     * ensure that Kinetica puts it in that collection.
-     */
-    def createKineticaTableTwoIntNullableColumns( tableName: String,
-                                                  collectionName: Option[String],
-                                                  numRows: Int ) : Unit = {
-        
-        // Create the table type
-        var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
-        columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
-        columns += new Type.Column( "y", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
-
-        // Create the table
-        createKineticaTableWithGivenColumns( tableName, collectionName, columns, numRows );
-        return;
-    }
-
-    
 
 
     /**
@@ -481,6 +444,9 @@ trait SparkConnectorTestFixture
             // A collection name is given; set it
             case Some( collName ) => {
                 m_createTableInCollectionOptions( CreateTableRequest.Options.COLLECTION_NAME ) = collName;
+
+                // Will need to delete the collection, too
+                mark_table_for_deletion_at_test_end( collName );
             }
             // No collection name is given, so ensure the relevant property
             // is absent from the options
@@ -501,6 +467,8 @@ trait SparkConnectorTestFixture
         if ( numRows > 0) {
             m_gpudb.insertRecordsRandom( tableName, numRows, null );
         }
+
+        mark_table_for_deletion_at_test_end( tableName );
         return;
     }
 

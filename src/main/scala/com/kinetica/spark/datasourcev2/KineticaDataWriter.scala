@@ -60,11 +60,13 @@ class KineticaDataWriter (schema: StructType, options: Map[String, String], part
         }    
 
     // Keeping some stats
-    private val totalRows        = new LongAccumulator()
-    private val convertedRows    = new LongAccumulator()
-    private val failedConversion = new LongAccumulator()
+    private val totalRows        = new LongAccumulator();
+    private val convertedRows    = new LongAccumulator();
+    private val failedConversion = new LongAccumulator();
 
-
+    private val ingestionUtils = new KineticaSparkDFManager( conf );
+        
+        
     /**
      * Insert a row of record into Kinetica
      */
@@ -83,7 +85,7 @@ class KineticaDataWriter (schema: StructType, options: Map[String, String], part
                     rtemp = record.getAs(column.getName)
                 }
                 if( rtemp != null ) { // This means null value - nothing to do.
-                    if (!KineticaSparkDFManager.putInGenericRecord(genericRecord, rtemp, column)) {
+                    if (!ingestionUtils.putInGenericRecord(genericRecord, rtemp, column)) {
                         failedConversion.add( 1 );
                         isRecordGood = false;
                     }
@@ -120,8 +122,8 @@ class KineticaDataWriter (schema: StructType, options: Map[String, String], part
                                                  totalRows.value, convertedRows.value, failedConversion.value );
         } catch {
             case e: GPUdbException => {
-                logger.warn(s"Error flushing records to Kinetica!");
-                logger.debug(s"Error flushing records to Kinetica: ", e);
+                logger.error(s"Error flushing records to Kinetica: '${e.getMessage()}'");
+                logger.debug(s"Error flushing records to Kinetica; stacktrace for debugging: ", e);
                 if ( conf.failOnError ) {
                     throw e;
                 }

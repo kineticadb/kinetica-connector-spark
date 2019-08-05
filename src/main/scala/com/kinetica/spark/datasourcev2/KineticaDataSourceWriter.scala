@@ -21,6 +21,9 @@ class KineticaDataSourceWriter (schema: StructType, options: DataSourceOptions)
     // Parse the options (need a Scala immutable map)--need for table creation
     val conf: LoaderParams = new LoaderParams(None, options.asMap().asScala.toMap );
 
+    // Ingestion related utility class
+    val ingestionUtils = new KineticaSparkDFManager( conf );
+    
     setup( schema );
 
     private def setup( schema: StructType ): Unit = {
@@ -59,13 +62,6 @@ class KineticaDataSourceWriter (schema: StructType, options: DataSourceOptions)
                 case e: Throwable => throw new RuntimeException("Failed with errors ", e);
             }
         }
-
-        logger.debug("Get Kinetica Table Type");
-        KineticaSparkDFManager.setType( conf );
-
-        logger.debug("Set LoaderParms Table Type");
-        conf.setTableType( KineticaSparkDFManager.getType( conf ) );
-
 
         if (conf.isTableReplicated) {
             logger.info("Table is replicated");

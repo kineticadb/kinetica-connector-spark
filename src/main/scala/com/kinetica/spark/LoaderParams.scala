@@ -3,6 +3,7 @@ package com.kinetica.spark;
 import com.gpudb.Type;
 import com.gpudb.GPUdb;
 import com.gpudb.GPUdbBase;
+import com.gpudb.GPUdbException;
 import com.gpudb.GenericRecord;
 import com.gpudb.protocol.ShowTableRequest;
 import com.gpudb.protocol.ShowTableResponse;
@@ -230,13 +231,16 @@ class LoaderParams extends Serializable with LazyLogging {
         trustStorePassword = params.get(KINETICA_TRUSTSTOREPASSWORD_PARAM).getOrElse(null)
         keyStorePath = params.get(KINETICA_KEYSTOREP12_PARAM).getOrElse(null)
         keyStorePassword = params.get(KINETICA_KEYSTOREPASSWORD_PARAM).getOrElse(null)
+
+        // Set the GPUdb and table type
+        this.cachedGpudb = connect();
+        
     }   // end constructor
 
     // below are not serializable so they are created on demand
     @transient
     private var cachedGpudb: GPUdb = null
 
-    def getType(): Type = this.tableType
 
     def setType(kineticaType: Type): Unit = {
         this.tableType = kineticaType
@@ -244,10 +248,27 @@ class LoaderParams extends Serializable with LazyLogging {
 
     def getGpudb(): GPUdb = {
         if (this.cachedGpudb != null) {
-            this.cachedGpudb
+            return this.cachedGpudb;
         }
-        this.cachedGpudb = connect()
-        this.cachedGpudb
+        this.cachedGpudb = connect();
+        return this.cachedGpudb;
+    }
+
+    def getType(): Type = {
+        if (this.tableType != null) {
+            return this.tableType;
+        }
+        
+        // Need to get a type first
+        try {
+            this.tableType = Type.fromTable(this.cachedGpudb, getTablename);
+            return this.tableType;
+        } catch {
+            case e: GPUdbException => {
+                logger.error( s"Cannot create a type from the table name '$getTablename'; issue: '${e.getMessage()}'" );
+                throw e;
+            }
+        }
     }
 
     private def connect(): GPUdb = {

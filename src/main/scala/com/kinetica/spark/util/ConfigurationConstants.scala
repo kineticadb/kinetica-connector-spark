@@ -24,7 +24,7 @@ object ConfigurationConstants {
     val CONNECTOR_NUMPARTITIONS_PARAM: String = "spark.num_partitions";
     val CONNECTOR_ROWSPERPARTITION_PARAM: String = "spark.rows_per_partition";
 
-    val KINETICA_SSLBYPASSCERTCJECK_PARAM: String = "ssl.bypass_cert_check";
+    val KINETICA_SSLBYPASSCERTCHECK_PARAM: String = "ssl.bypass_cert_check";
     val KINETICA_TRUSTSTOREJKS_PARAM: String = "ssl.truststore_jks";
     val KINETICA_TRUSTSTOREPASSWORD_PARAM: String = "ssl.truststore_password";
     val KINETICA_KEYSTOREP12_PARAM: String = "ssl.keystore_p12";

@@ -133,18 +133,23 @@ trait SparkConnectorTestFixture
         }
         logger.info( s"User given parameter host URL value: ${m_host}" );
 
-        m_gpudb = new GPUdb( m_host );
-
-        // Get the JDBC URL
-        m_jdbc_url = get_jdbc_url();
-        
         // Parse user given username and password, if any
         m_username = System.getProperty("username", "");
         m_password = System.getProperty("password", "");
         logger.info( s"User given parameter username value: ${m_username}" );
 
+        val db_options = new GPUdbBase.Options();
+        if ( !m_username.isEmpty ) {
+            db_options.setUsername( m_username ).setPassword( m_password );
+        }
+        
+        // Create a DB with the given options (username and password, if any)
+        m_gpudb = new GPUdb( m_host, db_options );
+
+        // Get the JDBC URL
+        m_jdbc_url = get_jdbc_url();
+        
         // Create a directory for any test files that may need to be generated
-        // m_temporary_directory = new File( m_temporary_directory_path );
         m_temporary_directory.mkdir();
     }   // end beforeAll
 
@@ -362,7 +367,56 @@ trait SparkConnectorTestFixture
                                immutable.Map[String, String]("delete_all_records" -> "true").asJava );
         return;
     }
+
+
+    /**
+     * Given a table name, names of columns to compare, the sorting column name,
+     * and the expected data, fetch the appropriate data from the table in a sorted
+     * manner and compare to the expected data.  The data comparison happens with assertions;
+     * so no value is returned.
+     */
+    def compare_table_data( table_name: String,
+                            columns_to_compare: List[String],
+                            sort_column_name: String,
+                            expected_data: Seq[scala.collection.immutable.Map[String,Any]] )
+        : Unit = {
+        // Fetch the data from the table first
+        val fetched_records = get_records_by_column( table_name,
+                                                     columns_to_compare,
+                                                     0, GPUdbBase.END_OF_SET.toInt,
+                                                     Option.apply( sort_column_name ),
+                                                     Option.apply( "ascending" ) );
+        // Compare the fetched data per row
+        for ( i <- 0 until expected_data.length ) {
+            // Compare each column for the current row
+            for ( column_name <- columns_to_compare ) {
+                val expected = expected_data(i)(           column_name );
+                val actual   = fetched_records.get(i).get( column_name );
+                assert( (expected == actual),
+                        s"Fetched value of record #$i '$actual' should be '$expected' for '$column_name'" );
+            }
+        }
+    }
+
+
+
+    // --------- Data Generator Functions for Testing Convenience ---------
+
+    /**
+     * Generate a random string of alphanumeric characters of the given length
+     */
+    def getRandomKineticaUsername( length: Integer ) : String = {
+        val chars = ('a' to 'z') ++ ('0' to '9');
+        val sb = new StringBuilder;
+        for ( i <- 1 to length ) {
+            val j = Random.nextInt( chars.length );
+            sb.append( chars( j ) );
+        }
+        return sb.toString();
+    }
+
     
+
     // --------- DataFrame Generator Functions for Testing Convenience ---------
 
     /**

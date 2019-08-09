@@ -1368,13 +1368,13 @@ The following properties control the authentication & connection to *Kinetica*.
 The following apply for the *Data Loader* if SSL is used. A keystore or
 truststore can be specified to override the default from the JVM.
 
-| Property Name               | Default  | Description
-| :---                        | :---     | :---
-| ``ssl.bypass_cert_check``   | *<none>* | Whether CA certificate check should be skipped
-| ``ssl.keystore_p12``        | *<none>* | PKCS#12 key store--only for 2-way SSL
-| ``ssl.keystore_password``   | *<none>* | Key store password
-| ``ssl.truststore_jks``      | *<none>* | JKS trust store for CA certificate check
-| ``ssl.truststore_password`` | *<none>* | Trust store password
+| Property Name               | Default   | Description
+| :---                        | :---      | :---
+| ``ssl.bypass_cert_check``   | ``false`` | Whether CA certificate check should be skipped; this allows for using a self-signed certificate
+| ``ssl.keystore_p12``        | *<none>*  | PKCS#12 key store--only for 2-way SSL
+| ``ssl.keystore_password``   | *<none>*  | Key store password
+| ``ssl.truststore_jks``      | *<none>*  | JKS trust store for CA certificate check
+| ``ssl.truststore_password`` | *<none>*  | Trust store password
 
 ### Data Source/Target Properties
 

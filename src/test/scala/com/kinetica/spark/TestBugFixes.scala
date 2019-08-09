@@ -1,8 +1,13 @@
 package com.kinetica.spark;
 
 import com.gpudb.ColumnProperty;
+import com.gpudb.GPUdb;
+import com.gpudb.GPUdbBase;
 import com.gpudb.Record;
 import com.gpudb.Type;
+import com.gpudb.protocol.GrantPermissionTableRequest;
+import com.gpudb.protocol.ShowSystemPropertiesRequest;
+
 
 import java.nio.ByteBuffer;
 import java.sql.Timestamp;
@@ -118,18 +123,8 @@ trait SparkConnectorBugFixes
             assert( (table_size == data.length), s"Table size ($table_size) should be ${data.length}" );
 
             // Check correctness of the data
-            val columns_to_fetch = ts_col_name :: Nil;
-            val fetched_records = get_records_by_column( tableName,
-                                                         columns_to_fetch,
-                                                         0, 100,
-                                                         Option.apply(sort_col_name),
-                                                         Option.apply("ascending") );
-            for ( i <- 0 until data.length ) {
-                var expected = expected_values(i)( ts_col_name );
-                var actual   = fetched_records.get(i).get( ts_col_name );
-                assert( (expected == actual),
-                        s"Fetched value of record #$i '$actual' should be '$expected' for '$ts_col_name'" );
-            }
+            val columns_to_compare = ts_col_name :: Nil;
+            compare_table_data( tableName, columns_to_compare, sort_col_name, expected_values );
         }  // end test #1 for KECO-1396
 
 
@@ -242,26 +237,8 @@ trait SparkConnectorBugFixes
             assert( (table_size == df.count), s"Table size ($table_size) should be ${df.count}" );
 
             // Check the data
-            val columns_to_fetch = col1_name :: col2_name :: col3_name :: Nil;
-            val fetched_records = get_records_by_column( tableName,
-                                                         columns_to_fetch,
-                                                         0, 100,
-                                                         Option.apply(sort_col_name),
-                                                         Option.apply("ascending") );
-            for ( i <- 0 until 3 ) {
-                var expected = expected_values(i)("date");
-                var actual   = fetched_records.get(i).get("date");
-                assert( (expected == actual),
-                        s"Fetched value of record #$i '$actual' should be '$expected' for 'date'" );
-                expected = expected_values(i)("time");
-                actual   = fetched_records.get(i).get("time");
-                assert( (expected == actual),
-                        s"Fetched value of record #$i '$actual' should be '$expected' for 'time'" );
-                expected = expected_values(i)("datetime");
-                actual   = fetched_records.get(i).get("datetime");
-                assert( (expected == actual),
-                        s"Fetched value of record #$i '$actual' should be '$expected' for 'datetime'" );
-            }
+            val columns_to_compare = col1_name :: col2_name :: col3_name :: Nil;
+            compare_table_data( tableName, columns_to_compare, sort_col_name, expected_values );
         }  // end test #2 for KECO-1396
 
 
@@ -708,45 +685,11 @@ trait SparkConnectorBugFixes
                     s"Table size ($table_size) should be ${expected_values.length}" );
 
             // Check correctness of the data
-            val columns_to_fetch = sort_col_name :: char1_name :: char2_name ::
+            val columns_to_compare = sort_col_name :: char1_name :: char2_name ::
                                    char4_name :: char8_name :: char16_name ::
                                    char32_name :: char64_name :: char128_name ::
                                    char256_name :: str_name :: bytes_name :: Nil;
-            val fetched_records = get_records_by_column( tableName,
-                                                         columns_to_fetch,
-                                                         0, 100,
-                                                         Option.apply( sort_col_name ),
-                                                         Option.apply( "ascending" ) );
-            val charNValues = 1 :: 2 :: 4 :: 8 :: 16 :: 32 :: 64 :: 128 :: 256 :: Nil;
-            for ( i <- 0 until expected_values.length ) {
-                // int column
-                var expected = expected_values(i)( sort_col_name );
-                var actual   = fetched_records.get(i).get( sort_col_name );
-                assert( (expected == actual),
-                        s"Fetched value of record #$i '$actual' should be '$expected' for '$sort_col_name'" );
-
-                // CharN columns
-                for ( N <- charNValues ) {
-                    val columnName = s"char$N";
-                    expected = expected_values(i)( columnName );
-                    actual   = fetched_records.get(i).get( columnName );
-                    assert( (expected == actual),
-                            s"Fetched value of record #$i '$actual' should be '$expected' for '$columnName'" );
-                }
-
-                // Regular string column
-                expected = expected_values(i)( str_name );
-                actual   = fetched_records.get(i).get( str_name );
-                assert( (expected == actual),
-                        s"Fetched value of record #$i '$actual' should be '$expected' for '$str_name'" );
-
-                // Regular bytes column
-                expected = expected_values(i)( bytes_name );
-                actual   = fetched_records.get(i).get( bytes_name );
-                assert( (expected == actual),
-                        s"Fetched value of record #$i '$actual' should be '$expected' for 'bytes_name'" );
-            }
-            
+            compare_table_data( tableName, columns_to_compare, sort_col_name, expected_values );
         }  // end test for KECO-1371
 
 
@@ -1010,24 +953,8 @@ trait SparkConnectorBugFixes
                     s"Table size ($table_size) should be ${expected_values.length}" );
 
             // Check correctness of the data
-            val columns_to_fetch = sort_col_name :: str_col_name :: Nil;
-            val fetched_records = get_records_by_column( tableName,
-                                                         columns_to_fetch,
-                                                         0, 100,
-                                                         Option.apply( sort_col_name ),
-                                                         Option.apply( "ascending" ) );
-            for ( i <- 0 until expected_values.length ) {
-                // int column
-                var expected = expected_values(i)( sort_col_name );
-                var actual   = fetched_records.get(i).get( sort_col_name );
-                assert( (expected == actual),
-                        s"Fetched value of record #$i '$actual' should be '$expected' for '$sort_col_name'" );
-                // First string column
-                expected = expected_values(i)( str_col_name );
-                actual   = fetched_records.get(i).get( str_col_name );
-                assert( (expected == actual),
-                        s"Fetched value of record #$i '$actual' should be '$expected' for '$str_col_name'" );
-            }
+            val columns_to_compare = sort_col_name :: str_col_name :: Nil;
+            compare_table_data( tableName, columns_to_compare, sort_col_name, expected_values );
         }  // end test for KECO-1415
 
 
@@ -1203,31 +1130,118 @@ trait SparkConnectorBugFixes
                     s"Table size ($table_size) should be ${expected_values.length}" );
 
             // Check correctness of the data
-            val columns_to_fetch = int_col_name :: str_col_name1 :: str_col_name2 :: Nil;
-            val fetched_records = get_records_by_column( tableName,
-                                                         columns_to_fetch,
-                                                         0, 100,
-                                                         Option.apply(int_col_name),
-                                                         Option.apply("ascending") );
-            for ( i <- 0 until expected_values.length ) {
-                // int column
-                var expected = expected_values(i)( int_col_name );
-                var actual   = fetched_records.get(i).get( int_col_name );
-                assert( (expected == actual),
-                        s"Fetched value of record #$i '$actual' should be '$expected' for '$int_col_name'" );
-                // First string column
-                expected = expected_values(i)( str_col_name1 );
-                actual   = fetched_records.get(i).get( str_col_name1 );
-                assert( (expected == actual),
-                        s"Fetched value of record #$i '$actual' should be '$expected' for '$str_col_name1'" );
-                // Second string column
-                expected = expected_values(i)( str_col_name2 );
-                actual   = fetched_records.get(i).get( str_col_name2 );
-                assert( (expected == actual),
-                        s"Fetched value of record #$i '$actual' should be '$expected' for '$str_col_name2'" );
-            }
-            
+            val columns_to_compare = int_col_name :: str_col_name1 :: str_col_name2 :: Nil;
+            compare_table_data( tableName, columns_to_compare, int_col_name, expected_values );
         }  // end test for KECO-1457
+
+
+        /**
+         * Test for restricted users
+         */
+        test(s"""$package_description KECO-1481: Users with only table
+             | permissions should be able to ingest and egress without
+             | issues""".stripMargin.replaceAll("\n", "") ) {
+
+            // This test can only be run if certain criteria are met
+            val sys_properties = m_gpudb.showSystemProperties( new ShowSystemPropertiesRequest() )
+                                        .getPropertyMap();
+
+            val require_authentication_flag       = "conf.require_authentication";
+            val require_authentication_flag_value = sys_properties.get( require_authentication_flag );
+            logger.debug( s"Checking that authentication is required: '$require_authentication_flag' = '$require_authentication_flag_value'" );
+            assume( require_authentication_flag_value == "TRUE" );
+            logger.debug( s"Authorization related settings are found to be as expected" );
+
+            // Make sure that the 'admin' username is passed to the test harness
+            // so that internal users can be created
+            logger.info( s"Make sure that the user (test runner) passed in the 'admin' username and password (necessary for creating internal users)" );
+            assume( m_username == "admin" );
+            
+            // Create a type
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( "i", classOf[java.lang.Integer] );
+            columns += new Type.Column( "d", classOf[java.lang.Double] );
+
+            // Create a table
+            val tableName = "keco_1481";
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+
+            // Create a user and a password
+            // ----------------------------
+            // Username can't be pre-existing; in case the test was run before
+            val ingest_username = "spark_test_user_ingest_" + getRandomKineticaUsername( 10 );
+            val ingest_password = "spark_test_password";
+            logger.debug( s"Trying to create internal user '$ingest_username'" );
+            m_gpudb.createUserInternal( ingest_username, ingest_password, null );
+            logger.debug( s"Created internal user '$ingest_username'" );
+
+            // Grant the user admin permissions on the table
+            logger.debug( s"Granting user '$ingest_username' admin permission to table '$tableName'" );
+            m_gpudb.grantPermissionTable( ingest_username,
+                                          GrantPermissionTableRequest.Permission.TABLE_ADMIN,
+                                          tableName,
+                                          null, null );
+
+            // Perform the ingest test
+            // -----------------------
+            // Get the proper ingestion options with the username and password
+            var options = get_default_spark_connector_options();
+            options( "table.create"      ) = "false";
+            options( "table.name"        ) = tableName;
+            options( "database.username" ) = ingest_username;
+            options( "database.password" ) = ingest_password;
+            
+            // Generate some data and the appropriate schema
+            val data = Seq( Row( 0, 1.2 ), Row( 1, 2.4 ), Row( 2, 3.5 ), Row( 3, 4.2 ) );
+            val expected_values = Seq( Map( "i" -> 0, "d" -> 1.2 ),
+                                       Map( "i" -> 1, "d" -> 2.4 ),
+                                       Map( "i" -> 2, "d" -> 3.5 ),
+                                       Map( "i" -> 3, "d" -> 4.2 ) );
+            val schema = StructType( StructField( "i", IntegerType, true ) ::
+                                     StructField( "d", DoubleType, true ) :: Nil );
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe with some values in it with (${df.count} rows)");
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            var table_size = get_table_size( tableName );
+            assert( (table_size == expected_values.length), s"Table size ($table_size) should be ${expected_values.length}" );
+
+            // Check the data
+            val columns_to_compare = "d" :: Nil;
+            compare_table_data( tableName, columns_to_compare, "i", expected_values );
+
+            // Egress test (with a different user)
+            // -----------------------------------
+            // Username can't be pre-existing; in case the test was run before
+            val egress_username = "spark_test_user_egress_" + getRandomKineticaUsername( 10 );
+            val egress_password = "spark_test_password";
+            logger.debug( s"Trying to create internal user for egress test '$egress_username'" );
+            m_gpudb.createUserInternal( egress_username, egress_password, null );
+            logger.debug( s"Created internal user '$egress_username'" );
+
+            // Grant the user admin permissions on the table
+            logger.debug( s"Granting user '$egress_username' admin permission to table '$tableName'" );
+            m_gpudb.grantPermissionTable( egress_username,
+                                          GrantPermissionTableRequest.Permission.TABLE_READ,
+                                          tableName,
+                                          null, null );
+
+            // Get the proper egress options with the username and password
+            var egress_options = get_default_spark_connector_options();
+            egress_options( "table.create"      ) = "false";
+            egress_options( "table.name"        ) = tableName;
+            egress_options( "database.username" ) = egress_username;
+            egress_options( "database.password" ) = egress_password;
+            
+            // Check egress
+            val df_egress = m_sparkSession.sqlContext.read.format( package_to_test )
+                                             .options( egress_options ).load();
+            
+        }  // end test #1 for KECO-1481
 
 
         

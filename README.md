@@ -1365,7 +1365,7 @@ truststore can be specified to override the default from the JVM.
 
 | Property Name               | Default  | Description
 | :---                        | :---     | :---
-| ``ssl.bypass_cert_check``   | *<none>* | Whether CA certificate check should be skipped
+| ``ssl.bypass_cert_check``   | *<none>* | Whether CA certificate check should be skipped; this allows for using a self-signed certificate
 | ``ssl.keystore_p12``        | *<none>* | PKCS#12 key store--only for 2-way SSL
 | ``ssl.keystore_password``   | *<none>* | Key store password
 | ``ssl.truststore_jks``      | *<none>* | JKS trust store for CA certificate check

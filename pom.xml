@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.kinetica</groupId>
     <artifactId>kinetica-spark</artifactId>
-    <version>6.2.2.8</version>
+    <version>6.2.2.9</version>
     <packaging>jar</packaging>
     <name>spark-kinetica</name>
     <description>Tools for reading/writing data from/to Spark into Kinetica</description>
@@ -232,50 +232,51 @@
                 </configuration>
             </plugin>
 
-            <plugin>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <version>${maven-assembly-plugin.version}</version>
-                <executions>
+            <!-- Using the maven-shade-plugin instead -->
+            <!-- <plugin> -->
+            <!--     <artifactId>maven-assembly-plugin</artifactId> -->
+            <!--     <version>${maven-assembly-plugin.version}</version> -->
+            <!--     <executions> -->
 
-                    <!-- create Dependencies jar -->
-                    <execution>
-                        <id>make-assembly</id>
-                        <configuration>
-                            <archive>
-                                <manifest>
-                                    <addClasspath>false</addClasspath>
-                                    <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
-                                    <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
-                                </manifest>
-                                <manifestEntries>
-                                    <Implementation-Version>${version.number}</Implementation-Version>
-                                    <SCM-Revision>${git.commit.id}</SCM-Revision>
-                                </manifestEntries>
-                            </archive>
-                            <!-- <finalName>${project.artifactId}-${spark.version}-${project.version}-connector</finalName> -->
-                            <descriptorRefs>
-                                <descriptorRef>jar-with-dependencies</descriptorRef>
-                            </descriptorRefs>
-                        </configuration>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-                    </execution>
+            <!--         <!-\- create Dependencies jar -\-> -->
+            <!--         <execution> -->
+            <!--             <id>make-assembly</id> -->
+            <!--             <configuration> -->
+            <!--                 <archive> -->
+            <!--                     <manifest> -->
+            <!--                         <addClasspath>false</addClasspath> -->
+            <!--                         <addDefaultImplementationEntries>true</addDefaultImplementationEntries> -->
+            <!--                         <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries> -->
+            <!--                     </manifest> -->
+            <!--                     <manifestEntries> -->
+            <!--                         <Implementation-Version>${version.number}</Implementation-Version> -->
+            <!--                         <SCM-Revision>${git.commit.id}</SCM-Revision> -->
+            <!--                     </manifestEntries> -->
+            <!--                 </archive> -->
+            <!--                 <!-\- <finalName>${project.artifactId}-${spark.version}-${project.version}-connector</finalName> -\-> -->
+            <!--                 <descriptorRefs> -->
+            <!--                     <descriptorRef>jar-with-dependencies</descriptorRef> -->
+            <!--                 </descriptorRefs> -->
+            <!--             </configuration> -->
+            <!--             <phase>package</phase> -->
+            <!--             <goals> -->
+            <!--                 <goal>single</goal> -->
+            <!--             </goals> -->
+            <!--         </execution> -->
 
-                    <!-- create ZIP distribution -->
-                    <execution>
-                        <id>create-archive</id>
-                        <configuration>
-                            <descriptor>src/assembly/dist.xml</descriptor>
-                        </configuration>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
+            <!--         <!-\- create ZIP distribution -\-> -->
+            <!--         <execution> -->
+            <!--             <id>create-archive</id> -->
+            <!--             <configuration> -->
+            <!--                 <descriptor>src/assembly/dist.xml</descriptor> -->
+            <!--             </configuration> -->
+            <!--             <phase>package</phase> -->
+            <!--             <goals> -->
+            <!--                 <goal>single</goal> -->
+            <!--             </goals> -->
+            <!--         </execution> -->
+            <!--     </executions> -->
+            <!-- </plugin> -->
 
             <!--
 
@@ -301,6 +302,45 @@
             -->
 
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>2.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <relocations>
+                                <relocation>
+                                    <pattern>com.typesafe.scalalogging</pattern>
+                                    <shadedPattern>com.kinetica.scalalogging</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.gpudb</pattern>
+                                    <shadedPattern>com.kinetica.kinetica-java-api</shadedPattern>
+                                </relocation>
+                            </relocations>
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>jar-with-dependencies</shadedClassifierName>
+                            <minimizeJar>true</minimizeJar>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
                 <groupId>org.scalatest</groupId>
                 <artifactId>scalatest-maven-plugin</artifactId>
                 <version>1.0</version>
@@ -309,8 +349,6 @@
                     <junitxml>.</junitxml>
                     <filereports>WDF TestSuite.txt</filereports>
                     <argLine>-Durl=${kurl} -Dusername=${kusername} -Dpassword=${kpassword}</argLine>
-                    <!-- <argLine>-Duname=${uname}</argLine> -->
-                    <!--argLine>-Dpassword=${password}</argLine-->
                 </configuration>
                 <executions>
                     <execution>

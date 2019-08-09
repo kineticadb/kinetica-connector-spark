@@ -16,7 +16,7 @@ import com.kinetica.spark.util.ConfigurationConstants._;
 
 import com.kinetica.spark.ssl.X509KeystoreOverride;
 import com.kinetica.spark.ssl.X509TrustManagerOverride;
-import com.kinetica.spark.ssl.X509TustManagerBypass;
+import com.kinetica.spark.ssl.X509TrustManagerBypass;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.KeyManager;
@@ -226,7 +226,7 @@ class LoaderParams extends Serializable with LazyLogging {
         
         
         // SSL
-        bypassCert = params.get(KINETICA_SSLBYPASSCERTCJECK_PARAM).getOrElse("false").toBoolean
+        bypassCert = params.get(KINETICA_SSLBYPASSCERTCHECK_PARAM).getOrElse("false").toBoolean
         trustStorePath =  params.get(KINETICA_TRUSTSTOREJKS_PARAM).getOrElse(null)
         trustStorePassword = params.get(KINETICA_TRUSTSTOREPASSWORD_PARAM).getOrElse(null)
         keyStorePath = params.get(KINETICA_KEYSTOREP12_PARAM).getOrElse(null)
@@ -291,8 +291,16 @@ class LoaderParams extends Serializable with LazyLogging {
         val options: java.util.Map[String, String] = new java.util.HashMap[String, String]()
         options.put(CORE_VERSION, "")
         options.put(VERSION_DATE, "")
-        val rsMap: java.util.Map[String, String] = conn.showSystemProperties(options).getPropertyMap
-        logger.debug("Connected to {} ({})", rsMap.get(CORE_VERSION), rsMap.get(VERSION_DATE))
+        try {
+            val rsMap: java.util.Map[String, String] = conn.showSystemProperties(options).getPropertyMap
+            logger.debug("Connected to {} ({})", rsMap.get(CORE_VERSION), rsMap.get(VERSION_DATE))
+        } catch {
+            case e: GPUdbException => {
+                logger.debug( s"Cannot verify connection health: '${e.getMessage()}'" );
+                throw e;
+            }
+        }
+            
     }
 
     /**
@@ -348,7 +356,7 @@ class LoaderParams extends Serializable with LazyLogging {
     private def setupSSL(): Unit = {
         if (this.bypassCert) {
             logger.info("Installing truststore to bypass certificate check.")
-            X509TustManagerBypass.install()
+            X509TrustManagerBypass.install()
             return
         }
 

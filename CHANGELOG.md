@@ -2,6 +2,18 @@
 
 ## Version 6.2
 
+### Version 6.2.2.9 -- 2019-08-09
+
+#### Changed
+-   Using the `maven-shade-plugin` for building the package; changes:
+    -   Relocated package `com.typesafe.scalalogging` to `com.kinetica.scalalogging`
+    -   Minimized the uber jar to reduce size
+
+#### Fixed
+
+-   Users with the proper table read access can now egress data from the table.
+
+
 ### Version 6.2.2.8 -- 2019-08-03
 
 #### Added

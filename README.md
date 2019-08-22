@@ -1356,7 +1356,7 @@ The following properties control the authentication & connection to *Kinetica*.
 | ``ingester.batch_size``            | ``10000``   | Batch size for bulk inserter
 | ``ingester.flatten_source_schema`` | ``false``   | When ``true``, converts the following complex source data structures into single-table representations:  *struct*, *array*, & *map*.  See [Complex Data Types](#complex-data-types) for details.  **Ingest Processor Only**
 | ``ingester.ip_regex``              | *<none>*    | Regular expression to use in selecting *Kinetica* worker node IP addresses (e.g., ``172.*``) that are accessible by the connector, for multi-head ingest  **Ingest Processor Only**
-| ``ingester.multi_head``            | ``false``   | Enable multi-head ingest; this must be false for replicated tables
+| ``ingester.multi_head``            | ``true``    | Enable multi-head ingestion.
 | ``ingester.fail_on_errors``        | ``false``   | Fail on errors when ingesting data; default behavior is to log warnings and ignoring the bad row
 | ``ingester.num_threads``           | ``4``       | Number of threads for bulk inserter
 | ``ingester.use_snappy``            | ``false``   | Use *snappy* compression during ingestion  **Ingest Processor Only**

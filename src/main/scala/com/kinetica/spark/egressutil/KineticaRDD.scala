@@ -171,7 +171,10 @@ private[kinetica] class KineticaRDD(
             } else {
                 colStrBuilder.append("1")
             }
-            s"/* KI_HINT_MAX_ROWS_TO_FETCH($maxRowsToFetch) */SELECT $colStrBuilder FROM $table $whereClause"
+
+            // Need to quote the table name, but quotess don't work with string
+            // interpolation in scala; the following is correct, though ugly
+            s"""/* KI_HINT_MAX_ROWS_TO_FETCH($maxRowsToFetch) */SELECT $colStrBuilder FROM "$table" $whereClause"""
         }
         log.debug("External Table Query: " + baseQuery)
         baseQuery.toString()

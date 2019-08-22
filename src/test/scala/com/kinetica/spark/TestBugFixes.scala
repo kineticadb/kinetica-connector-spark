@@ -71,7 +71,7 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.TIMESTAMP );
     
             // Create the table (but clear any pre-existing ones)
-            val tableName = "keco_1396_long_timestamp";
+            val tableName = s"keco_1396_long_timestamp_${package_description}";
             logger.debug( s"Table name '${tableName}'" );
             createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
 
@@ -158,7 +158,7 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.DATETIME );
 
             // Create the table (but clear any pre-existing ones)
-            val tableName = "keco_1396_string_date_time_datetime";
+            val tableName = s"keco_1396_string_date_time_datetime_${package_description}";
             logger.debug( s"Table name '${tableName}'" );
             createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
 
@@ -275,7 +275,7 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.TIMESTAMP );
 
             // Create the table (but clear any pre-existing ones)
-            val tableName  = "keco_1396_date_time_datetime_timestamp";
+            val tableName  = s"keco_1396_date_time_datetime_timestamp_${package_description}";
             val numRecords = 10;
             logger.debug( s"Table name '${tableName}'" );
             createKineticaTableWithGivenColumns( tableName, None, columns, numRecords );
@@ -403,7 +403,7 @@ trait SparkConnectorBugFixes
             columns += new Type.Column( "float_col", classOf[java.lang.Float] );
 
             // Create the table
-            val tableName = "keco_1355";
+            val tableName = s"keco_1355_${package_description}";
             logger.debug( s"Table name '${tableName}'" );
             createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
 
@@ -701,7 +701,7 @@ trait SparkConnectorBugFixes
              | passed to the connector""".stripMargin.replaceAll("\n", "") ) {
 
             // Create a table (but clear any pre-existing ones)
-            val tableName = "keco_1402";
+            val tableName = s"keco_1402_${package_description}";
             logger.debug( s"Table name '${tableName}'" );
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
@@ -751,7 +751,7 @@ trait SparkConnectorBugFixes
              | warning""".stripMargin.replaceAll("\n", "") ) {
 
             // Get a table name and clear any pre-existing ones
-            val tableName = "keco_1405";
+            val tableName = s"keco_1405_${package_description}";
             clear_table( tableName );
             logger.debug( s"Table name '${tableName}'" );
 
@@ -976,7 +976,7 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.TIME );
 
             // Create the table (but clear any pre-existing ones)
-            val tableName = "keco_1419_string_time";
+            val tableName = s"keco_1419_string_time_${package_description}";
             logger.debug( s"Table name '${tableName}'" );
             createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
 
@@ -1163,7 +1163,7 @@ trait SparkConnectorBugFixes
             columns += new Type.Column( "d", classOf[java.lang.Double] );
 
             // Create a table
-            val tableName = "keco_1481";
+            val tableName = s"keco_1481_${package_description}";
             createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
 
             // Create a user and a password
@@ -1244,6 +1244,95 @@ trait SparkConnectorBugFixes
         }  // end test #1 for KECO-1481
 
 
+        
+        /**
+         * Test for ingesting into a sharded table.
+         */
+        test(s"""$package_description KECO-1503: Ingestion into a sharded table
+             | should work without issues""".stripMargin.replaceAll("\n", "") ) {
+
+            // We need a table with a float column
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( "i",
+                                        classOf[java.lang.Integer],
+                                        ColumnProperty.SHARD_KEY );
+
+            // Create the table
+            val tableName = s"keco_1503_sharded_${package_description}";
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create" ) = "false";
+            options( "table.name"   ) = tableName;
+
+            logger.debug(s"Test inserting into sharded table");
+
+            // Create some data
+            val numRows = 100;
+            val numColumns = 1;
+            val data = (1 to numRows).map(_ => Seq.fill( numColumns )( Random.nextInt() ) );
+
+            // Generate the schema with a double type
+            val schema = StructType( StructField( "i", IntegerType, true ) :: Nil );
+            
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe (${df.count} rows)");
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            var table_size = get_table_size( tableName );
+            assert( (table_size == numRows), s"Table size ($table_size) should be $numRows" );
+        }   // end test #1 for KECO-1503
+
+
+        /**
+         * Test for ingesting into a replicated table.
+         */
+        test(s"""$package_description KECO-1503: Ingestion into a replicated table
+             | should work without issues""".stripMargin.replaceAll("\n", "") ) {
+
+            // We need a table with a float column
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( "i",
+                                        classOf[java.lang.Integer] );
+
+            // Create the table
+            val tableName = s"keco_1503_replicated_${package_description}";
+            logger.debug( s"Table name '${tableName}'" );
+            createReplicatedKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create" ) = "false";
+            options( "table.name"   ) = tableName;
+
+            logger.debug(s"Test inserting into replicated table");
+
+            // Create some data
+            val numRows = 100;
+            val numColumns = 1;
+            val data = (1 to numRows).map(_ => Seq.fill( numColumns )( Random.nextInt() ) );
+
+            // Generate the schema with a double type
+            val schema = StructType( StructField( "i", IntegerType, true ) :: Nil );
+            
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe (${df.count} rows)");
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            var table_size = get_table_size( tableName );
+            assert( (table_size == numRows), s"Table size ($table_size) should be $numRows" );
+        }   // end test #2 for KECO-1503
+        
         
     }   // end tests for bugFixes
 

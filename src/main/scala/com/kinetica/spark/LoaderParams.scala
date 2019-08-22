@@ -98,7 +98,7 @@ class LoaderParams extends Serializable with LazyLogging {
     var alterTable: Boolean = false
 
     @BeanProperty
-    var multiHead: Boolean = false
+    var multiHead: Boolean = true
 
     @BeanProperty
     var truncateTable: Boolean = false

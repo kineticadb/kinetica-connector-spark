@@ -77,6 +77,11 @@ trait SparkConnectorTestFixture
     val m_createTableInCollectionOptions = GPUdbBase.options( CreateTableRequest.Options.NO_ERROR_IF_EXISTS,
                                                               CreateTableRequest.Options.TRUE ).asScala;
 
+    val m_createReplicatedTableInCollectionOptions = GPUdbBase.options( CreateTableRequest.Options.NO_ERROR_IF_EXISTS,
+                                                                        CreateTableRequest.Options.TRUE,
+                                                                        CreateTableRequest.Options.IS_REPLICATED,
+                                                                        CreateTableRequest.Options.TRUE).asScala;
+
     val m_dropAllRecordsOptions = GPUdbBase.options( DeleteRecordsRequest.Options.DELETE_ALL_RECORDS,
                                                      DeleteRecordsRequest.Options.TRUE );
 
@@ -513,6 +518,55 @@ trait SparkConnectorTestFixture
         // Create the table
         m_gpudb.createTable( tableName, type_.create( m_gpudb ),
                              m_createTableInCollectionOptions );
+        logger.debug( s"Created table $tableName via the Java API" );
+
+        // Generate some random data, if desired by the caller
+        if ( numRows > 0) {
+            m_gpudb.insertRecordsRandom( tableName, numRows, null );
+        }
+
+        mark_table_for_deletion_at_test_end( tableName );
+        return;
+    }
+
+
+    
+    /**
+     * Create a REPLICATED Kinetica table with the given name with the given type.
+     * Optionally generate the given number of random records.  If a
+     * collection name is given, ensure that Kinetica puts
+     * it in that collection.  Clear any pre-existing table with the same
+     * name first.
+     */
+    def createReplicatedKineticaTableWithGivenColumns( tableName: String,
+                                                       collectionName: Option[String],
+                                                       columns: mutable.ListBuffer[Type.Column],
+                                                       numRows: Int ) : Unit = {
+        // Create a type object from the columns
+        val type_ = new Type( columns.toList.asJava );
+        
+        // Set the collection name option for table creation
+        collectionName match {
+            // A collection name is given; set it
+            case Some( collName ) => {
+                m_createReplicatedTableInCollectionOptions( CreateTableRequest.Options.COLLECTION_NAME ) = collName;
+
+                // Will need to delete the collection, too
+                mark_table_for_deletion_at_test_end( collName );
+            }
+            // No collection name is given, so ensure the relevant property
+            // is absent from the options
+            case None => {
+                m_createReplicatedTableInCollectionOptions remove CreateTableRequest.Options.COLLECTION_NAME;
+            }
+        }
+        
+        // Delete any pre-existing table with the same name
+        clear_table( tableName );
+
+        // Create the replicated table
+        m_gpudb.createTable( tableName, type_.create( m_gpudb ),
+                             m_createReplicatedTableInCollectionOptions );
         logger.debug( s"Created table $tableName via the Java API" );
 
         // Generate some random data, if desired by the caller

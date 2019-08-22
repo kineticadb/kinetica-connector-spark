@@ -2,6 +2,12 @@
 
 ## Version 6.2
 
+### Version 6.2.2.10 -- 2019-08-22
+
+#### Changed
+-   Converted the ingest processor default for parameter ``ingester.multi_head``
+    ``true``.
+
 ### Version 6.2.2.9 -- 2019-08-09
 
 #### Changed

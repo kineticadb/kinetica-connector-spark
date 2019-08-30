@@ -38,6 +38,9 @@ class LoaderParams extends Serializable with LazyLogging {
     var kineticaURL: String = null
 
     @BeanProperty
+    var kineticaPrimaryURL: String = null
+
+    @BeanProperty
     var streamURL: String = null
 
     @BeanProperty
@@ -159,11 +162,22 @@ class LoaderParams extends Serializable with LazyLogging {
         require(params != null, "Config cannot be null")
         require(params.nonEmpty, "Config cannot be empty")
 
-        kineticaURL = params.get(KINETICA_URL_PARAM).getOrElse(null)
-        streamURL = params.get(KINETICA_STREAMURL_PARAM).getOrElse(null)
+        // URL related parameters
+        kineticaURL        = params.get(KINETICA_URL_PARAM).getOrElse(null)
+        kineticaPrimaryURL = params.get(KINETICA_PRIMARY_URL_PARAM).getOrElse(null)
+        jdbcURL            = params.get(KINETICA_JDBCURL_PARAM).getOrElse(null)
+        streamURL          = params.get(KINETICA_STREAMURL_PARAM).getOrElse(null)
+
+        // Append the primary URL to the JDBC url, if given any
+        if ( this.jdbcURL != null ) {
+            if ( this.kineticaPrimaryURL != null ) {
+                this.jdbcURL = s"${this.jdbcURL};PrimaryURL=${this.kineticaPrimaryURL}";
+            }
+        }
+
         kusername = params.get(KINETICA_USERNAME_PARAM).getOrElse("")
         kpassword = params.get(KINETICA_PASSWORD_PARAM).getOrElse("")
-        threads =   params.get(KINETICA_NUMTHREADS_PARAM).getOrElse("4").toInt
+        threads   = params.get(KINETICA_NUMTHREADS_PARAM).getOrElse("4").toInt
 
         insertSize = params.get(KINETICA_BATCHSIZE_PARAM).getOrElse("10000").toInt
         updateOnExistingPk = params.get(KINETICA_UPDATEONEXISTINGPK_PARAM).getOrElse("false").toBoolean
@@ -176,7 +190,6 @@ class LoaderParams extends Serializable with LazyLogging {
 
         // Default setting is 0
         retryCount = params.get(KINETICA_RETRYCOUNT_PARAM).getOrElse("0").toInt
-        jdbcURL = params.get(KINETICA_JDBCURL_PARAM).getOrElse(null)
         createTable = params.get(KINETICA_CREATETABLE_PARAM).getOrElse("false").toBoolean
 
         alterTable = params.get(KINETICA_ALTERTABLE_PARAM).getOrElse("false").toBoolean
@@ -272,17 +285,23 @@ class LoaderParams extends Serializable with LazyLogging {
     }
 
     private def connect(): GPUdb = {
-        setupSSL()
-        logger.info("Connecting to {} as <{}>", kineticaURL, kusername)
-        val opts: GPUdbBase.Options = new GPUdbBase.Options()
-        opts.setUsername(kusername)
-        opts.setPassword(kpassword)
-        opts.setThreadCount(threads)
-        opts.setTimeout(timeoutMs)
-        opts.setUseSnappy(useSnappy)
-        val gpudb: GPUdb = new GPUdb(kineticaURL, opts)
-        checkConnection(gpudb)
-        gpudb
+        setupSSL();
+        val opts: GPUdbBase.Options = new GPUdbBase.Options();
+        opts.setUsername(    kusername );
+        opts.setPassword(    kpassword );
+        opts.setThreadCount( threads   );
+        opts.setTimeout(     timeoutMs );
+        opts.setUseSnappy(   useSnappy );
+
+        // Set the primary url, if given any
+        if ( this.kineticaPrimaryURL != null ) {
+            opts.setPrimaryUrl( this.kineticaPrimaryURL );
+        }
+        
+        val gpudb: GPUdb = new GPUdb(kineticaURL, opts);
+        logger.info(s"Connecting to ${gpudb.getURL().toString()} as user <${kusername}>");
+        checkConnection(gpudb);
+        return gpudb;
     }
 
     private def checkConnection(conn: GPUdb): Unit = {

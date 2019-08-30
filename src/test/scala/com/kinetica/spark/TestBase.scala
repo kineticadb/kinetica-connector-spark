@@ -90,10 +90,11 @@ trait SparkConnectorTestFixture
     val m_temporary_directory = new File( m_temporary_directory_path );
 
     // User given properties
-    var m_host : String = "";
-    var m_username : String = "";
-    var m_password : String = "";
-    var m_jdbc_url : String = "";
+    var m_host        : String = "";
+    var m_username    : String = "";
+    var m_password    : String = "";
+    var m_jdbc_url    : String = "";
+    var m_primary_url : String = null;
 
     var m_sparkSession : SparkSession = _;
 
@@ -138,6 +139,14 @@ trait SparkConnectorTestFixture
         }
         logger.info( s"User given parameter host URL value: ${m_host}" );
 
+        // Parse any user given parameters
+        m_primary_url = System.getProperty("primaryURL", null);
+        if ( m_primary_url == null ) {
+            logger.info( s"User given parameter primary URL value: null" );
+        } else {
+            logger.info( s"User given parameter primary URL value: ${m_primary_url}" );
+        }
+
         // Parse user given username and password, if any
         m_username = System.getProperty("username", "");
         m_password = System.getProperty("password", "");
@@ -146,6 +155,9 @@ trait SparkConnectorTestFixture
         val db_options = new GPUdbBase.Options();
         if ( !m_username.isEmpty ) {
             db_options.setUsername( m_username ).setPassword( m_password );
+        }
+        if ( (m_primary_url != null) && !m_primary_url.isEmpty ) {
+            db_options.setPrimaryUrl( m_primary_url );
         }
         
         // Create a DB with the given options (username and password, if any)
@@ -176,6 +188,12 @@ trait SparkConnectorTestFixture
             jdbc_url = s"jdbc:kinetica://${host}:9191";
         else
             jdbc_url = s"jdbc:simba://${host}:9292";
+
+        // Set the primary URL, if any
+        if ( (m_primary_url != null) && !m_primary_url.isEmpty ) {
+            jdbc_url = s"${jdbc_url};PrimaryURL=${m_primary_url}";
+        }
+        
         logger.info(s"JDBC URL: ${jdbc_url}");
         return jdbc_url;
     }
@@ -216,6 +234,11 @@ trait SparkConnectorTestFixture
                                        "table.append_new_columns" -> "false",
                                        "table.map_columns_by_name" -> "true"
                                        );
+
+        // Set the primary URL, if any
+        if ( (m_primary_url != null) && !m_primary_url.isEmpty ) {
+            options( "database.primary_url" ) = m_primary_url;
+        }
         return options;
     }
 
@@ -351,7 +374,6 @@ trait SparkConnectorTestFixture
                          sortByColumn.get );
             options.put( GetRecordsByColumnRequest.Options.SORT_ORDER, sortOrder.get );
         }
-        logger.info(s"Sending options to /get/records/bycolumn: ${options.toString()}"); // debug~~~~~~`
 
         // Set up the request
         val getRecordsByColumnReq = new GetRecordsByColumnRequest( table_name, column_names,

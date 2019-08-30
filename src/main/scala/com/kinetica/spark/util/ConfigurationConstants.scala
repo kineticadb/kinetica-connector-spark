@@ -5,6 +5,7 @@ object ConfigurationConstants {
     val SPARK_DATASOURCE_VERSION: String = "spark.datasource_api_version";
     
     val KINETICA_URL_PARAM: String = "database.url";
+    val KINETICA_PRIMARY_URL_PARAM: String = "database.primary_url";
     val KINETICA_JDBCURL_PARAM: String = "database.jdbc_url";
     val KINETICA_STREAMURL_PARAM: String = "database.stream_url";
     val KINETICA_USERNAME_PARAM: String = "database.username";

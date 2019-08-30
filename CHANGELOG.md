@@ -2,6 +2,13 @@
 
 ## Version 7.0
 
+### Version 7.0.3.6 -- 2019-08-30
+
+#### Added
+-   Added an ingest processor parameter ``database.primary_url`` that allows the
+    user to specify primary Kinetica server cluster.
+
+
 ### Version 7.0.3.5 -- 2019-08-22
 
 #### Changed

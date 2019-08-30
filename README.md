@@ -1347,6 +1347,7 @@ The following properties control the authentication & connection to *Kinetica*.
 | :---                               | :---        | :---
 | ``database.url``                   | *<none>*    | URL of *Kinetica* instance (http or https)
 | ``database.jdbc_url``              | *<none>*    | JDBC URL of the *Kinetica ODBC Server*  **Ingest/Egress Processor Only**
+| ``database.primary_url``           | *<none>*    | URL of the primary/active *Kinetica Server* cluster  **Ingest/Egress Processor Only**
 | ``database.stream_url``            | *<none>*    | ZMQ URL of the *Kinetica* table monitor  **Streaming Processor Only**
 | ``database.username``              | *<none>*    | *Kinetica* login username
 | ``database.password``              | *<none>*    | *Kinetica* login password

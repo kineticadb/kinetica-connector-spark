@@ -2,6 +2,21 @@
 
 ## Version 6.2
 
+### Version 6.2.3.0 -- 2019-09-12
+
+#### Added
+-   New SSL related parameters for the ODBC server (required only if using HTTPS):
+    - ``ssl.odbc_truststore_jks``
+    - ``ssl.odbc_truststore_password``
+
+
+#### Deprecated
+-   SSL certification verification bypass flag ``ssl.bypass_cert_check``; the
+    connector still accepts this flag, but it is now internally ignored.  The
+    bypassing happens automatically if the JKS truststore is not passed via the
+    ``ssl.truststore_jks`` flag (which is optional).
+
+
 ### Version 6.2.2.10 -- 2019-08-22
 
 #### Changed

@@ -1363,13 +1363,15 @@ The following properties control the authentication & connection to *Kinetica*.
 The following apply for the *Data Loader* if SSL is used. A keystore or
 truststore can be specified to override the default from the JVM.
 
-| Property Name               | Default   | Description
-| :---                        | :---      | :---
-| ``ssl.bypass_cert_check``   | ``false`` | Whether CA certificate check should be skipped; this allows for using a self-signed certificate
-| ``ssl.keystore_p12``        | *<none>*  | PKCS#12 key store--only for 2-way SSL
-| ``ssl.keystore_password``   | *<none>*  | Key store password
-| ``ssl.truststore_jks``      | *<none>*  | JKS trust store for CA certificate check
-| ``ssl.truststore_password`` | *<none>*  | Trust store password
+| Property Name                    | Default   | Description
+| :---                             | :---      | :---
+| ``ssl.bypass_cert_check``        | ``false`` | Deprecated option since version 6.2.3.0.  Internally ignored.  If ``ssl.truststore_jks`` is not provided, then the Kinetica server's certificate will not be verified.
+| ``ssl.keystore_p12``             | *<none>*  | PKCS#12 key store--only for 2-way SSL
+| ``ssl.keystore_password``        | *<none>*  | Key store password
+| ``ssl.truststore_jks``           | *<none>*  | JKS trust store for CA certificate check for the HTTPD server.  If not provided, then the Kinetica server's certificate will not be verified.  To allow for a self-signed certificate, omit this option.
+| ``ssl.truststore_password``      | *<none>*  | The HTTPD server trust store password.
+| ``ssl.odbc_truststore_jks``      | *<none>*  | JKS trust store for CA certificate check for the ODBC server.  This applies only to 6.2 versions of Kinetica.
+| ``ssl.odbc_truststore_password`` | *<none>*  | The ODBC server trust store password.
 
 ### Data Source/Target Properties
 

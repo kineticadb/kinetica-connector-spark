@@ -27,6 +27,8 @@ object ConfigurationConstants {
     val KINETICA_SSLBYPASSCERTCHECK_PARAM: String = "ssl.bypass_cert_check";
     val KINETICA_TRUSTSTOREJKS_PARAM: String = "ssl.truststore_jks";
     val KINETICA_TRUSTSTOREPASSWORD_PARAM: String = "ssl.truststore_password";
+    val KINETICA_ODBC_TRUSTSTOREJKS_PARAM: String = "ssl.odbc_truststore_jks";
+    val KINETICA_ODBC_TRUSTSTOREPASSWORD_PARAM: String = "ssl.odbc_truststore_password";
     val KINETICA_KEYSTOREP12_PARAM: String = "ssl.keystore_p12";
     val KINETICA_KEYSTOREPASSWORD_PARAM: String = "ssl.keystore_password";
 

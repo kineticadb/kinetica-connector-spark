@@ -94,6 +94,11 @@ trait SparkConnectorTestFixture
     var m_username : String = "";
     var m_password : String = "";
     var m_jdbc_url : String = "";
+    var m_httpd_trust_store_path : String = "";
+    var m_httpd_trust_store_pwd  : String = "";
+    var m_jdbc_trust_store_path  : String = "";
+    var m_jdbc_trust_store_pwd   : String = "";
+    var m_bypass_ssl_cert_check     : Boolean = false;
 
     var m_sparkSession : SparkSession = _;
 
@@ -143,7 +148,29 @@ trait SparkConnectorTestFixture
         m_password = System.getProperty("password", "");
         logger.info( s"User given parameter username value: ${m_username}" );
 
-        val db_options = new GPUdbBase.Options();
+        // SSL certificate trust store related
+        m_httpd_trust_store_path = System.getProperty("httpdTrustStorePath", "");
+        m_httpd_trust_store_pwd  = System.getProperty("httpdTrustStorePassword", "");
+        m_jdbc_trust_store_path  = System.getProperty("jdbcTrustStorePath", "");
+        m_jdbc_trust_store_pwd   = System.getProperty("jdbcTrustStorePassword", "");
+
+        logger.info( s"User given flag for HTTPD cert verification trust store path:     '${m_httpd_trust_store_path}'" );
+        logger.info( s"User given flag for HTTPD cert verification trust store password: '${m_httpd_trust_store_pwd}'" );
+        logger.info( s"User given flag for ODBC cert verification trust store path:      '${m_jdbc_trust_store_path}'" );
+        logger.info( s"User given flag for ODBC cert verification trust store password:  '${m_jdbc_trust_store_pwd}'" );
+        
+        // The Java API needs to know if the SSL certificate verification
+        // needs to be bypassed (will do only if no HTTPD trust store is given.
+        m_bypass_ssl_cert_check = (m_httpd_trust_store_path.isEmpty || m_httpd_trust_store_pwd.isEmpty);
+        logger.info( s"Passing value for SSL cert verification *bypassing* flag to the Java API: ${m_bypass_ssl_cert_check}" );
+
+        if ( !m_bypass_ssl_cert_check ) {
+            logger.info( s"Setting system properties with the trust store path and password" );
+            System.setProperty("javax.net.ssl.trustStore", m_httpd_trust_store_path);
+            System.setProperty("javax.net.ssl.trustStorePassword", m_httpd_trust_store_pwd);
+        }
+        
+        val db_options = new GPUdbBase.Options().setBypassSslCertCheck( m_bypass_ssl_cert_check );
         if ( !m_username.isEmpty ) {
             db_options.setUsername( m_username ).setPassword( m_password );
         }
@@ -172,10 +199,11 @@ trait SparkConnectorTestFixture
         logger.info(s"Kinetica Version: ${version}");
         val host = m_gpudb.getURL().getHost();
         var jdbc_url : String = "";
-        if (s"${version(0)}".toInt > 6)
+        if (s"${version(0)}".toInt > 6) {
             jdbc_url = s"jdbc:kinetica://${host}:9191";
-        else
+        } else {
             jdbc_url = s"jdbc:simba://${host}:9292";
+        }
         logger.info(s"JDBC URL: ${jdbc_url}");
         return jdbc_url;
     }
@@ -215,7 +243,20 @@ trait SparkConnectorTestFixture
                                        "table.use_templates" -> "false",
                                        "table.append_new_columns" -> "false",
                                        "table.map_columns_by_name" -> "true"
-                                       );
+                                );
+        // Set SSL related flags only if provided by the user
+        if ( !m_httpd_trust_store_path.isEmpty ) {
+            options( "ssl.truststore_jks" ) = m_httpd_trust_store_path;
+        }
+        if ( !m_httpd_trust_store_pwd.isEmpty ) {
+            options( "ssl.truststore_password" ) = m_httpd_trust_store_pwd;
+        }
+        if ( !m_jdbc_trust_store_path.isEmpty ) {
+            options( "ssl.odbc_truststore_jks" ) = m_jdbc_trust_store_path;
+        }
+        if ( !m_jdbc_trust_store_pwd.isEmpty ) {
+            options( "ssl.odbc_truststore_password" ) = m_jdbc_trust_store_pwd;
+        }
         return options;
     }
 

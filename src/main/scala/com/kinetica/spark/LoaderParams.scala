@@ -116,6 +116,12 @@ class LoaderParams extends Serializable with LazyLogging {
     var trustStorePassword: String = null
 
     @BeanProperty
+    var jdbcTrustStorePath: String = null
+
+    @BeanProperty
+    var jdbcTrustStorePassword: String = null
+
+    @BeanProperty
     var keyStorePath: String = null
 
     @BeanProperty
@@ -159,8 +165,54 @@ class LoaderParams extends Serializable with LazyLogging {
         require(params != null, "Config cannot be null")
         require(params.nonEmpty, "Config cannot be empty")
 
+        // SSL related parameters
+        // bypassCert = params.get(KINETICA_SSLBYPASSCERTCHECK_PARAM).getOrElse("false").toBoolean
+        trustStorePath         = params.get( KINETICA_TRUSTSTOREJKS_PARAM ).getOrElse(null)
+        trustStorePassword     = params.get( KINETICA_TRUSTSTOREPASSWORD_PARAM ).getOrElse(null)
+        jdbcTrustStorePath     = params.get( KINETICA_ODBC_TRUSTSTOREJKS_PARAM ).getOrElse(null)
+        jdbcTrustStorePassword = params.get( KINETICA_ODBC_TRUSTSTOREPASSWORD_PARAM ).getOrElse(null)
+        keyStorePath           = params.get( KINETICA_KEYSTOREP12_PARAM ).getOrElse(null)
+        keyStorePassword       = params.get( KINETICA_KEYSTOREPASSWORD_PARAM ).getOrElse(null)
+
+        // We will bypass the HTTPD certificate verification only if no
+        // truststore path is given
+        bypassCert = (this.trustStorePath == null);
+        
+        // URLs
         kineticaURL = params.get(KINETICA_URL_PARAM).getOrElse(null)
+        jdbcURL = params.get(KINETICA_JDBCURL_PARAM).getOrElse(null)
         streamURL = params.get(KINETICA_STREAMURL_PARAM).getOrElse(null)
+
+        // Handle SSL cert verification bypassing in the JDBC connector, if needed
+        if ( jdbcURL != null ) {
+            // We're searching the Kinetica URL since the JDBC URL won't have the
+            // internet protocol in it
+            if ( kineticaURL.contains( "https" ) ) {
+                // Using HTTPS; must have the JDBC trust store path and the password
+                if ( (this.jdbcTrustStorePath == null)
+                     || (this.jdbcTrustStorePassword == null) ){
+                    val errorMsg = (s"Using SSL; both the `${KINETICA_ODBC_TRUSTSTOREJKS_PARAM}` "
+                                    + s" and `${KINETICA_ODBC_TRUSTSTOREPASSWORD_PARAM}` "
+                                    + " parameters are required, but not given.");
+                    logger.error( errorMsg );
+                    throw new Exception( errorMsg )
+                }
+                
+                // For HTTPS URLs only, use SSL between the JDBC client and
+                // the ODBC server
+                jdbcURL = s"${this.jdbcURL};UseSSL=Enabled;SSLAllowHostMismatch=1;TrustedStorePath=${this.jdbcTrustStorePath};TrustedStorePassword=${this.jdbcTrustStorePassword}";
+
+                // Relax some JDBC cert verification parameters if the HTTPD cert
+                // isn't being verified
+                if ( bypassCert ) {
+                    jdbcURL = s"${this.jdbcURL};AllowHostMismatch=1;AllowSelfSignedCert=1;AllowExpiredCert=1;";
+                    // this.jdbcURL = s"${this.jdbcURL};SslAllowHostMismatch=1"; // for 7.0
+                }
+            }
+        }
+        // Note: Not throwing an exception if the JDBC URL is not given since it
+        //       is not required in every execution path
+        
         kusername = params.get(KINETICA_USERNAME_PARAM).getOrElse("")
         kpassword = params.get(KINETICA_PASSWORD_PARAM).getOrElse("")
         threads =   params.get(KINETICA_NUMTHREADS_PARAM).getOrElse("4").toInt
@@ -176,7 +228,6 @@ class LoaderParams extends Serializable with LazyLogging {
 
         // Default setting is 0
         retryCount = params.get(KINETICA_RETRYCOUNT_PARAM).getOrElse("0").toInt
-        jdbcURL = params.get(KINETICA_JDBCURL_PARAM).getOrElse(null)
         createTable = params.get(KINETICA_CREATETABLE_PARAM).getOrElse("false").toBoolean
 
         alterTable = params.get(KINETICA_ALTERTABLE_PARAM).getOrElse("false").toBoolean
@@ -225,13 +276,6 @@ class LoaderParams extends Serializable with LazyLogging {
         }
         
         
-        // SSL
-        bypassCert = params.get(KINETICA_SSLBYPASSCERTCHECK_PARAM).getOrElse("false").toBoolean
-        trustStorePath =  params.get(KINETICA_TRUSTSTOREJKS_PARAM).getOrElse(null)
-        trustStorePassword = params.get(KINETICA_TRUSTSTOREPASSWORD_PARAM).getOrElse(null)
-        keyStorePath = params.get(KINETICA_KEYSTOREP12_PARAM).getOrElse(null)
-        keyStorePassword = params.get(KINETICA_KEYSTOREPASSWORD_PARAM).getOrElse(null)
-
         // Set the GPUdb and table type
         this.cachedGpudb = connect();
         
@@ -274,15 +318,16 @@ class LoaderParams extends Serializable with LazyLogging {
     private def connect(): GPUdb = {
         setupSSL()
         logger.debug("Connecting to {} as <{}>", kineticaURL, kusername)
-        val opts: GPUdbBase.Options = new GPUdbBase.Options()
-        opts.setUsername(kusername)
-        opts.setPassword(kpassword)
-        opts.setThreadCount(threads)
-        opts.setTimeout(timeoutMs)
-        opts.setUseSnappy(useSnappy)
-        val gpudb: GPUdb = new GPUdb(kineticaURL, opts)
-        checkConnection(gpudb)
-        gpudb
+        val opts: GPUdbBase.Options = new GPUdbBase.Options();
+        opts.setUsername( kusername );
+        opts.setPassword( kpassword );
+        opts.setThreadCount( threads );
+        opts.setTimeout( timeoutMs );
+        opts.setUseSnappy( useSnappy );
+        opts.setBypassSslCertCheck( this.bypassCert ); // Default is false
+        val gpudb: GPUdb = new GPUdb(kineticaURL, opts);
+        checkConnection(gpudb);
+        gpudb;
     }
 
     private def checkConnection(conn: GPUdb): Unit = {

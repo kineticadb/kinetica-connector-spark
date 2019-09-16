@@ -162,21 +162,59 @@ class LoaderParams extends Serializable with LazyLogging {
         require(params != null, "Config cannot be null")
         require(params.nonEmpty, "Config cannot be empty")
 
+        // SSL related parameters
+        // bypassCert = params.get(KINETICA_SSLBYPASSCERTCHECK_PARAM).getOrElse("false").toBoolean
+        trustStorePath         = params.get( KINETICA_TRUSTSTOREJKS_PARAM ).getOrElse(null)
+        trustStorePassword     = params.get( KINETICA_TRUSTSTOREPASSWORD_PARAM ).getOrElse(null)
+        keyStorePath           = params.get( KINETICA_KEYSTOREP12_PARAM ).getOrElse(null)
+        keyStorePassword       = params.get( KINETICA_KEYSTOREPASSWORD_PARAM ).getOrElse(null)
+
+        // We will bypass the HTTPD certificate verification only if no
+        // truststore path is given
+        bypassCert = (this.trustStorePath == null);
+        
         // URL related parameters
         kineticaURL        = params.get(KINETICA_URL_PARAM).getOrElse(null)
         kineticaPrimaryURL = params.get(KINETICA_PRIMARY_URL_PARAM).getOrElse(null)
         jdbcURL            = params.get(KINETICA_JDBCURL_PARAM).getOrElse(null)
         streamURL          = params.get(KINETICA_STREAMURL_PARAM).getOrElse(null)
 
-        // Append the primary URL to the JDBC url, if given any
-        if ( this.jdbcURL != null ) {
+        // Username and password
+        kusername = params.get(KINETICA_USERNAME_PARAM).getOrElse("")
+        kpassword = params.get(KINETICA_PASSWORD_PARAM).getOrElse("")
+        
+        // Modify the JDBC connection string as needed (based on options)
+        if ( jdbcURL != null ) {
+            // Add the primary cluster URL, if given any
             if ( this.kineticaPrimaryURL != null ) {
                 this.jdbcURL = s"${this.jdbcURL};PrimaryURL=${this.kineticaPrimaryURL}";
             }
-        }
 
-        kusername = params.get(KINETICA_USERNAME_PARAM).getOrElse("")
-        kpassword = params.get(KINETICA_PASSWORD_PARAM).getOrElse("")
+            // We're searching the Kinetica URL since the JDBC URL won't have the
+            // internet protocol in it
+            if ( kineticaURL.contains( "https" ) ) {
+                // For HTTPS URLs only, use SSL between the JDBC client and
+                // the Kinetica server
+                jdbcURL = s"${this.jdbcURL};SSLAllowHostMismatch=1";
+
+                // Relax some JDBC cert verification parameters if the HTTPD cert
+                // isn't being verified
+                if ( bypassCert ) {
+                    jdbcURL = s"${this.jdbcURL};AllowHostMismatch=1;AllowSelfSignedCert=1;AllowExpiredCert=1;";
+                } else {
+                    jdbcURL = s"${this.jdbcURL};SslCACertPath=${this.trustStorePath};SslCACert=${this.trustStorePassword}";
+                }
+            }
+
+            // Handle the username and password
+            if ( ( kusername != null ) && ( kpassword != null ) ) {
+                jdbcURL = s"${this.jdbcURL};UID=${this.kusername};PWD=${this.kpassword}";
+            }
+            logger.info(s"Using JDBC connection string: ${this.jdbcURL}");
+        }
+        // Note: Not throwing an exception if the JDBC URL is not given since it
+        //       is not required in every execution path
+        
         threads   = params.get(KINETICA_NUMTHREADS_PARAM).getOrElse("4").toInt
 
         insertSize = params.get(KINETICA_BATCHSIZE_PARAM).getOrElse("10000").toInt
@@ -238,13 +276,6 @@ class LoaderParams extends Serializable with LazyLogging {
         }
         
         
-        // SSL
-        bypassCert = params.get(KINETICA_SSLBYPASSCERTCHECK_PARAM).getOrElse("false").toBoolean
-        trustStorePath =  params.get(KINETICA_TRUSTSTOREJKS_PARAM).getOrElse(null)
-        trustStorePassword = params.get(KINETICA_TRUSTSTOREPASSWORD_PARAM).getOrElse(null)
-        keyStorePath = params.get(KINETICA_KEYSTOREP12_PARAM).getOrElse(null)
-        keyStorePassword = params.get(KINETICA_KEYSTOREPASSWORD_PARAM).getOrElse(null)
-
         // Set the GPUdb and table type
         this.cachedGpudb = connect();
         
@@ -292,6 +323,7 @@ class LoaderParams extends Serializable with LazyLogging {
         opts.setThreadCount( threads   );
         opts.setTimeout(     timeoutMs );
         opts.setUseSnappy(   useSnappy );
+        opts.setBypassSslCertCheck( this.bypassCert ); // Default is false
 
         // Set the primary url, if given any
         if ( this.kineticaPrimaryURL != null ) {

@@ -1361,6 +1361,7 @@ The following properties control the authentication & connection to *Kinetica*.
 | ``ingester.fail_on_errors``        | ``false``   | Fail on errors when ingesting data; default behavior is to log warnings and ignoring the bad row
 | ``ingester.num_threads``           | ``4``       | Number of threads for bulk inserter
 | ``ingester.use_snappy``            | ``false``   | Use *snappy* compression during ingestion  **Ingest Processor Only**
+| ``ingester.use_timezone``          | *<none>*    | Use the given timezone when ingesting any date/time/datetime data.  By default, the system timezone will be used.  Allowed formats are standard timezone formats; e.g. ``America/Pacific``, ``EDT``, ``GMT+02:00``, ``GMT-0730``.  Local date/time will not be affected by this setting; only timestamps with a specified offset will be interpreted and saved in the given timezone.  For example, if ``GMT-0500`` is the time zone, and the timestamp value is ``2019-07-21 13:13:13+02:00``, it will be stored in the database as ``2019-07-21 06:13:13``.
 | ``spark.num_partitions``           | ``4``       | Number of *Spark* partitions to use for extracting data  **Egress Processor Only**
 | ``spark.rows_per_partition``       | *<none>*    | Number of records per partition *Spark* should segment data into before loading into *Kinetica*; if not specified, *Spark* will use the same number of partitions it used to retrieve the source data  **Data Loader Only**
 | ``spark.datasource_api_version``   | ``v1``      | Which Spark DataSource API to use (accepted values: ``v1`` and ``v2``). **Data Loader Only**
@@ -1369,13 +1370,13 @@ The following properties control the authentication & connection to *Kinetica*.
 The following apply for the *Data Loader* if SSL is used. A keystore or
 truststore can be specified to override the default from the JVM.
 
-| Property Name               | Default   | Description
-| :---                        | :---      | :---
-| ``ssl.bypass_cert_check``   | ``false`` | Whether CA certificate check should be skipped; this allows for using a self-signed certificate
-| ``ssl.keystore_p12``        | *<none>*  | PKCS#12 key store--only for 2-way SSL
-| ``ssl.keystore_password``   | *<none>*  | Key store password
-| ``ssl.truststore_jks``      | *<none>*  | JKS trust store for CA certificate check
-| ``ssl.truststore_password`` | *<none>*  | Trust store password
+| Property Name                    | Default   | Description
+| :---                             | :---      | :---
+| ``ssl.bypass_cert_check``        | ``false`` | Deprecated option since version 7.0.4.0.  Internally ignored.  If ``ssl.truststore_jks`` is not provided, then the Kinetica server's certificate will not be verified.
+| ``ssl.keystore_p12``             | *<none>*  | PKCS#12 key store--only for 2-way SSL
+| ``ssl.keystore_password``        | *<none>*  | Key store password
+| ``ssl.truststore_jks``           | *<none>*  | JKS trust store for CA certificate check for the HTTPD server.  If not provided, then the Kinetica server's certificate will not be verified.  To allow for a self-signed certificate, omit this option.
+| ``ssl.truststore_password``      | *<none>*  | The HTTPD server trust store password.
 
 ### Data Source/Target Properties
 

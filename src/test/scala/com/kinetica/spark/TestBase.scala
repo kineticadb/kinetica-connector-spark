@@ -95,6 +95,9 @@ trait SparkConnectorTestFixture
     var m_password    : String = "";
     var m_jdbc_url    : String = "";
     var m_primary_url : String = null;
+    var m_httpd_trust_store_path : String = "";
+    var m_httpd_trust_store_pwd  : String = "";
+    var m_bypass_ssl_cert_check  : Boolean = false;
 
     var m_sparkSession : SparkSession = _;
 
@@ -152,7 +155,25 @@ trait SparkConnectorTestFixture
         m_password = System.getProperty("password", "");
         logger.info( s"User given parameter username value: ${m_username}" );
 
-        val db_options = new GPUdbBase.Options();
+        // SSL certificate trust store related
+        m_httpd_trust_store_path = System.getProperty("httpdTrustStorePath", "");
+        m_httpd_trust_store_pwd  = System.getProperty("httpdTrustStorePassword", "");
+
+        logger.info( s"User given flag for HTTPD cert verification trust store path:     '${m_httpd_trust_store_path}'" );
+        logger.info( s"User given flag for HTTPD cert verification trust store password: '${m_httpd_trust_store_pwd}'" );
+        
+        // The Java API needs to know if the SSL certificate verification
+        // needs to be bypassed (will do only if no HTTPD trust store is given.
+        m_bypass_ssl_cert_check = (m_httpd_trust_store_path.isEmpty || m_httpd_trust_store_pwd.isEmpty);
+        logger.info( s"Passing value for SSL cert verification *bypassing* flag to the Java API: ${m_bypass_ssl_cert_check}" );
+
+        if ( !m_bypass_ssl_cert_check ) {
+            logger.info( s"Setting system properties with the trust store path and password" );
+            System.setProperty("javax.net.ssl.trustStore", m_httpd_trust_store_path);
+            System.setProperty("javax.net.ssl.trustStorePassword", m_httpd_trust_store_pwd);
+        }
+        
+        val db_options = new GPUdbBase.Options().setBypassSslCertCheck( m_bypass_ssl_cert_check );
         if ( !m_username.isEmpty ) {
             db_options.setUsername( m_username ).setPassword( m_password );
         }
@@ -184,10 +205,15 @@ trait SparkConnectorTestFixture
         logger.info(s"Kinetica Version: ${version}");
         val host = m_gpudb.getURL().getHost();
         var jdbc_url : String = "";
-        if (s"${version(0)}".toInt > 6)
-            jdbc_url = s"jdbc:kinetica://${host}:9191";
-        else
+        if (s"${version(0)}".toInt > 6) {
+            if ( m_gpudb.getURL().getProtocol() == "https" ) {
+                jdbc_url = s"jdbc:kinetica:URL=${m_gpudb.getURL()}";
+            } else {
+                jdbc_url = s"jdbc:kinetica://${host}:9191";
+            }
+        } else {
             jdbc_url = s"jdbc:simba://${host}:9292";
+        }
 
         // Set the primary URL, if any
         if ( (m_primary_url != null) && !m_primary_url.isEmpty ) {
@@ -238,6 +264,13 @@ trait SparkConnectorTestFixture
         // Set the primary URL, if any
         if ( (m_primary_url != null) && !m_primary_url.isEmpty ) {
             options( "database.primary_url" ) = m_primary_url;
+        }
+        // Set SSL related flags only if provided by the user
+        if ( !m_httpd_trust_store_path.isEmpty ) {
+            options( "ssl.truststore_jks" ) = m_httpd_trust_store_path;
+        }
+        if ( !m_httpd_trust_store_pwd.isEmpty ) {
+            options( "ssl.truststore_password" ) = m_httpd_trust_store_pwd;
         }
         return options;
     }

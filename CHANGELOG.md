@@ -2,6 +2,15 @@
 
 ## Version 7.0
 
+### Version 7.0.4.0 -- 2019-09-16
+
+#### Deprecated
+-   SSL certification verification bypass flag ``ssl.bypass_cert_check``; the
+    connector still accepts this flag, but it is now internally ignored.  The
+    bypassing happens automatically if the JKS truststore is not passed via the
+    ``ssl.truststore_jks`` flag (which is optional).
+
+
 ### Version 7.0.3.6 -- 2019-08-30
 
 #### Added

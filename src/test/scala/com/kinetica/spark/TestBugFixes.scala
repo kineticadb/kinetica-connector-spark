@@ -869,7 +869,7 @@ trait SparkConnectorBugFixes
 
             // Test Case 1: Write to the table with fail-fast mode
             logger.info( s"Test Case 1: Write to the table with fail-fast mode" );
-            options( "table.fail_on_errors" ) = "true";
+            options( "ingester.fail_on_errors" ) = "true";
             logger.debug( s"Writing to table ${tableName} via the connector" );
 
             try {
@@ -877,12 +877,25 @@ trait SparkConnectorBugFixes
                 assert( (false), s"Nul value for non-nullable column should fail for failfast mode" );
             } catch {
                 case e: com.kinetica.spark.util.table.KineticaException => {
-                    logger.debug( s"Got KINETICA exception {}", e );
-                    assert( (true), s"Nul value for non-nullable column should fail for failfast mode" );
+                    logger.debug( s"Got KINETICA exception: '${e.toString()}'" );
+                    assert( (e.toString() contains "Could not encode object"),
+                            s"Nul value for non-nullable column should fail for failfast mode" );
+                }
+                case e: com.gpudb.GPUdbException => {
+                    logger.debug( s"Got KINETICA Java API exception: '${e.getMessage()}'" );
+                    assert( (e.getMessage() contains "Could not encode object"),
+                            s"Nul value for non-nullable column should fail for failfast mode" );
                 }
                 case e2: java.lang.RuntimeException => {
-                    logger.debug( s"Got RUNTIME exception {}", e2 );
-                    assert( (true), s"Nul value for non-nullable column should fail for failfast mode" );
+                    logger.debug( s"Got RUNTIME exception: '${e2.toString()}'" );
+                    assert( (e2.toString() contains "Could not encode object"),
+                            s"Nul value for non-nullable column should fail for failfast mode" );
+                }
+                case e2: Exception => {
+                    logger.debug( s"Got SCALA exception: '${e2.toString()}'" );
+                    assert( ( (e2.toString() contains "Could not encode object") // package v1 propagates GPUdbException errors
+                              || (e2.toString() contains "org.apache.spark.SparkException: Writing job aborted") ),  // package v2 does not
+                            s"Nul value for non-nullable column should fail for failfast mode" );
                 }
             }
 
@@ -943,7 +956,7 @@ trait SparkConnectorBugFixes
 
             // Test Case 2: Write to the table with graceful failure
             logger.info( s"Test Case 2: Write to the table with graceful failure mode" );
-            options( "table.fail_on_errors" ) = "false";
+            options( "ingester.fail_on_errors" ) = "false";
             logger.debug( s"Writing to table ${tableName} via the connector" );
             df.write.format( package_to_test ).options( options ).save();
 

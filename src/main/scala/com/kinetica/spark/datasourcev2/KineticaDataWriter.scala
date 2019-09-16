@@ -99,6 +99,7 @@ class KineticaDataWriter (schema: StructType, options: Map[String, String], part
                     logger.debug(s"Found non-matching column ${column.getName}; skipping record; reason: ", e);
                     if ( conf.failOnError ) {
                         // Throw exception only for fail-fast mode
+                        logger.error(s"Found non-matching column ${column.getName}; skipping record; reason: ", e);
                         throw e;
                     }
                 }

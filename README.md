@@ -1346,7 +1346,7 @@ The following properties control the authentication & connection to *Kinetica*.
 | Property Name                      | Default     | Description
 | :---                               | :---        | :---
 | ``database.url``                   | *<none>*    | URL of *Kinetica* instance (http or https)
-| ``database.jdbc_url``              | *<none>*    | JDBC URL of the *Kinetica ODBC Server*  **Ingest/Egress Processor Only**
+| ``database.jdbc_url``              | *<none>*    | JDBC URL of the *Kinetica ODBC Server*  **Ingest/Egress Processor Only**.  When using SSL, use the `URL=` option to pass in the full URL.  E.g. ``database.jdbc_url="jdbc:kinetica://;URL=https://localhost:8082/gpudb-0"``.
 | ``database.primary_url``           | *<none>*    | URL of the primary/active *Kinetica Server* cluster  **Ingest/Egress Processor Only**
 | ``database.stream_url``            | *<none>*    | ZMQ URL of the *Kinetica* table monitor  **Streaming Processor Only**
 | ``database.username``              | *<none>*    | *Kinetica* login username

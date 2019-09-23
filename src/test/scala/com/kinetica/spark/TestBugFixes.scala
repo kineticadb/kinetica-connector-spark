@@ -532,7 +532,6 @@ trait SparkConnectorBugFixes
         test(s"""$package_description KECO-1371: `table.truncate_to_size`
              | should work""".stripMargin.replaceAll("\n", "") ) {
 
-            // We need a table with a float column
             val sort_col_name = "i";
             val char1_name    = "char1";
             val char2_name    = "char2";
@@ -831,7 +830,6 @@ trait SparkConnectorBugFixes
              | column should fail for failfast
              | mode""".stripMargin.replaceAll("\n", "") ) {
 
-            // We need a table with a float column
             val sort_col_name = "i";
             val str_col_name = "str_col";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
@@ -910,7 +908,6 @@ trait SparkConnectorBugFixes
         test(s"""$package_description KECO-1415: Date column with non-conforming format
              | should be handled properly""".stripMargin.replaceAll("\n", "") ) {
 
-            // We need a table with a float column
             val sort_col_name = "i";
             val str_col_name = "str_col";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
@@ -1073,7 +1070,6 @@ trait SparkConnectorBugFixes
         test(s"""$package_description KECO-1457: Graceful failure mode should
              | not throw exceptions""".stripMargin.replaceAll("\n", "") ) {
 
-            // We need a table with a float column
             val int_col_name = "int_col";
             val str_col_name1 = "str_col1";
             val str_col_name2 = "str_col2";
@@ -1264,7 +1260,6 @@ trait SparkConnectorBugFixes
         test(s"""$package_description KECO-1503: Ingestion into a sharded table
              | should work without issues""".stripMargin.replaceAll("\n", "") ) {
 
-            // We need a table with a float column
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( "i",
                                         classOf[java.lang.Integer],
@@ -1309,7 +1304,6 @@ trait SparkConnectorBugFixes
         test(s"""$package_description KECO-1503: Ingestion into a replicated table
              | should work without issues""".stripMargin.replaceAll("\n", "") ) {
 
-            // We need a table with a float column
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( "i",
                                         classOf[java.lang.Integer] );
@@ -1346,6 +1340,162 @@ trait SparkConnectorBugFixes
             assert( (table_size == numRows), s"Table size ($table_size) should be $numRows" );
         }   // end test #2 for KECO-1503
         
+
+        /**
+         * Tests for egress with null values via the Java API (no filter push-down)
+         */
+        test(s"""$package_description KECO-1574: Egressing without filter push-down
+             | should work with null values""".stripMargin.replaceAll("\n", "") ) {
+
+            // We need a table with all basic types
+            val sort_col_name   = "i";
+            val int_col_name    = "int";
+            val int8_col_name   = "int8";
+            val int16_col_name  = "int16";
+            val long_col_name   = "long";
+            val ts_col_name     = "timestamp";
+            val float_col_name  = "float";
+            val double_col_name = "double";
+            val str_col_name    = "string";
+            val bytes_col_name  = "bytes";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( sort_col_name,
+                                        classOf[java.lang.Integer] );
+            columns += new Type.Column( int_col_name,
+                                        classOf[java.lang.Integer],
+                                        ColumnProperty.NULLABLE );
+            columns += new Type.Column( int8_col_name,
+                                        classOf[java.lang.Integer],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.INT8 );
+            columns += new Type.Column( int16_col_name,
+                                        classOf[java.lang.Integer],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.INT16 );
+            columns += new Type.Column( long_col_name,
+                                        classOf[java.lang.Long],
+                                        ColumnProperty.NULLABLE );
+            columns += new Type.Column( ts_col_name,
+                                        classOf[java.lang.Long],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.TIMESTAMP );
+            columns += new Type.Column( float_col_name,
+                                        classOf[java.lang.Float],
+                                        ColumnProperty.NULLABLE );
+            columns += new Type.Column( double_col_name,
+                                        classOf[java.lang.Double],
+                                        ColumnProperty.NULLABLE );
+            columns += new Type.Column( str_col_name,
+                                        classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE );
+            columns += new Type.Column( bytes_col_name,
+                                        classOf[java.nio.ByteBuffer],
+                                        ColumnProperty.NULLABLE );
+
+            // Create the table
+            val tableName = s"keco_1574_${package_description}";
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+
+            // Get some test data with null values
+            // -----------------------------------
+            val non_null_timestamp = Timestamp.valueOf( "1975-02-01 12:12:12" );
+            val float_val  = Random.nextFloat();
+            val double_val = Random.nextDouble();
+            val long_val   = Random.nextLong();
+            val string_val = "abcd";
+            val bytes_val  = "bytes 1";
+            
+            val expected_values = Seq( Map( sort_col_name -> 1,
+                                            int_col_name    -> 1,
+                                            int8_col_name   -> 2,
+                                            int16_col_name  -> 3,
+                                            long_col_name   -> long_val,
+                                            ts_col_name     -> non_null_timestamp,
+                                            float_col_name  -> float_val,
+                                            double_col_name -> double_val,
+                                            str_col_name    -> string_val,
+                                            bytes_col_name  -> bytes_val.getBytes() ),
+                                       Map( sort_col_name   -> 2,
+                                            int_col_name    -> null,
+                                            int8_col_name   -> null,
+                                            int16_col_name  -> null,
+                                            long_col_name   -> null,
+                                            ts_col_name     -> null,
+                                            float_col_name  -> null,
+                                            double_col_name -> null,
+                                            str_col_name    -> null,
+                                            bytes_col_name  -> null )
+                                       );
+
+            val data = Seq( // Non-null values
+                            Row( 1, 1, 2, 3, long_val, non_null_timestamp,
+                                 float_val, double_val, string_val, bytes_val ),
+                            // Null values
+                            Row( 2, null, null, null, null, null, null, null, null, null )  );
+            // Generate the appropriate schema create the test data
+            val schema = StructType( StructField( sort_col_name,   IntegerType,   true ) ::
+                                     StructField( int_col_name,    IntegerType,   true ) ::
+                                     StructField( int8_col_name,   IntegerType,   true ) ::
+                                     StructField( int16_col_name,  IntegerType,   true ) ::
+                                     // StructField( long_col_name,   IntegerType, true ) ::
+                                     StructField( long_col_name,   LongType,      true ) ::
+                                     StructField( ts_col_name,     TimestampType, true ) ::
+                                     StructField( float_col_name,  FloatType,     true ) ::
+                                     // StructField( double_col_name, FloatType,  true ) ::
+                                     StructField( double_col_name, DoubleType,    true ) ::
+                                     StructField( str_col_name,    StringType,    true ) ::
+                                     StructField( bytes_col_name,  StringType,    true ) :: Nil );
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe with a row with null values in it (${df.count} rows)");
+
+            // Get the appropriate options (for both ingest and egress)
+            var options = get_default_spark_connector_options();
+            options( "table.create" ) = "false";
+            options( "table.name"   ) = tableName;
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            var table_size = get_table_size( tableName );
+            assert( (table_size == expected_values.length),
+                    s"Table size ($table_size) should be ${expected_values.length}" );
+
+            // Read from the table
+            logger.debug( s"Reading from the table ${tableName} via the connector" );
+            val df_out = m_sparkSession.sqlContext.read.format( package_to_test )
+                                   .options( options ).load();
+            val fetched_records = df_out.orderBy( sort_col_name ).collect();
+
+            // Check for data correctness
+            val columns_to_compare = sort_col_name   :: int_col_name ::
+                                     int8_col_name   :: int16_col_name ::
+                                     long_col_name   :: ts_col_name  :: float_col_name ::
+                                     double_col_name :: str_col_name ::
+                                     bytes_col_name  :: Nil;
+            // Compare the fetched data per row
+            for ( i <- 0 until expected_values.length ) {
+                // Compare each column for the current row
+                var col_idx = 0;
+                for ( column_name <- columns_to_compare ) {
+                    val expected = expected_values( i )( column_name );
+                    val actual   = fetched_records( i ).get( col_idx );
+                    // We need to handle arrays specially
+                    if ( expected.isInstanceOf[Array[_]] && actual.isInstanceOf[Array[_]]) {
+                        // Comparing scalar types
+                        assert( (expected.asInstanceOf[Array[_]].deep == actual.asInstanceOf[Array[_]].deep),
+                                s"Fetched value for column ${column_name} of record #$i '$actual' should be '$expected' for '$column_name'" );
+                    } else {
+                        // Comparing all scalar types
+                        assert( (expected == actual),
+                                s"Fetched value for column ${column_name} of record #$i '$actual' should be '$expected' for '$column_name'" );
+                    }
+                    col_idx += 1;
+                }
+            }
+        }  // end test for KECO-1574
         
     }   // end tests for bugFixes
 

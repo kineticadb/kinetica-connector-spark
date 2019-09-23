@@ -330,9 +330,9 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
             {
                 // Need to convert to Scala double
-                val value = gr.getDouble( pos ).toDouble;
+                val value = gr.getDouble( pos );
                 if( value != null ) {
-                    row.setDouble( pos, value );
+                    row.setDouble( pos, value.toDouble );
                 } else {
                     row.update( pos, null );
                 }
@@ -343,9 +343,9 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
             {
                 // Need to convert to Scala float
-                val value = gr.getFloat( pos ).toFloat;
+                val value = gr.getFloat( pos );
                 if( value != null ) {
-                    row.setFloat( pos, value );
+                    row.setFloat( pos, value.toFloat );
                 } else {
                     row.update( pos, null );
                 }
@@ -356,7 +356,7 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
             {
                 // Need to convert to Scala integer
-                val value = gr.getInt( pos).toInt;
+                val value = gr.getInt( pos);
                 if( value != null ) {
                     // Check subtypes
                     if ( columnProperties.contains( ColumnProperty.INT8 ) ) {
@@ -367,7 +367,7 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
                         row.setShort(pos, (value.shortValue()));
                     } else {
                         // Regular integer
-                        row.setInt( pos, value );
+                        row.setInt( pos, value.toInt );
                     }
                 } else {
                     row.update( pos, null );
@@ -379,7 +379,7 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
             {
                 // Need to convert to Scala long
-                val value = gr.getLong( pos ).toLong;
+                val value = gr.getLong( pos );
                 if( value != null ) {
                     // Check subtypes
                     if ( columnProperties.contains( ColumnProperty.TIMESTAMP ) ) {
@@ -388,7 +388,7 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
                         row.setLong( pos, DateTimeUtils.fromJavaTimestamp(t) );
                     } else {
                         // Regular longs
-                        row.setLong( pos, value );
+                        row.setLong( pos, value.toLong );
                     }
                 } else {
                     row.update( pos, null );
@@ -443,9 +443,9 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
             case q if (q == classOf[java.nio.ByteBuffer]) =>
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
             {
-                val value = gr.getBytes( pos ).array();
+                val value = gr.getBytes( pos );
                 if( value != null ) {
-                    row.update( pos, value);
+                    row.update( pos, value.array() );
                 } else {
                     row.update( pos, null );
                 }

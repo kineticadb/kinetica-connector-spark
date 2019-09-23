@@ -2,6 +2,12 @@
 
 ## Version 6.2
 
+### Version 6.2.3.1 -- 2019-09-23
+
+#### Fixed
+-   Egress issue when exporting nulls
+
+
 ### Version 6.2.3.0 -- 2019-09-12
 
 #### Added
@@ -31,7 +37,6 @@
     -   Minimized the uber jar to reduce size
 
 #### Fixed
-
 -   Users with the proper table read access can now egress data from the table.
 
 

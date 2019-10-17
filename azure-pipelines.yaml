@@ -7,7 +7,8 @@ trigger:
 - feat/support-json-templates
 
 pool:
-  vmImage: 'ubuntu-latest'
+  name: linux-lab-vms
+  demands: maven
 
 steps:
 - task: SonarCloudPrepare@1
@@ -19,13 +20,18 @@ steps:
 - task: Maven@3
   inputs:
     mavenPomFile: 'pom.xml'
-    mavenOptions: '-Xmx3072m -DskipTests'
-    javaHomeOption: 'JDKVersion'
-    jdkVersionOption: '1.8'
-    jdkArchitectureOption: 'x64'
+    goals: 'clean package'
+    options: 'DskipTests=true'
     publishJUnitResults: true
     testResultsFiles: '**/TEST-*.xml'
-    goals: 'clean package'
+    javaHomeOption: 'JDKVersion'
+    jdkVersionOption: '1.8'
+    mavenVersionOption: 'Default'
+    mavenOptions: '-Xmx3072m'
+    mavenAuthenticateFeed: true
+    effectivePomSkip: false
+    sonarQubeRunAnalysis: true
+    sqMavenPluginVersionChoice: 'latest'
 
 - task: SonarCloudPublish@1
   inputs:

@@ -8,7 +8,6 @@ trigger:
 
 pool:
   name: linux-lab-vms
-  demands: maven
 
 steps:
 - task: SonarCloudPrepare@1

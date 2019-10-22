@@ -1,6 +1,6 @@
 # Kinetica Spark Connector
 
-This project contains the **7.0.x.y** version of the **Kinetica Spark Connector**
+This project contains the **7.0** version of the **Kinetica Spark Connector**
 for bidirectional integration of *Kinetica* with *Spark*.
 
 This guide exists on-line at:  [Kinetica Spark Connector Guide](http://www.kinetica.com/docs/7.0/connectors/spark_guide.html)
@@ -13,13 +13,14 @@ More information can be found at:  [Kinetica Documentation](http://www.kinetica.
 
 The following guide provides step by step instructions to get started using
 *Spark* with *Kinetica*.  The *Spark Connector* provides easy integration of
-*Spark v2.3.x* with *Kinetica* via the *Spark Data Source API*.  There are two
-packages in this project:
+*Spark v2.3.x* with *Kinetica* via the *Spark Data Source API*.
 
-* `com.kinetica.spark.datasourcev1` -- uses the Spark DataSource v1 API
-* `com.kinetica.spark.datasourcev2` -- uses the Spark DataSource v2 API
+There are two packages in this project:
 
-The `com.kinetica.spark` package uses the v1 API by default.  The
+* ``com.kinetica.spark.datasourcev1`` -- uses the *Spark DataSource v1 API*
+* ``com.kinetica.spark.datasourcev2`` -- uses the *Spark DataSource v2 API*
+
+The ``com.kinetica.spark`` package uses the v1 API by default.  The
 *Spark DataSource v2 API* is still evolving, so we encourage users to use the v1
 API (which can be used by default, or by explicitly choosing the first
 aforementioned package).
@@ -67,7 +68,7 @@ The connector JAR can be built with *Maven* as follows:
 appropriately.
 
 
-This sequence produces the connector JAR, which will be made availble to the
+This sequence produces the connector JAR, which will be made available to the
 *Spark* cluster upon submitting the *Spark* job.  It can be found under the
 ``target`` directory:
 
@@ -83,10 +84,9 @@ In order to run the pre-packaged tests, run:
     $ mvn test -Dkurl=http://<KINETICA_IP>:<KINETICA_PORT> \
         -Dkusername=<kinetica_username> -Dkpassword=<kinetica_password>
 
-**NOTE:** The tests fail with Java 1.9+ due to a known bug in spark
+**NOTE:** The tests fail with Java 1.9+ due to a known bug in Spark
 (https://issues.apache.org/jira/browse/SPARK-24201).  Please use Java 1.8
 for running the tests.
-
 
 
 ## Usage
@@ -1128,10 +1128,10 @@ df.printSchema
 Verify output:
 
     root
-     |-- vendor_id: string (nullable = false)
-     |-- min_geo_miles: double (nullable = false)
-     |-- avg_geo_miles: double (nullable = false)
-     |-- max_geo_miles: double (nullable = false)
+     |-- vendor_id: string (nullable = true)
+     |-- min_geo_miles: decimal(20,4) (nullable = true)
+     |-- avg_geo_miles: decimal(20,4) (nullable = true)
+     |-- max_geo_miles: decimal(20,4) (nullable = true)
 
 Output query result set:
 
@@ -1144,11 +1144,11 @@ Verify output (may contain additional records from streaming test):
     +---------+-------------+-------------+-------------+
     |vendor_id|min_geo_miles|avg_geo_miles|max_geo_miles|
     +---------+-------------+-------------+-------------+
-    |      CMT|         0.01|       2.0952|      80.8669|
-    |      DDS|       0.0148|        2.735|      64.2944|
+    |      CMT|       0.0100|       2.0952|      80.8669|
+    |      DDS|       0.0148|       2.7350|      64.2944|
     |      NYC|       0.0101|       2.1548|      36.9236|
-    |      VTS|         0.01|       2.0584|      94.5213|
-    |     YCAB|         0.01|       2.1049|      36.0565|
+    |      VTS|       0.0100|       2.0584|      94.5213|
+    |     YCAB|       0.0100|       2.1049|      36.0565|
     +---------+-------------+-------------+-------------+
 
 
@@ -1355,28 +1355,30 @@ The following properties control the authentication & connection to *Kinetica*.
 | ``database.timeout_ms``            | ``1800000`` | Connection timeout, in milliseconds (default is 30 minutes)
 | ``ingester.analyze_data_only``     | ``false``   | When ``true``, will analyze the ingest data set, determining the types & sizes of columns necessary to hold the ingest data, and will output the derived schema as a ``CREATE TABLE statement`` (at the INFO log level).  **NOTE:** If this parameter is set to ``true``, all others will be ignored.  **Ingest Processor Only**
 | ``ingester.batch_size``            | ``10000``   | Batch size for bulk inserter
+| ``ingester.fail_on_errors``        | ``false``   | Fail on errors when ingesting data; default behavior is to log warnings and ignore the bad row
 | ``ingester.flatten_source_schema`` | ``false``   | When ``true``, converts the following complex source data structures into single-table representations:  *struct*, *array*, & *map*.  See [Complex Data Types](#complex-data-types) for details.  **Ingest Processor Only**
 | ``ingester.ip_regex``              | *<none>*    | Regular expression to use in selecting *Kinetica* worker node IP addresses (e.g., ``172.*``) that are accessible by the connector, for multi-head ingest  **Ingest Processor Only**
-| ``ingester.multi_head``            | ``true``    | Enable multi-head ingestion.
-| ``ingester.fail_on_errors``        | ``false``   | Fail on errors when ingesting data; default behavior is to log warnings and ignoring the bad row
+| ``ingester.multi_head``            | ``true``    | Enable multi-head ingestion
 | ``ingester.num_threads``           | ``4``       | Number of threads for bulk inserter
 | ``ingester.use_snappy``            | ``false``   | Use *snappy* compression during ingestion  **Ingest Processor Only**
-| ``ingester.use_timezone``          | *<none>*    | Use the given timezone when ingesting any date/time/datetime data.  By default, the system timezone will be used.  Allowed formats are standard timezone formats; e.g. ``America/Pacific``, ``EDT``, ``GMT+02:00``, ``GMT-0730``.  Local date/time will not be affected by this setting; only timestamps with a specified offset will be interpreted and saved in the given timezone.  For example, if ``GMT-0500`` is the time zone, and the timestamp value is ``2019-07-21 13:13:13+02:00``, it will be stored in the database as ``2019-07-21 06:13:13``.
+| ``ingester.use_timezone``          | *<none>*    | Use the given timezone when ingesting any date/time/datetime data.  By default, the system timezone will be used.  Allowed formats are standard timezone formats; e.g. ``America/Pacific``, ``EDT``, ``GMT+02:00``, ``GMT-0730``.  Local date/time will not be affected by this setting; only timestamps with a specified offset will be interpreted and saved in the given timezone.  For example, if ``GMT-0500`` is the time zone, and the timestamp value is ``2019-07-21 12:34:56+02:00``, it will be stored in the database as ``2019-07-21 05:34:56``.
+| ``egress.offset``                  | ``0``       | The offset from which point in the table records should be extracted.  **Egress Processor Only**
+| ``egress.limit``                   | *<none>*    | The total number of records that should be fetched.  The default is set for fetching all the records in the table.  **Egress Processor Only**
+| ``spark.datasource_api_version``   | ``v1``      | Which Spark DataSource API to use (accepted values: ``v1`` and ``v2``). **Data Loader Only**
 | ``spark.num_partitions``           | ``4``       | Number of *Spark* partitions to use for extracting data  **Egress Processor Only**
 | ``spark.rows_per_partition``       | *<none>*    | Number of records per partition *Spark* should segment data into before loading into *Kinetica*; if not specified, *Spark* will use the same number of partitions it used to retrieve the source data  **Data Loader Only**
-| ``spark.datasource_api_version``   | ``v1``      | Which Spark DataSource API to use (accepted values: ``v1`` and ``v2``). **Data Loader Only**
 
 
 The following apply for the *Data Loader* if SSL is used. A keystore or
 truststore can be specified to override the default from the JVM.
 
-| Property Name                    | Default   | Description
-| :---                             | :---      | :---
-| ``ssl.bypass_cert_check``        | ``false`` | Deprecated option since version 7.0.4.0.  Internally ignored.  If ``ssl.truststore_jks`` is not provided, then the Kinetica server's certificate will not be verified.
-| ``ssl.keystore_p12``             | *<none>*  | PKCS#12 key store--only for 2-way SSL
-| ``ssl.keystore_password``        | *<none>*  | Key store password
-| ``ssl.truststore_jks``           | *<none>*  | JKS trust store for CA certificate check for the HTTPD server.  If not provided, then the Kinetica server's certificate will not be verified.  To allow for a self-signed certificate, omit this option.
-| ``ssl.truststore_password``      | *<none>*  | The HTTPD server trust store password.
+| Property Name               | Default   | Description
+| :---                        | :---      | :---
+| ``ssl.bypass_cert_check``   | ``false`` | Deprecated option since version 7.0.4.0; internally ignored.  Instead, if ``ssl.truststore_jks`` is provided, then the server certificate will be verified; if not provided, the check will be skipped.
+| ``ssl.keystore_p12``        | *<none>*  | PKCS#12 key store--only for 2-way SSL
+| ``ssl.keystore_password``   | *<none>*  | Key store password
+| ``ssl.truststore_jks``      | *<none>*  | Java trust store for CA certificate check for the HTTPD server.  If not provided, then the Kinetica server's certificate will not be verified.  To allow for a self-signed certificate, omit this option.
+| ``ssl.truststore_password`` | *<none>*  | Java trust store password
 
 ### Data Source/Target Properties
 
@@ -1388,7 +1390,7 @@ the access mechanism.
 | ``table.create``                | ``false`` | Automatically create table if missing
 | ``table.is_replicated``         | ``false`` | Whether the target table is replicated or not  **Ingest Processor Only**
 | ``table.name``                  | *<none>*  | *Kinetica* table to access
-| ``table.name_contains_schema``  | ``true``  | Indicates that a schema name should be extracted from the ``table.name``, if one is given (separated by periods).  Any additional periods will remain in the table name
+| ``table.name_contains_schema``  | ``true``  | Indicates that a schema name should be extracted from the ``table.name``, if one is given (separated by periods).  Any additional periods will remain in the table name.
 | ``table.truncate``              | ``false`` | Truncate table if it exists
 | ``table.truncate_to_size``      | ``false`` | Truncate strings when inserting into charN columns
 | ``table.update_on_existing_pk`` | ``false`` | If the target table, ``table.name``, has a primary key, update records in it with matching primary key values from records being ingested

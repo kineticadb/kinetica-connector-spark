@@ -51,8 +51,14 @@ private[kinetica] object KineticaInputFormat {
     /**
      * Get partitions mapping to the data slices in the database,
      */
-    def getDataSlicePartition(conn: Connection, numPartitions: Int, table: String, filters: Array[Filter]): Array[Partition] = {
-        val numberOfRows = getTotalNumberOfRows(conn, table, filters)
+    def getDataSlicePartition(conn: Connection, numPartitions: Int, table: String,
+                              filters: Array[Filter],
+                              offset: Long, limit: java.lang.Long ): Array[Partition] = {
+        var numberOfRows = getTotalNumberOfRows(conn, table, filters)
+        // If the user provided a limit, use that instead of ALL the records
+        if ( limit != null ) {
+            numberOfRows = limit;
+        }
         var rowsPerPartition = numberOfRows / numPartitions
         
         val extra = numberOfRows % numPartitions
@@ -64,10 +70,10 @@ private[kinetica] object KineticaInputFormat {
 		*/
         
         if (rowsPerPartition <= 1) {
-            Array[Partition](KineticaPartition(0, numberOfRows, 0))
+            Array[Partition](KineticaPartition( offset, numberOfRows, 0))
         } else {
             val ans = new ArrayBuffer[Partition]()
-            var start : Long   = 0
+            var start : Long   = offset
             var numRows : Long = rowsPerPartition
             for (index <- 0 until numPartitions) {
                 if( index == (numPartitions-1) ) {

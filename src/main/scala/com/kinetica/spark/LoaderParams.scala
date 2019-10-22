@@ -77,6 +77,12 @@ class LoaderParams extends Serializable with LazyLogging {
     var numPartitions: Int = 4
         
     @BeanProperty
+    var egressOffset: Long = 0
+
+    @BeanProperty
+    var egressLimit: java.lang.Long = null
+
+    @BeanProperty
     var jdbcURL: String = null
 
     @BooleanBeanProperty
@@ -226,6 +232,18 @@ class LoaderParams extends Serializable with LazyLogging {
 
         numPartitions = params.get(CONNECTOR_NUMPARTITIONS_PARAM).getOrElse("4").toInt
 
+        // Egress offset and limit (if no limit, fetch everything)
+        egressOffset = params.get( KINETICA_EGRESS_OFFSET_PARAM ).getOrElse( "0" ).toLong
+        val egressLimitStr = params.get( KINETICA_EGRESS_LIMIT_PARAM ).getOrElse( null )
+        if ( egressLimitStr == null ) {
+            // A null egress indicates that we want to fetch all records from
+            // the table
+            egressLimit = null;
+        } else {
+            // Save the actual egress for use
+            egressLimit = egressLimitStr.toLong;
+        }
+        
         // Default setting is 0
         retryCount = params.get(KINETICA_RETRYCOUNT_PARAM).getOrElse("0").toInt
         createTable = params.get(KINETICA_CREATETABLE_PARAM).getOrElse("false").toBoolean

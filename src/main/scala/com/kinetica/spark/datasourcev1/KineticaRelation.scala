@@ -74,24 +74,48 @@ class KineticaRelation(
         logger.debug( s"KineticaRelation::buildScan(): Got required columns: '${requiredColumns.mkString(", ")}'" )
 
         val numPartitions = conf.getNumPartitions;
-                
-        if (requiredColumns.isEmpty) {
-            emptyRowRDD(filters, url, tableName, numPartitions)
-        } else {
-            val parts = com.kinetica.spark.egressutil.KineticaInputFormat.getDataSlicePartition(
-                           com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)(),
-                           numPartitions.toInt, tableName, filters);
-            new KineticaRDD(
-                sqlContext.sparkContext,
-                KineticaJdbcUtils.getConnector(url, conf),
-                KineticaSchema.pruneSchema( tableSchema, requiredColumns ),
-                tableName,
-                requiredColumns,
-                filters,
-                parts,
-                properties,
-                conf);
-        }
+
+        // Offset and limit for getting data out
+        val offset = conf.getEgressOffset;
+        val limit  = conf.getEgressLimit;
+        logger.debug( s"KineticaRelation::buildScan(): offset $offset limit $limit" );
+
+        val parts = com.kinetica.spark.egressutil.KineticaInputFormat.getDataSlicePartition(
+                                                                                            com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)(),
+                                                                                            numPartitions.toInt, tableName, filters, offset, limit);
+        new KineticaRDD(
+                        sqlContext.sparkContext,
+                        KineticaJdbcUtils.getConnector(url, conf),
+                        KineticaSchema.pruneSchema( tableSchema, requiredColumns ),
+                        tableName,
+                        requiredColumns,
+                        filters,
+                        parts,
+                        properties,
+                        conf);
+
+        // // original~~~~~~~~
+        // // The intent here is that when we want to just get a count, we don't need
+        // // the data to flow; but tests show that the empty column path still gets
+        // // the full rows and ends up fetching all the columns anyway.  Need to investigate more.
+        // if (requiredColumns.isEmpty) {
+        //     emptyRowRDD(filters, url, tableName, numPartitions)
+        // } else {
+        //     val parts = com.kinetica.spark.egressutil.KineticaInputFormat.getDataSlicePartition(
+        //                    com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)(),
+        //                    numPartitions.toInt, tableName, filters, offset, limit);
+        //     new KineticaRDD(
+        //         sqlContext.sparkContext,
+        //         KineticaJdbcUtils.getConnector(url, conf),
+        //         KineticaSchema.pruneSchema( tableSchema, requiredColumns ),
+        //         tableName,
+        //         requiredColumns,
+        //         filters,
+        //         parts,
+        //         properties,
+        //         conf);
+        // }
+        // // end original~~~~~~~~
     }
 
     override def insert(df: DataFrame, dummy: Boolean): Unit = {

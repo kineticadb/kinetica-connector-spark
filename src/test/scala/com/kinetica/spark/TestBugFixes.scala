@@ -347,7 +347,7 @@ trait SparkConnectorBugFixes
                                           .format( package_to_test )
                                           .options( egress_options ).load()
                                           .filter( filter_expression );
-            logger.debug( s"Extracted the data from table ${tableName} via the connector (no filter --> use the Java API)" );
+            logger.debug( s"Extracted the data from table ${tableName} via the connector (with filter --> use the JDBC connector)" );
 
             // Re-insert the data
             try {

@@ -20,6 +20,8 @@ object ConfigurationConstants {
     val KINETICA_USETIMEZONE_PARAM: String = "ingester.use_timezone";
     val KINETICA_ERROR_HANDLING_PARAM: String = "ingester.fail_on_errors";
 
+    val KINETICA_EGRESS_OFFSET_PARAM: String = "egress.offset";
+    val KINETICA_EGRESS_LIMIT_PARAM: String = "egress.limit";
 
     val CONNECTOR_NUMPARTITIONS_PARAM: String = "spark.num_partitions";
     val CONNECTOR_ROWSPERPARTITION_PARAM: String = "spark.rows_per_partition";

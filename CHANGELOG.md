@@ -2,6 +2,14 @@
 
 ## Version 6.2
 
+### Version 6.2.4.0 -- 2019-10-22
+
+#### Added
+-   New egress options to allow fetching part of a table instead of the whole table:
+    - ``egress.offset``
+    - ``egress.limit``
+
+
 ### Version 6.2.3.1 -- 2019-09-23
 
 #### Fixed

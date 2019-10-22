@@ -43,6 +43,16 @@ class KineticaDataReader (
     // Read the table's rows
     val batchSize = 10000;
 
+    // Offset and limit for getting data out
+    val offset = conf.getEgressOffset;
+    var limit  = conf.getEgressLimit;
+    logger.debug( s"KineticaDataReader constructor: offset $offset limit $limit" );
+    if ( limit == null ) {
+        // Use the table size as the limit
+        limit = tableSize;
+    }
+        
+    
     // Retrieve the records
     val myRows: Iterator[Row] = {
 
@@ -52,11 +62,12 @@ class KineticaDataReader (
             // since no filters are used
             KineticaEgressUtilsNativeClient.getRowsFromKinetica( gpudbConn, tableName,
                                                                  requiredColumns, requiredSchema,
-                                                                 0, tableSize.toInt, batchSize );            
+                                                                 offset, limit, batchSize );
         } else {
             logger.debug("KineticaDataReader: Filters ARE given; use the JDBC connector");
             // Use the JDBC connector to get the records
-            val queryStr = buildTableQuery(table, requiredColumns, pushedCatalystFilters)
+            val queryStr = buildTableQuery( table, requiredColumns, pushedCatalystFilters,
+                                            offset, limit );
 
             val conn = com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)();
             val stmt = conn.prepareStatement( queryStr );
@@ -84,7 +95,9 @@ class KineticaDataReader (
     private def buildTableQuery(
         table: String,
         columns: Array[String],
-        pushedCatalystFilters: Array[Expression]
+        pushedCatalystFilters: Array[Expression],
+        offset: Long,
+        limit: Long
         ): String = {
 
         val baseQuery = {
@@ -110,7 +123,7 @@ class KineticaDataReader (
 
             // Need to quote the table name, but quotess don't work with string
             // interpolation in scala; the following is correct, though ugly
-            s"""SELECT $colStrBuilder FROM "$table" $whereClause"""
+            s"""SELECT $colStrBuilder FROM "$table" $whereClause LIMIT $offset,$limit"""
         }
         logger.info("Query for retrieving records: " + baseQuery)
         baseQuery.toString()

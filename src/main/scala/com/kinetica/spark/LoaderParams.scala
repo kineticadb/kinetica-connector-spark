@@ -12,6 +12,7 @@ import java.io.Serializable;
 import java.util.TimeZone;
 import scala.beans.{ BeanProperty, BooleanBeanProperty };
 import com.typesafe.scalalogging.LazyLogging;
+import com.kinetica.spark.egressutil.KineticaEgressUtilsNativeClient;
 import com.kinetica.spark.util.ConfigurationConstants._;
 
 import com.kinetica.spark.ssl.X509KeystoreOverride;
@@ -345,18 +346,23 @@ class LoaderParams extends Serializable with LazyLogging {
         opts.setBypassSslCertCheck( this.bypassCert ); // Default is false
         val gpudb: GPUdb = new GPUdb(kineticaURL, opts);
         checkConnection(gpudb);
+
+        // Fix the offset and limit
+        fixEgressOffsetLimit( gpudb );
+
+        // Return the GPUdb connection object
         gpudb;
     }
 
     private def checkConnection(conn: GPUdb): Unit = {
-        val CORE_VERSION: String = "version.gpudb_core_version"
-        val VERSION_DATE: String = "version.gpudb_version_date"
-        val options: java.util.Map[String, String] = new java.util.HashMap[String, String]()
-        options.put(CORE_VERSION, "")
-        options.put(VERSION_DATE, "")
+        val CORE_VERSION: String = "version.gpudb_core_version";
+        val VERSION_DATE: String = "version.gpudb_version_date";
+        val options: java.util.Map[String, String] = new java.util.HashMap[String, String]();
+        options.put(CORE_VERSION, "");
+        options.put(VERSION_DATE, "");
         try {
-            val rsMap: java.util.Map[String, String] = conn.showSystemProperties(options).getPropertyMap
-            logger.debug("Connected to {} ({})", rsMap.get(CORE_VERSION), rsMap.get(VERSION_DATE))
+            val rsMap: java.util.Map[String, String] = conn.showSystemProperties(options).getPropertyMap;
+            logger.debug("Connected to {} ({})", rsMap.get(CORE_VERSION), rsMap.get(VERSION_DATE));
         } catch {
             case e: GPUdbException => {
                 logger.debug( s"Cannot verify connection health: '${e.getMessage()}'" );
@@ -367,18 +373,71 @@ class LoaderParams extends Serializable with LazyLogging {
     }
 
     /**
-     * Checks if the table exists.
+     * Given a table, fix the offset and the limit, if needed.  If the offset
+     * is beyong the table size, we want to return an empty dataframe.  If the
+     * given limit, in conjunction with the offset, is beyond the table size,
+     * we reduce it to the table size (so that some executors don't get an
+     * error from the Kinetica server).
      */
-    def hasTable(): Boolean = {
-        val gpudb: GPUdb = this.getGpudb
-        if (!gpudb.hasTable(this.tablename, null).getTableExists) {
-            false
-        } else {
-            logger.info("Found existing table: {}", this.tablename)
-            true
+    private def fixEgressOffsetLimit( gpudbConn: com.gpudb.GPUdb ): Unit = {
+        if ( !gpudbConn.hasTable(this.tablename, null).getTableExists ) {
+            return; // table does not exist, so cannot fix egress options
+        }
+        
+        // Offset must be positive integers
+        if ( this.egressOffset < 0 ) {
+            val errorMsg = (s"Egress offset must be a positive integer; given"
+                            + s" `${this.egressOffset}`.");
+            logger.error( errorMsg );
+            throw new Exception( errorMsg )
+        }
+
+        // Get the table size
+        val tableSize = KineticaEgressUtilsNativeClient.getKineticaTableSize( gpudbConn, getTablename );
+
+        // Fix the offset based on the table size
+        if ( this.egressOffset > tableSize ) {
+            this.egressOffset = tableSize;
+        }
+
+        
+        // Fix the limit, if any
+        if ( this.egressLimit != null ) {
+            // Limit must be a positive integer
+            if ( this.egressLimit < 0 ) {
+                val errorMsg = (s"Egress limit must be a positive integer; given"
+                                + s" `${this.egressLimit}`.");
+                logger.error( errorMsg );
+                throw new Exception( errorMsg )
+            }
+            
+            if ( (this.egressOffset + this.egressLimit) > tableSize ) {
+                // The given limit would take us beyond the table, which may
+                // cause problems for some executros.  Cap the limit such
+                // that we never go byond the number of records available
+                // in the table that we can fetch
+                this.egressLimit = (tableSize - this.egressOffset);
+            }
         }
     }
 
+
+
+    /**
+     * Checks if the table exists.
+     */
+    def hasTable(): Boolean = {
+        val gpudb: GPUdb = this.getGpudb;
+        if (!gpudb.hasTable(this.tablename, null).getTableExists) {
+            false;
+        } else {
+            logger.info("Found existing table: {}", this.tablename);
+            true;
+        }
+    }
+
+
+        
     /**
      * Checks if the table belongs to the collection, if
      * given any.  Returns true if no collection is given, or if

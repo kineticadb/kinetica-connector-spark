@@ -2,6 +2,12 @@
 
 ## Version 7.0
 
+### Version 7.0.5.1 -- 2019-10-23
+
+#### Fixed
+-   Issues in egress options offset and limit when they are beyond table sizes.
+
+
 ### Version 7.0.5.0 -- 2019-10-22
 
 #### Added

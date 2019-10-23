@@ -689,6 +689,17 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
         numRows:    Long,
         batchSize:  Long ): java.util.ArrayList[Record] = {
 
+        val allRecords = new java.util.ArrayList[Record]();
+
+        // Check if the given offset even requires fetching any record, or if it's
+        // too large (in which case, we return an empty list)
+        // Get the table size
+        val tableSize = KineticaEgressUtilsNativeClient.getKineticaTableSize( gpudbConn, tableName );
+
+        if ( startRow >= tableSize ) {
+            return allRecords;
+        }
+
         val blank_options: java.util.Map[String, String] = new java.util.HashMap[String, String]();
 
         // Select the columns to be fetched
@@ -724,7 +735,6 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
         // Get an ID for this invocation of this function (useful for logging)
         val id = Random.nextInt();
        
-        val allRecords = new java.util.ArrayList[Record]();
         var ii = 0;
         while ( ii < loopCount ) {
 

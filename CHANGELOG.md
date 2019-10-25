@@ -2,6 +2,13 @@
 
 ## Version 7.0
 
+### Version 7.0.5.2 -- 2019-10-25
+
+#### Changed
+-   Java API and JDBC connector version dependency due to significant bugfixes in
+    those two packages.
+
+
 ### Version 7.0.5.1 -- 2019-10-23
 
 #### Fixed

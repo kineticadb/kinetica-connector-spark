@@ -64,8 +64,7 @@ private[kinetica] class KineticaRDD(
         // Fetch the rows
         val allRows = KineticaUtils.getRowsFromKinetica( conf.getGpudb, conf.getTablename,
                                                          columns, schema,
-                                                         part.startRow, part.numRows,
-                                                         MAX_ROWS_TO_FETCH );
+                                                         part.startRow, part.numRows, conf.getDownloadSize, true);
 
         // Note: Beware of calling .size or other functions on the rows created above
         //       (even in a debug print); it may have unintended consequences. For example,

@@ -36,10 +36,9 @@ class KineticaDataReader (
     val tableSize = KineticaUtils.getKineticaTableSize( gpudbConn, tableName );
      
     // Read the table's rows
-    val batchSize = 10000
     val myRows = KineticaUtils.getRowsFromKinetica( gpudbConn, tableName,
                                                     requiredColumns, requiredSchema,
-                                                    0, tableSize.toInt, batchSize );
+                                                    0, tableSize.toInt, conf.getDownloadSize );
   
   
     override def next(): Boolean = {

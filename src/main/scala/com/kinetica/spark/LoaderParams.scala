@@ -53,6 +53,10 @@ class LoaderParams(@transient val sparkContext: Option[SparkContext]) extends Se
     @BeanProperty
     var insertSize: Int = 10000
 
+    @BeanProperty
+    var downloadSize: Int = 10000
+    private val maxDownloadSize: Int = 25000
+
     @BooleanBeanProperty
     var updateOnExistingPk: Boolean = false
 
@@ -144,41 +148,42 @@ class LoaderParams(@transient val sparkContext: Option[SparkContext]) extends Se
         require(params != null, "Config cannot be null")
         require(params.nonEmpty, "Config cannot be empty")
 
-        kineticaURL = params.get(KINETICA_URL_PARAM).getOrElse(null)
-        streamURL = params.get(KINETICA_STREAMURL_PARAM).getOrElse(null)
-        kusername = params.get(KINETICA_USERNAME_PARAM).getOrElse("")
-        kpassword = params.get(KINETICA_PASSWORD_PARAM).getOrElse("")
-        threads =   params.get(KINETICA_NUMTHREADS_PARAM).getOrElse("4").toInt
+        kineticaURL = params.getOrElse(KINETICA_URL_PARAM, null)
+        streamURL = params.getOrElse(KINETICA_STREAMURL_PARAM, null)
+        kusername = params.getOrElse(KINETICA_USERNAME_PARAM, "")
+        kpassword = params.getOrElse(KINETICA_PASSWORD_PARAM, "")
+        threads =   params.getOrElse(KINETICA_NUMTHREADS_PARAM, "4").toInt
 
-        insertSize = params.get(KINETICA_BATCHSIZE_PARAM).getOrElse("10000").toInt
-        updateOnExistingPk = params.get(KINETICA_UPDATEONEXISTINGPK_PARAM).getOrElse("false").toBoolean
-        tableReplicated = params.get(KINETICA_REPLICATEDTABLE_PARAM).getOrElse("false").toBoolean
-        KdbIpRegex = params.get(KINETICA_IPREGEX_PARAM).getOrElse("")
-        useSnappy = params.get(KINETICA_USESNAPPY_PARAM).getOrElse("false").toBoolean
+        insertSize = params.getOrElse(KINETICA_BATCHSIZE_PARAM, "10000").toInt
+        downloadSize = Math.min(params.getOrElse(KINETICA_DOWNLOAD_BATCHSIZE_PARAM, "10000").toInt, maxDownloadSize)
+        updateOnExistingPk = params.getOrElse(KINETICA_UPDATEONEXISTINGPK_PARAM, "false").toBoolean
+        tableReplicated = params.getOrElse(KINETICA_REPLICATEDTABLE_PARAM, "false").toBoolean
+        KdbIpRegex = params.getOrElse(KINETICA_IPREGEX_PARAM, "")
+        useSnappy = params.getOrElse(KINETICA_USESNAPPY_PARAM, "false").toBoolean
 
-        numPartitions = params.get(CONNECTOR_NUMPARTITIONS_PARAM).getOrElse("4").toInt
+        numPartitions = params.getOrElse(CONNECTOR_NUMPARTITIONS_PARAM, "4").toInt
 
         // Default setting is 0
-        retryCount = params.get(KINETICA_RETRYCOUNT_PARAM).getOrElse("0").toInt
-        jdbcURL = params.get(KINETICA_JDBCURL_PARAM).getOrElse(null)
-        createTable = params.get(KINETICA_CREATETABLE_PARAM).getOrElse("false").toBoolean
+        retryCount = params.getOrElse(KINETICA_RETRYCOUNT_PARAM, "0").toInt
+        jdbcURL = params.getOrElse(KINETICA_JDBCURL_PARAM, null)
+        createTable = params.getOrElse(KINETICA_CREATETABLE_PARAM, "false").toBoolean
 
-        alterTable = params.get(KINETICA_ALTERTABLE_PARAM).getOrElse("false").toBoolean
-        mapToSchema = params.get(KINETICA_MAPTOSCHEMA_PARAM).getOrElse("false").toBoolean
-        truncateToSize = params.get(KINETICA_TRUNCATE_TO_SIZE).getOrElse("false").toBoolean
+        alterTable = params.getOrElse(KINETICA_ALTERTABLE_PARAM, "false").toBoolean
+        mapToSchema = params.getOrElse(KINETICA_MAPTOSCHEMA_PARAM, "false").toBoolean
+        truncateToSize = params.getOrElse(KINETICA_TRUNCATE_TO_SIZE, "false").toBoolean
 
         // 30 mins = 1800 seconds = 1800,000 ms
-        timeoutMs = params.get(KINETICA_TIMEOUT_PARAM).getOrElse("1800000").toInt
-        multiHead = params.get(KINETICA_MULTIHEAD_PARAM).getOrElse("false").toBoolean
+        timeoutMs = params.getOrElse(KINETICA_TIMEOUT_PARAM, "1800000").toInt
+        multiHead = params.getOrElse(KINETICA_MULTIHEAD_PARAM, "false").toBoolean
 
-        truncateTable = params.get(KINETICA_TRUNCATETABLE_PARAM).getOrElse("false").toBoolean
+        truncateTable = params.getOrElse(KINETICA_TRUNCATETABLE_PARAM, "false").toBoolean
 
-        loaderPath = params.get(LOADERCODEPATH).getOrElse("false").toBoolean
-        dryRun = params.get(KINETICA_DRYRUN).getOrElse("false").toBoolean
+        loaderPath = params.getOrElse(LOADERCODEPATH, "false").toBoolean
+        dryRun = params.getOrElse(KINETICA_DRYRUN, "false").toBoolean
 
-        flattenSourceSchema = params.get(KINETICA_FLATTEN_SCHEMA).getOrElse("false").toBoolean
+        flattenSourceSchema = params.getOrElse(KINETICA_FLATTEN_SCHEMA, "false").toBoolean
 
-        tablename = params.get(KINETICA_TABLENAME_PARAM).getOrElse(null)
+        tablename = params.getOrElse(KINETICA_TABLENAME_PARAM, null)
         if(tablename == null) {
             throw new Exception( "Parameter is required: " + KINETICA_TABLENAME_PARAM)
         }
@@ -187,8 +192,7 @@ class LoaderParams(@transient val sparkContext: Option[SparkContext]) extends Se
         // just check if a collection name is given, which is indicated by the
         // user (by default, we'll assume that we're to extract a schema name
         // from the table name)
-        val tableContainsSchemaName = params.get( KINETICA_TABLENAME_CONTAINS_SCHEMA_PARAM )
-                                            .getOrElse("true").toBoolean;
+        val tableContainsSchemaName = params.getOrElse(KINETICA_TABLENAME_CONTAINS_SCHEMA_PARAM, "true").toBoolean;
         if( tableContainsSchemaName && (tablename contains ".") ) {
             val tableParams: Array[String] = tablename.split("\\.")
             if (tableParams.length > 1) {
@@ -203,11 +207,11 @@ class LoaderParams(@transient val sparkContext: Option[SparkContext]) extends Se
         }
 
         // SSL
-        bypassCert = params.get(KINETICA_SSLBYPASSCERTCJECK_PARAM).getOrElse("false").toBoolean
-        trustStorePath =  params.get(KINETICA_TRUSTSTOREJKS_PARAM).getOrElse(null)
-        trustStorePassword = params.get(KINETICA_TRUSTSTOREPASSWORD_PARAM).getOrElse(null)
-        keyStorePath = params.get(KINETICA_KEYSTOREP12_PARAM).getOrElse(null)
-        keyStorePassword = params.get(KINETICA_KEYSTOREPASSWORD_PARAM).getOrElse(null)
+        bypassCert = params.getOrElse(KINETICA_SSLBYPASSCERTCJECK_PARAM, "false").toBoolean
+        trustStorePath =  params.getOrElse(KINETICA_TRUSTSTOREJKS_PARAM, null)
+        trustStorePassword = params.getOrElse(KINETICA_TRUSTSTOREPASSWORD_PARAM, null)
+        keyStorePath = params.getOrElse(KINETICA_KEYSTOREP12_PARAM, null)
+        keyStorePassword = params.getOrElse(KINETICA_KEYSTOREPASSWORD_PARAM, null)
     }   // end constructor
 
     // below are not serializable so they are created on demand

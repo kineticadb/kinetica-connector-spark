@@ -542,24 +542,38 @@ object KineticaUtils extends Logging {
         schema:     StructType,
         startRow:   Long,
         numRows:    Long,
-        batchSize:  Long ): Iterator[Row] = {
+        batchSize:  Long,
+        useLazyIterator: Boolean = false): Iterator[Row] = {
 
-        // Fetch the records from Kinetica in the native format
-        val allRecords = getRecordsFromKinetica( gpudbConn, tableName, columns,
-                                                 startRow, numRows, batchSize )
+        // wrap code in a lazy iterator to attempt to optimize batch performance
+        if(useLazyIterator) {
 
-        // Note: Beware of calling .size or other functions on the rows created below
-        //       (even in a debug print); it may have unintended consequences based
-        //       on where this function is being called from.  For example, KineticaRDD's
-        //       compute() calls this, and due to a debug print with ${myRows.size} in it,
-        //       the RDD was ALWAYS thought to be empty.  Bottom line: do NOT iterate over
-        //       the rows being returned.
-        
-        // Convert the records so that spark can understand it
-        val internalRows = resultSetToSparkInternalRows( null, allRecords )
-        val encoder = RowEncoder.apply( schema ).resolveAndBind()
-        val myRows = internalRows.map( encoder.fromRow )
-        myRows
+            val recordRange = startRow to (numRows+startRow-1)
+            val groupedRanges = recordRange.iterator.sliding(batchSize.toInt,batchSize.toInt).toList
+
+            groupedRanges.view.map(s => {
+                getRowsFromKinetica(gpudbConn, tableName, columns, schema, startRow = s.head, numRows = s.length, batchSize, false)
+            }).flatten.toIterator
+
+        } else {
+
+            // Fetch the records from Kinetica in the native format
+            val allRecords = getRecordsFromKinetica( gpudbConn, tableName, columns,
+                startRow, numRows, batchSize )
+
+            // Note: Beware of calling .size or other functions on the rows created below
+            //       (even in a debug print); it may have unintended consequences based
+            //       on where this function is being called from.  For example, KineticaRDD's
+            //       compute() calls this, and due to a debug print with ${myRows.size} in it,
+            //       the RDD was ALWAYS thought to be empty.  Bottom line: do NOT iterate over
+            //       the rows being returned.
+
+            // Convert the records so that spark can understand it
+            val internalRows = resultSetToSparkInternalRows( null, allRecords )
+            val encoder = RowEncoder.apply( schema ).resolveAndBind()
+            val myRows = internalRows.map( encoder.fromRow )
+            myRows
+        }
     }
         
 

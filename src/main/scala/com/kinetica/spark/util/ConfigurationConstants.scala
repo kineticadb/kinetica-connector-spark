@@ -11,6 +11,7 @@ object ConfigurationConstants {
     val KINETICA_PASSWORD_PARAM: String = "database.password"
     val KINETICA_RETRYCOUNT_PARAM: String = "database.retry_count"
     val KINETICA_TIMEOUT_PARAM: String = "database.timeout_ms"
+    val KINETICA_DOWNLOAD_BATCHSIZE_PARAM: String = "database.batch_size"
 
     val KINETICA_MULTIHEAD_PARAM: String = "ingester.multi_head"
     val KINETICA_IPREGEX_PARAM: String = "ingester.ip_regex"

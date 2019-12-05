@@ -22,6 +22,7 @@ object ConfigurationConstants {
 
     val KINETICA_EGRESS_OFFSET_PARAM: String = "egress.offset";
     val KINETICA_EGRESS_LIMIT_PARAM: String = "egress.limit";
+    val KINETICA_EGRESS_BATCH_SIZE: String = "egress.batch_size";
 
     val CONNECTOR_NUMPARTITIONS_PARAM: String = "spark.num_partitions";
     val CONNECTOR_ROWSPERPARTITION_PARAM: String = "spark.rows_per_partition";

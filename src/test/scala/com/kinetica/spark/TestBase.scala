@@ -566,7 +566,7 @@ trait SparkConnectorTestFixture
             m_gpudb.insertRecordsRandom( tableName, numRows, null );
         }
 
-        mark_table_for_deletion_at_test_end( tableName );
+        // mark_table_for_deletion_at_test_end( tableName );
         return;
     }
 

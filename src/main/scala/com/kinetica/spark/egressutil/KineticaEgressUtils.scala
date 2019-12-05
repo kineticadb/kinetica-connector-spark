@@ -697,6 +697,7 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
         val tableSize = KineticaEgressUtilsNativeClient.getKineticaTableSize( gpudbConn, tableName );
 
         if ( startRow >= tableSize ) {
+            // Return an empty list
             return allRecords;
         }
 
@@ -719,7 +720,6 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
         
         // Call /get/records/bycolumn repeatedly with a max rows of batchSize till we have done numRows
         // Collect the list of records in a separate list and pass into resultSetToSparkInternalRows
-        // TODO
         
         val extraRows = numRows % batchSize;
         var loopCount = numRows / batchSize;
@@ -772,27 +772,43 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
         schema:     StructType,
         startRow:   Long,
         numRows:    Long,
-        batchSize:  Long ): Iterator[Row] = {
+        batchSize:  Long,
+        useLazyIterator: Boolean = false ): Iterator[Row] = {
 
-        logger.debug("KineticaEgressUtilsNativeClient::getRowsFromKinetica() startRow {} numRows {}", startRow, numRows);
-        
-        // Fetch the records from Kinetica in the native format
-        val allRecords = getRecordsFromKinetica( gpudbConn, tableName, columns,
-                                                 startRow, numRows, batchSize )
+        if ( useLazyIterator ) {
+            logger.debug( s"getRowsFromKinetica(): Using lazy iterator (start: $startRow, # rows: $numRows)");
+            // Use a lazy iterator to optimize batch performance
+            val recordRange = startRow to (numRows + startRow - 1)
 
-        // Note: Beware of calling .size or other functions on the rows created below
-        //       (even in a debug print); it may have unintended consequences based
-        //       on where this function is being called from.  For example, KineticaRDD's
-        //       compute() calls this, and due to a debug print with ${myRows.size} in it,
-        //       the RDD was ALWAYS thought to be empty.  Bottom line: do NOT iterate over
-        //       the rows being returned.
+            // Create a sliding iterator with a step size of batchSize
+            val groupedRanges = recordRange.iterator.sliding( batchSize.toInt, batchSize.toInt ).toList
+
+            // Use a lazy view to stream the records one batch at a time
+            groupedRanges.view.map( group => {
+                getRowsFromKinetica( gpudbConn, tableName, columns, schema,
+                                     startRow = group.head, numRows = group.length, batchSize, false)
+            }).flatten.toIterator
+            
+        } else {
+            logger.debug( s"getRowsFromKinetica(): in else block (start: $startRow, # rows: $numRows)");
+            // Fetch the records from Kinetica in the native format
+            val allRecords = getRecordsFromKinetica( gpudbConn, tableName, columns,
+                                                     startRow, numRows, batchSize )
+
+            // Note: Beware of calling .size or other functions on the rows created below
+            //       (even in a debug print); it may have unintended consequences based
+            //       on where this function is being called from.  For example, KineticaRDD's
+            //       compute() calls this, and due to a debug print with ${myRows.size} in it,
+            //       the RDD was ALWAYS thought to be empty.  Bottom line: do NOT iterate over
+            //       the rows being returned.
         
-        // Convert the records so that spark can understand it
-        val internalRows = resultSetToSparkInternalRows( null, allRecords )
-        val encoder = RowEncoder.apply( schema ).resolveAndBind()
-        val myRows = internalRows.map( encoder.fromRow )
-        myRows
+            // Convert the records so that spark can understand it
+            val internalRows = resultSetToSparkInternalRows( null, allRecords )
+            val encoder = RowEncoder.apply( schema ).resolveAndBind()
+            val myRows = internalRows.map( encoder.fromRow )
+            myRows
+        }
     }
-        
+
 
 }   // end KineticaEgressUtilsNativeClient

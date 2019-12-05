@@ -50,8 +50,6 @@ private[kinetica] class KineticaRDD(
     )
     extends RDD[Row](sc, Nil) with LazyLogging {
     
-    private val  MAX_ROWS_TO_FETCH = 10000
-   
     /**
      * Retrieve the list of partitions corresponding to this RDD.
      */
@@ -64,13 +62,17 @@ private[kinetica] class KineticaRDD(
         // If no filter is given, use the native Java API to get the
         // records out using the fastest path possible
         if ( filters.isEmpty ) {
+            // No filter is given, so use the Java API to fetch data.  The reason
+            // we use the Java API only in this case is because we cannot push down
+            // spark sql filters via the Java API.
             logger.debug("KineticaRDD::compute(): No filters given; use the native path");
         
             // Fetch the rows (after filtering the data server-side)
             val allRowsForPartition = KineticaEgressUtilsNativeClient.getRowsFromKinetica( conf.getGpudb, conf.getTablename,
                                                                                            columns, schema,
                                                                                            part.startRow, part.numRows,
-                                                                                           MAX_ROWS_TO_FETCH );
+                                                                                           conf.getEgressBatchSize,
+                                                                                           true );
 
             // Note: Beware of calling .size or other functions on the rows created above
             //       (even in a debug print); it may have unintended consequences. For example,
@@ -91,6 +93,10 @@ private[kinetica] class KineticaRDD(
     }
 
 
+    /**
+     *  Use the JDBC connector and KineticaEgressUtilsJdbc to fetch records
+     * (not using the Java API direclty)
+     */
     def fetchRecordsViaJDBC(thePart: Partition, context: TaskContext): Iterator[Row] = {
         var closed = false
         var rs: ResultSet = null

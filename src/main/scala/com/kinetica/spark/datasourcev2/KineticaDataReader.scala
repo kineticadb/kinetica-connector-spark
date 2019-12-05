@@ -40,8 +40,8 @@ class KineticaDataReader (
     val tableSize = KineticaEgressUtilsNativeClient.getKineticaTableSize( gpudbConn, tableName );
     logger.debug("KineticaDataReader: got table size {}", tableSize);
      
-    // Read the table's rows
-    val batchSize = 10000;
+    // Read the table's rows in batches (default is 10k)
+    val batchSize = conf.getEgressBatchSize;
 
     // Offset and limit for getting data out
     val offset = conf.getEgressOffset;

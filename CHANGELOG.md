@@ -2,6 +2,16 @@
 
 ## Version 7.0
 
+### Version 7.0.6.0 -- 2019-12-05
+
+#### Added
+-   New egress option to control the batch size:
+    - ``egress.batch_size``
+
+#### Changed
+-   Egress to use lazy iterators for streaming data into partitions
+
+
 ### Version 7.0.5.2 -- 2019-10-25
 
 #### Changed

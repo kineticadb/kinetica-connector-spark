@@ -1353,6 +1353,9 @@ The following properties control the authentication & connection to *Kinetica*.
 | ``database.password``              | *<none>*    | *Kinetica* login password
 | ``database.retry_count``           | ``0``       | Connection retry count
 | ``database.timeout_ms``            | ``1800000`` | Connection timeout, in milliseconds (default is 30 minutes)
+| ``egress.offset``                  | ``0``       | A positive integer indicating the number of initial results to skip before returning records. If the offset is greater than the table size, an empty dataframe will be returned  **Egress Processor Only**
+| ``egress.limit``                   | *<none>*    | A positive integer indicating the total number of records to request. The default value will request all records in the table  **Egress Processor Only**
+| ``egress.batch_size``              | ``10000``   | A positive integer indicating the size to use for fetching batches of records (multiple batches can be used for a given ``offset`` and ``limit`` combination, if the latter two are given).  **Egress Processor Only**
 | ``ingester.analyze_data_only``     | ``false``   | When ``true``, will analyze the ingest data set, determining the types & sizes of columns necessary to hold the ingest data, and will output the derived schema as a ``CREATE TABLE statement`` (at the INFO log level).  **NOTE:** If this parameter is set to ``true``, all others will be ignored.  **Ingest Processor Only**
 | ``ingester.batch_size``            | ``10000``   | Batch size for bulk inserter
 | ``ingester.fail_on_errors``        | ``false``   | Fail on errors when ingesting data; default behavior is to log warnings and ignore the bad row
@@ -1362,8 +1365,6 @@ The following properties control the authentication & connection to *Kinetica*.
 | ``ingester.num_threads``           | ``4``       | Number of threads for bulk inserter
 | ``ingester.use_snappy``            | ``false``   | Use *snappy* compression during ingestion  **Ingest Processor Only**
 | ``ingester.use_timezone``          | *<none>*    | Use the given timezone when ingesting any date/time/datetime data.  By default, the system timezone will be used.  Allowed formats are standard timezone formats; e.g. ``America/Pacific``, ``EDT``, ``GMT+02:00``, ``GMT-0730``.  Local date/time will not be affected by this setting; only timestamps with a specified offset will be interpreted and saved in the given timezone.  For example, if ``GMT-0500`` is the time zone, and the timestamp value is ``2019-07-21 12:34:56+02:00``, it will be stored in the database as ``2019-07-21 05:34:56``.
-| ``egress.offset``                  | ``0``       | The offset from which point in the table records should be extracted.  If the offset is beyond the table size, an empty dataframe will be returned.  Must be a postivie integer.  **Egress Processor Only**
-| ``egress.limit``                   | *<none>*    | The total number of records that should be fetched.  The default is set for fetching all the records in the table.  Must be a postivie integer, if given.  **Egress Processor Only**
 | ``spark.datasource_api_version``   | ``v1``      | Which Spark DataSource API to use (accepted values: ``v1`` and ``v2``)  **Data Loader Only**
 | ``spark.num_partitions``           | ``4``       | Number of *Spark* partitions to use for extracting data  **Egress Processor Only**
 | ``spark.rows_per_partition``       | *<none>*    | Number of records per partition *Spark* should segment data into before loading into *Kinetica*; if not specified, *Spark* will use the same number of partitions it used to retrieve the source data  **Data Loader Only**

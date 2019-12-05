@@ -280,9 +280,6 @@ trait SparkConnectorBugFixes
             logger.debug( s"Table name '${tableName}'" );
             createKineticaTableWithGivenColumns( tableName, None, columns, numRecords );
 
-            // // Need to mark the table name for post-test clean-up
-            // mark_table_for_deletion_at_test_end( tableName );
-
             // Get the appropriate ingest options
             var ingest_options = get_default_spark_connector_options();
             ingest_options( "table.create" ) = "false";
@@ -707,9 +704,6 @@ trait SparkConnectorBugFixes
             createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
             // createKineticaTableOneIntNullableColumn( tableName, None, 0 );
 
-            // // Need to mark the table name for post-test clean-up
-            // mark_table_for_deletion_at_test_end( tableName );
-
             // Create some test data for a single int column where the first
             // row has a value of 0 and it increases by one per row
             val numTotalRecords = 100000;
@@ -1089,8 +1083,8 @@ trait SparkConnectorBugFixes
             logger.debug( s"Table name '${tableName}'" );
             createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
 
-            // // Need to mark the table name for post-test clean-up
-            // mark_table_for_deletion_at_test_end( tableName );
+            // Need to mark the table name for post-test clean-up
+            mark_table_for_deletion_at_test_end( tableName );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -1496,7 +1490,106 @@ trait SparkConnectorBugFixes
                 }
             }
         }  // end test for KECO-1574
+
+
         
+        /**
+         * Test that the lazy iterator egress is working
+         */
+        test(s"""$package_description KECO-1657: Lazy iterator egress tests
+             | """.stripMargin.replaceAll("\n", "") ) {
+
+            // TODO: The v2 package has an outstanding bug (KECO-1241) which
+            //       prevents us from testing the Java API path (for the
+            //       datasourcev2 package only!)
+            if ( package_to_test != m_v2_package ) {
+                // TODO: Remove the if filtering when KECO-1241 is fixed
+                
+
+                // This test case does not have any control data; it just egresses
+                // some (random) data without checking for any correctness
+            
+                // Create a table type with date, time, datetime columns
+                val sort_col_name = "i";
+                var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+                columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
+
+                // Create the table (but clear any pre-existing ones)
+                val tableName  = s"keco_1657_lazy_iterator_egress_${package_description}";
+                val numRecords = 100;
+                logger.debug( s"Table name '${tableName}'" );
+                createKineticaTableWithGivenColumns( tableName, None, columns, numRecords );
+
+                // We'll use a very tiny egress batch size
+                val egress_batch_size = "10";
+
+                // Get the appropriate egress options
+                var egress_options = get_default_spark_connector_options();
+                egress_options( "table.name"           ) = tableName;
+                egress_options( "egress.batch_size"    ) = egress_batch_size;
+                egress_options( "spark.num_partitions" ) = "1";
+
+                // Test the Java API path
+                // ----------------------
+
+                // Get the data out using the connecotr via the Java API (when no filtering is necessary)
+                try {
+                    logger.debug( s"Extracting the data from table ${tableName} via the connector (no filter --> use the Java API)..." );
+                    val fetched_records_native = m_sparkSession.sqlContext.read.format( package_to_test )
+                        .options( egress_options ).load();
+                    logger.debug( s"Extracted the data from table ${tableName} via the connector (no filter --> use the Java API)" );
+
+                    logger.debug( s"Getting the count (invoking the actual extraction) using the Java API");
+                    val fetched_record_count = fetched_records_native.count;
+                    logger.debug( s"Got the count: $fetched_record_count");
+                    assert( (fetched_record_count == numRecords),
+                            s"Table size ($fetched_record_count) should be ${numRecords}" );
+                } catch {
+                    case e: com.kinetica.spark.util.table.KineticaException => {
+                        logger.debug( s"Got KINETICA exception {}", e );
+                        assert( (false), s"Egressing via the native client from Kinetica should not fail (without filters)" );
+                    }
+                    case e2: java.lang.RuntimeException => {
+                        logger.debug( s"Got RUNTIME exception {}", e2 );
+                        assert( (false), s"Egressing via the native client from Kinetica should not fail (without filters)" );
+                    }
+                }
+
+
+
+                // Test the JDBC connector path
+                // ----------------------------
+                // Get the data out using the connecotr via the JDBC connector (when filtering IS necessary)
+                val filter_expression = s"i < 1000 or i >= 1000";
+
+                try {
+                    logger.debug( s"Extracting the data from table ${tableName} via the connector (with filter --> use the JDBC connector)..." );
+                    val fetched_records_jdbc = m_sparkSession.sqlContext.read
+                        .format( package_to_test )
+                        .options( egress_options ).load()
+                        .filter( filter_expression );
+                    logger.debug( s"Extracted the data from table ${tableName} via the connector (with filter --> use the JDBC connector)" );
+
+                    logger.debug( s"Getting the count (invoking the actual extraction) using the JDBC connector");
+                    val fetched_record_count = fetched_records_jdbc.count;
+                    logger.debug( s"Got the count: $fetched_record_count");
+                    assert( (fetched_record_count == numRecords),
+                            s"Table size ($fetched_record_count) should be ${numRecords}" );
+                } catch {
+                    case e: com.kinetica.spark.util.table.KineticaException => {
+                        logger.debug( s"Got KINETICA exception {}", e );
+                        assert( (false), s"Egressing via the JDBC connector from Kinetica should not fail (with filters)" );
+                    }
+                    case e2: java.lang.RuntimeException => {
+                        logger.debug( s"Got RUNTIME exception {}", e2 );
+                        assert( (false), s"Egressing via the JDBC connector from Kinetica should not fail (with filters)" );
+                    }
+                }
+
+            } // end if not package v2
+
+        }  // end test #1 for KECO-1657
+
     }   // end tests for bugFixes
 
 

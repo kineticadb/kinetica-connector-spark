@@ -78,10 +78,17 @@ class LoaderParams extends Serializable with LazyLogging {
     var numPartitions: Int = 4
         
     @BeanProperty
-    var egressOffset: Long = 0
+    var egressOffset: Long = 0;
 
     @BeanProperty
-    var egressLimit: java.lang.Long = null
+    var egressLimit: java.lang.Long = null;
+
+    @BeanProperty
+    var egressBatchSize: java.lang.Long = 10000;
+
+    // We will cap the egress batch size in case the user gives a ridiculously
+    // high limit
+    val maxEgressBatchSize: java.lang.Long = 25000;
 
     @BeanProperty
     var jdbcURL: String = null
@@ -197,9 +204,9 @@ class LoaderParams extends Serializable with LazyLogging {
                 this.jdbcURL = s"${this.jdbcURL};PrimaryURL=${this.kineticaPrimaryURL}";
             }
 
-            // We're searching the Kinetica URL since the JDBC URL won't have the
-            // internet protocol in it
-            if ( kineticaURL.contains( "https" ) ) {
+            // We're searching the Kinetica URL since the JDBC URL may not have
+            // the internet protocol in it
+            if ( kineticaURL.contains( "https" ) || jdbcURL.contains( "https" ) ) {
                 // For HTTPS URLs only, use SSL between the JDBC client and
                 // the Kinetica server
                 jdbcURL = s"${this.jdbcURL};SSLAllowHostMismatch=1";
@@ -233,7 +240,7 @@ class LoaderParams extends Serializable with LazyLogging {
 
         numPartitions = params.get(CONNECTOR_NUMPARTITIONS_PARAM).getOrElse("4").toInt
 
-        // Egress offset and limit (if no limit, fetch everything)
+        // Egress options: offset, limit (if no limit, fetch everything), batch size
         egressOffset = params.get( KINETICA_EGRESS_OFFSET_PARAM ).getOrElse( "0" ).toLong
         val egressLimitStr = params.get( KINETICA_EGRESS_LIMIT_PARAM ).getOrElse( null )
         if ( egressLimitStr == null ) {
@@ -244,6 +251,12 @@ class LoaderParams extends Serializable with LazyLogging {
             // Save the actual egress for use
             egressLimit = egressLimitStr.toLong;
         }
+        egressBatchSize = params.get( KINETICA_EGRESS_BATCH_SIZE ).getOrElse( "10000" ).toLong
+        // Cap the batch size to a hardcoded maximum
+        if ( egressBatchSize > maxEgressBatchSize ) {
+            egressBatchSize = maxEgressBatchSize;
+        }
+        
         
         // Default setting is 0
         retryCount = params.get(KINETICA_RETRYCOUNT_PARAM).getOrElse("0").toInt
@@ -346,9 +359,11 @@ class LoaderParams extends Serializable with LazyLogging {
 
         // Set the primary url, if given any
         if ( this.kineticaPrimaryURL != null ) {
+            logger.info(s"Setting primary URL to <${this.kineticaPrimaryURL}>");
             opts.setPrimaryUrl( this.kineticaPrimaryURL );
         }
         
+        logger.info(s"Using URL(s) ${kineticaURL}to create a GPUdb connection");
         val gpudb: GPUdb = new GPUdb(kineticaURL, opts);
         logger.info(s"Connecting to ${gpudb.getURL().toString()} as user <${kusername}>");
         checkConnection(gpudb);

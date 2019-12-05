@@ -206,11 +206,7 @@ trait SparkConnectorTestFixture
         val host = m_gpudb.getURL().getHost();
         var jdbc_url : String = "";
         if (s"${version(0)}".toInt > 6) {
-            if ( m_gpudb.getURL().getProtocol() == "https" ) {
-                jdbc_url = s"jdbc:kinetica:URL=${m_gpudb.getURL()}";
-            } else {
-                jdbc_url = s"jdbc:kinetica://${host}:9191";
-            }
+            jdbc_url = s"jdbc:kinetica:URL=${m_host}";
         } else {
             jdbc_url = s"jdbc:simba://${host}:9292";
         }

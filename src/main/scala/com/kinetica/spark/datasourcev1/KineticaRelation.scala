@@ -81,8 +81,9 @@ class KineticaRelation(
         logger.debug( s"KineticaRelation::buildScan(): offset $offset limit $limit" );
 
         val parts = com.kinetica.spark.egressutil.KineticaInputFormat.getDataSlicePartition(
-                                                                                            com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)(),
-                                                                                            numPartitions.toInt, tableName, filters, offset, limit);
+                com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)(),
+                numPartitions.toInt, tableName, filters, offset, limit );
+        logger.debug( s"KineticaRelation::buildScan(): offset $offset limit $limit" );
         new KineticaRDD(
                         sqlContext.sparkContext,
                         KineticaJdbcUtils.getConnector(url, conf),

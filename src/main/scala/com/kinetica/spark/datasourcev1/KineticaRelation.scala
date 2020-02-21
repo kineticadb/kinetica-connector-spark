@@ -74,24 +74,49 @@ class KineticaRelation(
         logger.debug( s"KineticaRelation::buildScan(): Got required columns: '${requiredColumns.mkString(", ")}'" )
 
         val numPartitions = conf.getNumPartitions;
-                
-        if (requiredColumns.isEmpty) {
-            emptyRowRDD(filters, url, tableName, numPartitions)
-        } else {
-            val parts = com.kinetica.spark.egressutil.KineticaInputFormat.getDataSlicePartition(
-                           com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)(),
-                           numPartitions.toInt, tableName, filters);
-            new KineticaRDD(
-                sqlContext.sparkContext,
-                KineticaJdbcUtils.getConnector(url, conf),
-                KineticaSchema.pruneSchema( tableSchema, requiredColumns ),
-                tableName,
-                requiredColumns,
-                filters,
-                parts,
-                properties,
-                conf);
-        }
+
+        // Offset and limit for getting data out
+        val offset = conf.getEgressOffset;
+        val limit  = conf.getEgressLimit;
+        logger.debug( s"KineticaRelation::buildScan(): offset $offset limit $limit" );
+
+        val parts = com.kinetica.spark.egressutil.KineticaInputFormat.getDataSlicePartition(
+                com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)(),
+                numPartitions.toInt, tableName, filters, offset, limit );
+        logger.debug( s"KineticaRelation::buildScan(): offset $offset limit $limit" );
+        new KineticaRDD(
+                        sqlContext.sparkContext,
+                        KineticaJdbcUtils.getConnector(url, conf),
+                        KineticaSchema.pruneSchema( tableSchema, requiredColumns ),
+                        tableName,
+                        requiredColumns,
+                        filters,
+                        parts,
+                        properties,
+                        conf);
+
+        // // original~~~~~~~~
+        // // The intent here is that when we want to just get a count, we don't need
+        // // the data to flow; but tests show that the empty column path still gets
+        // // the full rows and ends up fetching all the columns anyway.  Need to investigate more.
+        // if (requiredColumns.isEmpty) {
+        //     emptyRowRDD(filters, url, tableName, numPartitions)
+        // } else {
+        //     val parts = com.kinetica.spark.egressutil.KineticaInputFormat.getDataSlicePartition(
+        //                    com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)(),
+        //                    numPartitions.toInt, tableName, filters, offset, limit);
+        //     new KineticaRDD(
+        //         sqlContext.sparkContext,
+        //         KineticaJdbcUtils.getConnector(url, conf),
+        //         KineticaSchema.pruneSchema( tableSchema, requiredColumns ),
+        //         tableName,
+        //         requiredColumns,
+        //         filters,
+        //         parts,
+        //         properties,
+        //         conf);
+        // }
+        // // end original~~~~~~~~
     }
 
     override def insert(df: DataFrame, dummy: Boolean): Unit = {
@@ -135,8 +160,10 @@ class KineticaRelation(
 
         logger.info("Executing spark ingest ingest_analysis = {}", conf.isDryRun());
 
-        if (df.rdd.isEmpty()) {
-            throw new KineticaException("Dataframe/Dataset is empty, try again");
+        // Skip ingestion only if the schema is empty
+        if ( df.schema.isEmpty ) {
+            logger.warn("The dataframe has no schema; skipping ingestion");
+            return;
         }
 
         if (conf.isCreateTable && conf.isAlterTable) {
@@ -178,14 +205,15 @@ class KineticaRelation(
                     case e: Throwable => throw new RuntimeException("Failed with errors ", e);
                 }
             }
+            
             logger.debug("Get Kinetica Table Type");
-            KineticaSparkDFManager.setType(conf);
+            val ingestionUtils = new KineticaSparkDFManager(conf);
 
             logger.debug("Set LoaderParms Table Type");
-            conf.setTableType(KineticaSparkDFManager.getType(conf));
+            conf.setTableType( ingestionUtils.getType(conf) );
 
             logger.debug("Set DataFrame");
-            KineticaSparkDFManager.setDf(dfSource);
+            ingestionUtils.setDf( dfSource );
 
             if (conf.isTableReplicated) {
                 logger.info("Table is replicated");
@@ -194,7 +222,7 @@ class KineticaRelation(
             }
 
             logger.info("Map and Write to Kinetica...");
-            KineticaSparkDFManager.KineticaMapWriter(sparkSession.sparkContext, conf);
+            ingestionUtils.KineticaMapWriter(sparkSession.sparkContext, conf);
             logger.info("Map and Write to Kinetica done.");
             // Lets try and print the accumulators
             logger.info(" Total rows = " + conf.totalRows.value);

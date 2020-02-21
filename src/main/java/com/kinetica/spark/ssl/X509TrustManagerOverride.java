@@ -10,12 +10,9 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class X509TrustManagerOverride implements X509TrustManager {
 
-    private static final Logger LOG = LoggerFactory.getLogger(X509TrustManagerOverride.class);
 
     public static TrustManager[] newManagers(String trustStorePath, String password) throws Exception {
         X509TrustManager trustManager = X509TrustManagerOverride.newInstance(trustStorePath, password);
@@ -28,7 +25,6 @@ public class X509TrustManagerOverride implements X509TrustManager {
         if(!trustStore.exists()) {
             throw new Exception("Could not find trust store: " + trustStorePath);
         }
-        LOG.info("Found JKS truststore: {}", trustStore.getAbsolutePath());
 
         if(password == null) {
             throw new Exception("Truststore password must be specified.");

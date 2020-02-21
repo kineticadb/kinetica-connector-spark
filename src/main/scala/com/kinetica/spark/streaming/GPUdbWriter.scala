@@ -32,7 +32,7 @@ object GPUdbWriter {
  */
 @SerialVersionUID(-5273795273398765842L)
 class GPUdbWriter[T <: Record] (lp : LoaderParams ) extends Serializable with LazyLogging {
-  
+
     private val threads: Int = 4
     private val tableName: String = lp.tablename
     private val insertSize: Int = lp.insertSize
@@ -84,7 +84,7 @@ class GPUdbWriter[T <: Record] (lp : LoaderParams ) extends Serializable with La
             }
         })
     }
-    
+
     /**
      * Writes a record to GPUdb
      *
@@ -95,7 +95,7 @@ class GPUdbWriter[T <: Record] (lp : LoaderParams ) extends Serializable with La
         logger.debug("Added <{}> to write queue", t)
         if (records.size >= insertSize) flush()
     }
-    
+
     /**
      * Flushes the set of accumulated records, writing them to GPUdb
      */
@@ -119,7 +119,14 @@ class GPUdbWriter[T <: Record] (lp : LoaderParams ) extends Serializable with La
             insertRequest.setTableName(tableName)
             gpudb.insertRecords(insertRequest)
         } catch {
-            case ex: Exception => logger.error("Problem writing record(s)", ex)
+            case ex: Exception => {
+                logger.error( s"Problem writing record(s) '${ex.getMessage()}'");
+                logger.debug( "Stacktrace for debugging: ", ex );
+                if ( lp.failOnError ) {
+                    // Throw exception only for fail-fast mode
+                    throw ex;
+                }
+            }
         }
     }
 

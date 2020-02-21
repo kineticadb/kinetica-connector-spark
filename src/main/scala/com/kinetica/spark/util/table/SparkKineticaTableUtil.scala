@@ -57,7 +57,7 @@ object SparkKineticaTableUtil extends LazyLogging {
 
     @BeanProperty
     var alterStatements: List[String] = new ArrayList[String]()
-    
+
     @BeanProperty
     var charColumnLengths: scala.collection.mutable.Map[String, Integer] = scala.collection.mutable.Map();
 
@@ -96,6 +96,7 @@ object SparkKineticaTableUtil extends LazyLogging {
      * Check if the table exists in Kinetica.
      *
      * @param tableName  The name of the table
+     * @param properties Loader parameters
      *
      * @return true if the table exists, false otherwise
      */
@@ -125,7 +126,7 @@ object SparkKineticaTableUtil extends LazyLogging {
         JDBCConnectionUtils.Init(lp)
         //execute create table
         logger.info("Create table DDL:  {}", KineticaDDLBuilder.getCreateTableDDL)
-        
+
         if( !lp.isDryRun() ) {
             logger.info("Creating table " + lp.getTablename);
             JDBCConnectionUtils.executeSQL(KineticaDDLBuilder.getCreateTableDDL)
@@ -168,7 +169,6 @@ object SparkKineticaTableUtil extends LazyLogging {
      * @throws KineticaException
      */
     def AlterTable(ds: DataFrame, lp: LoaderParams): Unit = {
-        logger.info("KineticaMapWriter")
         logger.debug("Mapping DataFrame columns to Kinetica")
         try if (lp.getJdbcURL.trim().isEmpty)
             throw new RuntimeException("Missing JDBC URL or invalid")
@@ -198,6 +198,7 @@ object SparkKineticaTableUtil extends LazyLogging {
 
     /**
      * Builds Kinetica DDL from either a DataFrame or a schema
+     * @param ds Spark Dataframe/Dataset
      * @param schema StructType  Schema for the table
      * @param lp LoaderParams object
      */
@@ -219,7 +220,7 @@ object SparkKineticaTableUtil extends LazyLogging {
                 }
             }
         }
-        
+
         charColumnLengths.clear();
 
         while (sField.hasNext) {
@@ -291,7 +292,7 @@ object SparkKineticaTableUtil extends LazyLogging {
         AlterTableAddColumnDDL.init(lp)
         AlterTableModifyColumnDDL.init(lp)
         iniAlterStatements()
-        val mytype: Type = KineticaSparkDFManager.getType(lp)
+        val mytype: Type = lp.getTableType();
         val alterDDL: Boolean = true
 
         // Get the field iterator
@@ -413,31 +414,6 @@ object SparkKineticaTableUtil extends LazyLogging {
         KineticaDDLBuilder.getCreateTableDDL
     }
 
-    def getExistingColumnCharN(columnName: String): Int = synchronized {
-        var iterator: Iterator[String] = null
-        var charValue: Int = 0
-
-        try {
-            iterator = KineticaSparkDFManager.getType.getColumn(columnName).getProperties.iterator()
-        } catch {
-            case e: Exception => throw new KineticaException("Column does not exist");
-        }
-
-        while (iterator.hasNext) {
-            val metaValue: String = iterator.next()
-            if (CharMatcher.JAVA_LETTER
-                .retainFrom(metaValue)
-                .toLowerCase()
-                .matches(".*char.*")) {
-                logger.debug("Field is char")
-                logger.debug(
-                    "Char Length: " + CharMatcher.JAVA_DIGIT.retainFrom(metaValue))
-                charValue = java.lang.Integer
-                    .parseInt(CharMatcher.JAVA_DIGIT.retainFrom(metaValue))
-            }
-        }
-        charValue
-    }
 
     /**
      * Return kinetica Alter DDL from dataframe
@@ -458,7 +434,9 @@ object SparkKineticaTableUtil extends LazyLogging {
      * @param shardKey Shardkey
      */
     def setShardKey(shardKey: String): Unit = {
-        shardkeys.add(shardKey)
+        if ( !shardkeys.contains(shardKey) ) {
+            shardkeys.add(shardKey)
+        }
     }
 
     /**
@@ -467,7 +445,10 @@ object SparkKineticaTableUtil extends LazyLogging {
      * @param shardKeys List of shard keys
      */
     def setShardKeys(shardKeys: List[String]): Unit = {
-        shardkeys = shardKeys
+        for (shardkey <- shardKeys) {
+            if (!shardkeys.contains(shardkey))
+                shardkeys.add(shardkey)
+        }
     }
 
     /**
@@ -484,10 +465,13 @@ object SparkKineticaTableUtil extends LazyLogging {
 
     /**
      * Set primary keys for table creation
-     * @param primarykeys list of primary keys
+     * @param pks list of primary keys
      */
     def setPrimarykeys(pks: List[String]): Unit = {
-        primarykeys = pks
+        for (key <- pks) {
+            if (!primarykeys.contains(key))
+                primarykeys.add(key)
+        }
     }
 
     /**
@@ -497,7 +481,9 @@ object SparkKineticaTableUtil extends LazyLogging {
      * @param primarykey column
      */
     def setPrimarykey(primarykey: String): Unit = {
-        primarykeys.add(primarykey)
+        if (!primarykeys.contains(primarykey)) {
+            primarykeys.add(primarykey)
+        }
     }
 
     /**
@@ -508,10 +494,14 @@ object SparkKineticaTableUtil extends LazyLogging {
 
     /**
      * Set text search columns
-     * @param textsearchfields list of columns
+     * @param tsFields list of columns
      */
     def setTextsearchfields(tsFields: List[String]): Unit = {
-        textsearchfields = tsFields
+        for (key <- tsFields){
+            if (!textsearchfields.contains(key))
+                textsearchfields.add(key)
+        }
+
     }
 
     /**
@@ -522,7 +512,9 @@ object SparkKineticaTableUtil extends LazyLogging {
      * @param textsearchfield text search column
      */
     def setTextsearchfield(textsearchfield: String): Unit = {
-        textsearchfields.add(textsearchfield)
+        if (!textsearchfields.contains(textsearchfield)) {
+            textsearchfields.add(textsearchfield)
+        }
     }
 
     /**
@@ -535,10 +527,13 @@ object SparkKineticaTableUtil extends LazyLogging {
      * <pre>
      *  Set columns to store only
      * </pre>
-     * @param storeonlyfields list of store only columns
+     * @param sofields list of store only columns
      */
     def setStoreonlyfields(sofields: List[String]): Unit = {
-        storeonlyfields = sofields
+        for (key <- sofields) {
+            if (!storeonlyfields.contains(key))
+                storeonlyfields.add(key)
+        }
     }
 
     /**
@@ -549,7 +544,9 @@ object SparkKineticaTableUtil extends LazyLogging {
      * @param storeonlyfield list of store only columns
      */
     def setStoreonlyfield(storeonlyfield: String): Unit = {
-        storeonlyfields.add(storeonlyfield)
+        if (!storeonlyfields.contains(storeonlyfield)) {
+            storeonlyfields.add(storeonlyfield)
+        }
     }
 
     /**
@@ -560,10 +557,13 @@ object SparkKineticaTableUtil extends LazyLogging {
 
     /**
      * Set columns to ivp4 subyet
-     * @param ipv4fields list of columns to set to ipv4 subtype
+     * @param ipvfourfields list of columns to set to ipv4 subtype
      */
     def setIpv4fields(ipvfourfields: List[String]): Unit = {
-        ipv4fields = ipvfourfields
+        for (key <- ipvfourfields) {
+            if (!ipv4fields.contains(key))
+                ipv4fields.add(key)
+        }
     }
 
     /**
@@ -574,7 +574,9 @@ object SparkKineticaTableUtil extends LazyLogging {
      * @param ipv4field list of ipv4 columns
      */
     def setIpv4field(ipv4field: String): Unit = {
-        ipv4fields.add(ipv4field)
+        if (!ipv4fields.contains(ipv4field)) {
+            ipv4fields.add(ipv4field)
+        }
     }
 
     /**
@@ -585,10 +587,13 @@ object SparkKineticaTableUtil extends LazyLogging {
 
     /**
      * Sets columns to subtype disk optimized
-     * @param diskoptimizedfields list of columns
+     * @param dofields list of columns
      */
     def setDiskoptimizedfields(dofields: List[String]): Unit = {
-        diskoptimizedfields = diskoptimizedfields
+        for (key <- dofields) {
+            if (!diskoptimizedfields.contains(key))
+                diskoptimizedfields.add(key)
+        }
     }
 
     /**
@@ -599,7 +604,9 @@ object SparkKineticaTableUtil extends LazyLogging {
      * @param diskoptimizedfield column
      */
     def setDiskoptimizedfield(diskoptimizedfield: String): Unit = {
-        diskoptimizedfields.add(diskoptimizedfield)
+        if (!diskoptimizedfields.contains(diskoptimizedfield)) {
+            diskoptimizedfields.add(diskoptimizedfield)
+        }
     }
 
     /**
@@ -609,11 +616,24 @@ object SparkKineticaTableUtil extends LazyLogging {
     def getWktfields(): List[String] = wktfields
 
     /**
+     * Set columns to subtype WKT
+     * @param wkfields list of columns
+     */
+    def setWktfields(wkfields: List[String]): Unit = {
+        for (key <- wkfields) {
+            if (!wktfields.contains(key))
+                wktfields.add(key)
+        }
+    }
+
+    /**
      * Set column to subtype WKT
      * @param wktfield column
      */
     def setWktfield(wktfield: String): Unit = {
-        wktfields.add(wktfield)
+        if (!wktfields.contains(wktfield)) {
+            wktfields.add(wktfield)
+        }
     }
 
     /**
@@ -624,10 +644,13 @@ object SparkKineticaTableUtil extends LazyLogging {
 
     /**
      * Set all columns in list to not null
-     * @param notnullfields list of columns
+     * @param nnfields list of columns
      */
     def setNotnullfields(nnfields: List[String]): Unit = {
-        notnullfields = nnfields
+        for (key <- nnfields) {
+            if (!notnullfields.contains(key))
+                notnullfields.add(key)
+        }
     }
 
     /**
@@ -638,19 +661,30 @@ object SparkKineticaTableUtil extends LazyLogging {
      * @param notnullfield column
      */
     def setNotnullfield(notnullfield: String): Unit = {
-        notnullfields.add(notnullfield)
+        if (!notnullfields.contains(notnullfield)) {
+            notnullfields.add(notnullfield)
+        }
     }
 
+    /**
+     * Set column to subtype dict
+     * @param dictEncodingField column
+     */
     def setDictEncodingField(dictEncodingField: String): Unit = {
-        dictencodingfields.add(dictEncodingField)
+        if (!dictencodingfields.contains(dictEncodingField)) {
+            dictencodingfields.add(dictEncodingField)
+        }
     }
 
     /**
      * Set list of columns to subtype dict
-     * @param dictEncodingFields columns
+     * @param deFields list of columns
      */
     def setDictEncodingFields(deFields: List[String]): Unit = {
-        dictencodingfields = deFields
+        for (key <- deFields) {
+            if (!dictencodingfields.contains(key))
+                dictencodingfields.add(key)
+        }
     }
 
     /**
@@ -684,15 +718,20 @@ object SparkKineticaTableUtil extends LazyLogging {
      * @param stringfield column
      */
     def setStringfield(stringfield: String): Unit = {
-        stringfields.add(stringfield)
+        if (!stringfields.contains(stringfield)) {
+            stringfields.add(stringfield)
+        }
     }
 
     /**
      * Set list of columns to type String.  This will avoid conversion to type charN
-     * @param stringfields columns
+     * @param sfields columns
      */
     def setStringfields(sfields: List[String]): Unit = {
-        stringfields = sfields
+        for (key <- sfields) {
+            if (!stringfields.contains(key))
+                stringfields.add(key)
+        }
     }
 
     /**
@@ -718,11 +757,13 @@ object SparkKineticaTableUtil extends LazyLogging {
     }
 
     /**
-     * Add alter statment to lis
-     * @param alterStatements full list of alter statements
+     * Add alter statment to list
+     * @param alterStatement alter statement
      */
-    def setAlterStatements(alterStatements: String): Unit = {
-        SparkKineticaTableUtil.alterStatements.add(alterStatements)
+    def setAlterStatements(alterStatement: String): Unit = {
+        if (!alterStatements.contains(alterStatement)) {
+            alterStatements.add(alterStatement)
+        }
     }
 
     /**

@@ -19,11 +19,10 @@ packages in this project:
 * `com.kinetica.spark.datasourcev1` -- uses the Spark DataSource v1 API
 * `com.kinetica.spark.datasourcev2` -- uses the Spark DataSource v2 API.
 
-The `com.kinetica.spark` package uses the v1 API by default.  The Spark
-DataSource v2 API is still evolving, so we encourage users to use the v1
+The `com.kinetica.spark` package uses the v1 API by default.  The
+*Spark DataSource v2 API* is still evolving, so we encourage users to use the v1
 API (which can be used by default, or by explicitly choosing the first
 aforementioned package).
-
 
 There are three ways in which this connector can interface with *Kinetica*:
 
@@ -67,16 +66,16 @@ The connector JAR can be built with *Maven* as follows:
 appropriately.
 
 
-This sequence produces the connector JAR, which will be made availble to the
+This sequence produces the connector JAR, which will be made available to the
 *Spark* cluster upon submitting the *Spark* job.  It can be found under the
 ``target`` directory:
 
-    target/kinetica-spark-6.2.x.y-jar-with-dependencies.jar
+    target/kinetica-spark-6.2.<X>.<Y>-jar-with-dependencies.jar
 
 It will also produce a testing JAR under the same directory, which will be
 referenced later in this guide for use in testing the *Spark* connector:
 
-    target/kinetica-spark-6.2.x.y-tests.jar
+    target/kinetica-spark-6.2.<X>.<Y>-tests.jar
 
 In order to run the pre-packaged tests, run:
 
@@ -98,18 +97,18 @@ sure to provide appropriate values for ``<SparkMasterHostName/IP>``,
     $ spark-submit \
        --class com.kinetica.spark.SparkKineticaDriver \
        --master "spark://<SparkMasterHostName/IP>:<SparkMasterPort>" \
-       kinetica-spark-6.2.x.y-jar-with-dependencies.jar <PropertiesFile>
+       kinetica-spark-6.2.<X>.<Y>-jar-with-dependencies.jar <PropertiesFile>
 
 
 To launch the *Ingest/Egress Processor* or *Streaming Processor* through the
 *Spark* shell, run:
 
-    $ spark-shell --jars kinetica-spark-6.2.x.y-jar-with-dependencies.jar
+    $ spark-shell --jars kinetica-spark-6.2.<X>.<Y>-jar-with-dependencies.jar
 
 
 To run the *Ingest/Egress Processor* through the *PySpark* shell:
 
-    $ pyspark --jars kinetica-spark-6.2.x.y-jar-with-dependencies.jar
+    $ pyspark --jars kinetica-spark-6.2.<X>.<Y>-jar-with-dependencies.jar
 
 
 ## Spark Data Loader
@@ -527,7 +526,7 @@ a ``CREATE TABLE`` statement, to the *Spark* log file (or console, depending on
 Launch *Spark Shell*:
 
 ```shell
-$ spark-shell --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.1-jar-with-dependencies.jar
+$ spark-shell --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.*-jar-with-dependencies.jar
 ```
 
 Configure loader for target database; be sure to provide an appropriate value
@@ -557,8 +556,8 @@ Derive schema from ``DataFrame``, and log schema:
 df.write.format("com.kinetica.spark").options(options).save()
 ```
 
-Note:  In order to use the Spark DataSource v2 API, use the
-       `com.kinetica.spark.datasourcev2` package instead.
+**NOTE:** In order to use the *Spark DataSource v2 API*, use the
+``com.kinetica.spark.datasourcev2`` package instead.
 
 After this is complete, the log should contain the ``CREATE TABLE`` statement
 for the table appropriate for the airline dataset contained in :file:`2008.csv`.
@@ -574,7 +573,7 @@ It will first read airline data from CSV into a ``DataFrame``, and then load the
 Launch *Spark Shell*:
 
 ```shell
-$ spark-shell --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.x.y-jar-with-dependencies.jar
+$ spark-shell --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.*-jar-with-dependencies.jar
 ```
 
 Configure loader for target database; be sure to provide an appropriate value
@@ -620,13 +619,13 @@ Write data from ``DataFrame`` into *Kinetica*:
 df.write.format("com.kinetica.spark").options(options).save()
 ```
 
-Note:  In order to use the Spark DataSource v2 API, use the
-       `com.kinetica.spark.datasourcev2` package instead.
+**NOTE:** In order to use the *Spark DataSource v2 API*, use the
+``com.kinetica.spark.datasourcev2`` package instead.
 
 After the data load is complete, an ``airline`` table should exist in *Kinetica*
 that matches the ``2008.csv`` data file.
 
-The test JAR, ``kinetica-spark-6.2.x.y-tests.jar``, created in the
+The test JAR, ``kinetica-spark-6.2.<X>.<Y>-tests.jar``, created in the
 *Build & Install* section, can be used to run the example above.  This command
 assumes that the test JAR is also under ``/opt/gpudb/connectors/spark`` on the
 *Spark* master node; be sure to provide appropriate values for
@@ -638,8 +637,8 @@ applicable:
 $ spark-submit \
     --master "spark://<SparkMasterHostName/IP>:<SparkMasterPort>" \
     --class "com.kinetica.spark.KineticaIngestTest" \
-    --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.x.y-tests.jar \
-       /opt/gpudb/connectors/spark/kinetica-spark-6.2.x.y-jar-with-dependencies.jar \
+    --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.*-tests.jar \
+       /opt/gpudb/connectors/spark/kinetica-spark-6.2.*-jar-with-dependencies.jar \
        /opt/gpudb/connectors/spark/2008.csv \
        <KineticaHostName/IP> <Username> <Password>
 ```
@@ -656,7 +655,7 @@ the ``DataFrame`` and output the results to the console.
 Launch *Spark Shell*:
 
 ```shell
-$ spark-shell --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.x.y-jar-with-dependencies.jar
+$ spark-shell --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.*-jar-with-dependencies.jar
 ```
 
 Import *Spark* resources:
@@ -675,6 +674,7 @@ val username = "<Username>"
 val password = "<Password>"
 val url = s"http://${host}:9191"
 val options = Map(
+   "database.url" -> url,
    "database.jdbc_url" -> s"jdbc:simba://${host}:9292;URL=${url}",
    "database.username" -> username,
    "database.password" -> password,
@@ -745,7 +745,7 @@ Verify output:
 After the data write is complete, a ``2008.july`` directory should have been
 created, containing all data from the ``airline`` table for the month of July.
 
-The test JAR, ``kinetica-spark-6.2.x.y-tests.jar``, created in the
+The test JAR, ``kinetica-spark-6.2.<X>.<Y>-tests.jar``, created in the
 *Build & Install* section, can be used to run the example above.  This command
 assumes that the test JAR is also under ``/opt/gpudb/connectors/spark`` on the
 *Spark* master node; be sure to provide appropriate values for
@@ -757,8 +757,8 @@ applicable:
 $ spark-submit \
     --master "spark://<SparkMasterHostName/IP>:<SparkMasterPort>" \
     --class "com.kinetica.spark.KineticaEgressTest" \
-    --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.x.y-tests.jar \
-       /opt/gpudb/connectors/spark/kinetica-spark-6.2.x.y-jar-with-dependencies.jar \
+    --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.*-tests.jar \
+       /opt/gpudb/connectors/spark/kinetica-spark-6.2.*-jar-with-dependencies.jar \
        <KineticaHostName/IP> <Username> <Password>
 ```
 
@@ -772,7 +772,7 @@ and then load the ``DataFrame`` into *Kinetica*.
 Launch *PySpark Shell*:
 
 ```shell
-$ pyspark --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.x.y-jar-with-dependencies.jar
+$ pyspark --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.*-jar-with-dependencies.jar
 ```
 
 Import *PySpark* resources:
@@ -841,7 +841,7 @@ connector home directory:
 ```shell
 $ spark-submit \
     --master "spark://<SparkMasterHostName/IP>:<SparkMasterPort>" \
-    --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.x.y-jar-with-dependencies.jar \
+    --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.*-jar-with-dependencies.jar \
        <KineticaSparkConnectorHome>/scripts/python/kineticaingest.py \
        /opt/gpudb/connectors/spark/2008.csv \
        <KineticaHostName/IP> <Username> <Password>
@@ -902,14 +902,14 @@ As new records are added to that table, batches of streamed records will be
 represented in the *Spark* console.
 
 This example assumes the ``2008.csv`` and *Spark* connector JAR
-(``kinetica-spark-6.2.x.y-jar-with-dependencies.jar``) have been copied to the
-``/opt/gpudb/connectors/spark`` directory on the *Spark* master node.
+(``kinetica-spark-6.2.<X>.<Y>-jar-with-dependencies.jar``) have been copied to
+the ``/opt/gpudb/connectors/spark`` directory on the *Spark* master node.
 
 
 Launch *Spark Shell*:
 
 ```shell
-$ spark-shell --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.x.y-jar-with-dependencies.jar
+$ spark-shell --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.*-jar-with-dependencies.jar
 ```
 
 Import *Spark* resources:
@@ -1012,7 +1012,7 @@ them to the *Spark* console:
     {"Year": 2008, "Month": 1, "DayofMonth": 3, "DayOfWeek": 4, "DepTime": "617", "CRSDepTime": 615, "ArrTime": "652", "CRSArrTime": 650, "UniqueCarrier": "WN", "FlightNum": 11, "TailNum": "N689SW", "ActualElapsedTime": "95", "CRSElapsedTime": "95", "AirTime": "70", "ArrDelay": "2", "DepDelay": "2", "Origin": "IND", "Dest": "MCI", "Distance": 451, "TaxiIn": "6", "TaxiOut": "19", "Cancelled": 0, "CancellationCode": null, "Diverted": 0, "CarrierDelay": "NA", "WeatherDelay": "NA", "NASDelay": "NA", "SecurityDelay": "NA", "LateAircraftDelay": "NA"}
     {"Year": 2008, "Month": 1, "DayofMonth": 3, "DayOfWeek": 4, "DepTime": "1620", "CRSDepTime": 1620, "ArrTime": "1639", "CRSArrTime": 1655, "UniqueCarrier": "WN", "FlightNum": 810, "TailNum": "N648SW", "ActualElapsedTime": "79", "CRSElapsedTime": "95", "AirTime": "70", "ArrDelay": "-16", "DepDelay": "0", "Origin": "IND", "Dest": "MCI", "Distance": 451, "TaxiIn": "3", "TaxiOut": "6", "Cancelled": 0, "CancellationCode": null, "Diverted": 0, "CarrierDelay": "NA", "WeatherDelay": "NA", "NASDelay": "NA", "SecurityDelay": "NA", "LateAircraftDelay": "NA"}
 
-The test JAR, ``kinetica-spark-6.2.x.y-tests.jar``, created in the
+The test JAR, ``kinetica-spark-6.2.<X>.<Y>-tests.jar``, created in the
 *Build & Install* section, can be used to run a streaming example.  This command
 assumes that the test JAR is also under ``/opt/gpudb/connectors/spark`` on the
 *Spark* master node; be sure to provide appropriate values for
@@ -1024,8 +1024,8 @@ applicable:
 $ spark-submit \
     --master "spark://<SparkMasterHostName/IP>:<SparkMasterPort>" \
     --class "com.kinetica.spark.streaming.StreamExample" \
-    --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.x.y-tests.jar \
-    /opt/gpudb/connectors/spark/kinetica-spark-6.2.x.y-jar-with-dependencies.jar \
+    --jars /opt/gpudb/connectors/spark/kinetica-spark-6.2.*-tests.jar \
+    /opt/gpudb/connectors/spark/kinetica-spark-6.2.*-jar-with-dependencies.jar \
     <KineticaHostName/IP> airline_in airline_out 1000 <Username> <Password>
 ```
 
@@ -1063,14 +1063,18 @@ Launch *Spark Shell*:
 
 ```shell
 $ spark-shell --jars \
-    /opt/gpudb/connectors/spark/kinetica-spark-6.2.x.y-jar-with-dependencies.jar, \
+    /opt/gpudb/connectors/spark/kinetica-spark-6.2.*-jar-with-dependencies.jar \
     /opt/gpudb/connectors/odbcserver/client/lib/SimbaJDBCClient42.jar
 ```
 
 Configure JDBC for source database and specify query for map key ``dbtable``;
 be sure to provide an appropriate value for ``<KineticaHostName/IP>``, as
 well as ``<Username>`` & ``<Password>``, if the database is configured to
-require authentication:
+require authentication.
+
+**NOTE:**  When using the JDBC driver directly, make sure to use the JDBC
+authentication parameter names ``UID`` & ``PWD`` for username &
+password, respectively.
 
 ```scala
 val host = "<KineticaHostName/IP>"
@@ -1080,8 +1084,8 @@ val url = s"http://${host}:9191"
 val options = Map(
    "url" -> s"jdbc:simba://${host}:9292;URL=${url}",
    "driver" -> "com.simba.client.core.jdbc4.SCJDBC4Driver",
-   "database.username" -> username,
-   "database.password" -> password,
+   "UID" -> username,
+   "PWD" -> password,
    "dbtable" -> s"""(
       SELECT
          vendor_id,
@@ -1170,14 +1174,14 @@ It supplements that data with the NYC taxi zone data set, available in the
 connector project dirctory under ``scripts/data/taxi_zone.csv``.
 
 This example assumes the ``taxi_zone.csv`` file and *Spark* connector JAR
-(``kinetica-spark-6.2.x.y-jar-with-dependencies.jar``) have been copied to the
-``/opt/gpudb/connectors/spark`` directory on the *Spark* master node.
+(``kinetica-spark-6.2.<X>.<Y>-jar-with-dependencies.jar``) have been copied to
+the ``/opt/gpudb/connectors/spark`` directory on the *Spark* master node.
 
 Launch *Spark Shell*:
 
 ```shell
 $ spark-shell --jars \
-    /opt/gpudb/connectors/spark/kinetica-spark-6.2.x.y-jar-with-dependencies.jar, \
+    /opt/gpudb/connectors/spark/kinetica-spark-6.2.*-jar-with-dependencies.jar, \
     /opt/gpudb/connectors/odbcserver/client/lib/SimbaJDBCClient42.jar
 ```
 
@@ -1236,8 +1240,8 @@ Specify taxi trip and taxi zone JDBC query for map key ``dbtable``:
 val options = Map(
    "url" -> jdbcUrl,
    "driver" -> "com.simba.client.core.jdbc4.SCJDBC4Driver",
-   "database.username" -> username,
-   "database.password" -> password,
+   "UID" -> username,
+   "PWD" -> password,
    "dbtable" -> s"""(
       SELECT *
       FROM
@@ -1346,28 +1350,35 @@ The following properties control the authentication & connection to *Kinetica*.
 | ``database.password``              | *<none>*    | *Kinetica* login password
 | ``database.retry_count``           | ``0``       | Connection retry count
 | ``database.timeout_ms``            | ``1800000`` | Connection timeout, in milliseconds (default is 30 minutes)
+| ``egress.offset``                  | ``0``       | A positive integer indicating the number of initial results to skip before returning records. If the offset is greater than the table size, an empty dataframe will be returned  **Egress Processor Only**
+| ``egress.limit``                   | *<none>*    | A positive integer indicating the total number of records to request. The default value will request all records in the table  **Egress Processor Only**
+| ``egress.batch_size``              | ``10000``   | A positive integer indicating the size to use for fetching batches of records (multiple batches can be used for a given ``offset`` and ``limit`` combination, if the latter two are given).  **Egress Processor Only**
 | ``ingester.analyze_data_only``     | ``false``   | When ``true``, will analyze the ingest data set, determining the types & sizes of columns necessary to hold the ingest data, and will output the derived schema as a ``CREATE TABLE statement`` (at the INFO log level).  **NOTE:** If this parameter is set to ``true``, all others will be ignored.  **Ingest Processor Only**
 | ``ingester.batch_size``            | ``10000``   | Batch size for bulk inserter
+| ``ingester.fail_on_errors``        | ``false``   | Fail on errors when ingesting data; default behavior is to log warnings and ignoring the bad row
 | ``ingester.flatten_source_schema`` | ``false``   | When ``true``, converts the following complex source data structures into single-table representations:  *struct*, *array*, & *map*.  See [Complex Data Types](#complex-data-types) for details.  **Ingest Processor Only**
 | ``ingester.ip_regex``              | *<none>*    | Regular expression to use in selecting *Kinetica* worker node IP addresses (e.g., ``172.*``) that are accessible by the connector, for multi-head ingest  **Ingest Processor Only**
-| ``ingester.multi_head``            | ``false``   | Enable multi-head ingest; this must be false for replicated tables
+| ``ingester.multi_head``            | ``true``    | Enable multi-head ingestion
 | ``ingester.num_threads``           | ``4``       | Number of threads for bulk inserter
 | ``ingester.use_snappy``            | ``false``   | Use *snappy* compression during ingestion  **Ingest Processor Only**
+| ``ingester.use_timezone``          | *<none>*    | Use the given timezone when ingesting any date/time/datetime data.  By default, the system timezone will be used.  Allowed formats are standard timezone formats; e.g. ``America/Pacific``, ``EDT``, ``GMT+02:00``, ``GMT-0730``.  Local date/time will not be affected by this setting; only timestamps with a specified offset will be interpreted and saved in the given timezone.  For example, if ``GMT-0500`` is the time zone, and the timestamp value is ``2019-07-21 12:34:56+02:00``, it will be stored in the database as ``2019-07-21 05:34:56``.
+| ``spark.datasource_api_version``   | ``v1``      | Which Spark DataSource API to use (accepted values: ``v1`` and ``v2``)  **Data Loader Only**
 | ``spark.num_partitions``           | ``4``       | Number of *Spark* partitions to use for extracting data  **Egress Processor Only**
 | ``spark.rows_per_partition``       | *<none>*    | Number of records per partition *Spark* should segment data into before loading into *Kinetica*; if not specified, *Spark* will use the same number of partitions it used to retrieve the source data  **Data Loader Only**
-| ``spark.datasource_api_version``   | ``v1``      | Which Spark DataSource API to use (accepted values: ``v1`` and ``v2``). **Data Loader Only**
 
 
 The following apply for the *Data Loader* if SSL is used. A keystore or
 truststore can be specified to override the default from the JVM.
 
-| Property Name               | Default  | Description
-| :---                        | :---     | :---
-| ``ssl.bypass_cert_check``   | *<none>* | Whether CA certificate check should be skipped
-| ``ssl.keystore_p12``        | *<none>* | PKCS#12 key store--only for 2-way SSL
-| ``ssl.keystore_password``   | *<none>* | Key store password
-| ``ssl.truststore_jks``      | *<none>* | JKS trust store for CA certificate check
-| ``ssl.truststore_password`` | *<none>* | Trust store password
+| Property Name                    | Default   | Description
+| :---                             | :---      | :---
+| ``ssl.bypass_cert_check``        | ``false`` | Deprecated option since version 6.2.3.0; internally ignored.  Instead, if ``ssl.truststore_jks`` is provided, then the server certificate will be verified; if not provided, the check will be skipped.
+| ``ssl.keystore_p12``             | *<none>*  | PKCS#12 key store--only for 2-way SSL
+| ``ssl.keystore_password``        | *<none>*  | Key store password
+| ``ssl.odbc_truststore_jks``      | *<none>*  | Java trust store for CA certificate check for the ODBC server
+| ``ssl.odbc_truststore_password`` | *<none>*  | Password for Java trust store with ODBC server certificate
+| ``ssl.truststore_jks``           | *<none>*  | Java trust store for CA certificate check for the HTTPD server.  If not provided, then the Kinetica server's certificate will not be verified.  To allow for a self-signed certificate, omit this option.
+| ``ssl.truststore_password``      | *<none>*  | Password for Java trust store with HTTPD server certificate
 
 ### Data Source/Target Properties
 
@@ -1379,9 +1390,9 @@ the access mechanism.
 | ``table.create``                | ``false`` | Automatically create table if missing
 | ``table.is_replicated``         | ``false`` | Whether the target table is replicated or not  **Ingest Processor Only**
 | ``table.name``                  | *<none>*  | *Kinetica* table to access
-| ``table.name_contains_schema``  | ``true``  | Indicates that a schema name should be extracted from the ``table.name``, if one is given (separated by periods).  Any additional periods will remain in the table name
+| ``table.name_contains_schema``  | ``true``  | Indicates that a schema name should be extracted from the ``table.name``, if one is given (separated by periods).  Any additional periods will remain in the table name.
 | ``table.truncate``              | ``false`` | Truncate table if it exists
-| ``table.truncate_to_size``      | ``false`` | Truncate strings when inserting into charN columns  **Data Loader Only**
+| ``table.truncate_to_size``      | ``false`` | Truncate strings when inserting into charN columns
 | ``table.update_on_existing_pk`` | ``false`` | If the target table, ``table.name``, has a primary key, update records in it with matching primary key values from records being ingested
 | ``table.use_templates``         | ``false`` | Enable *template tables*; see [Template Tables](#template-tables) section for details  **Data Loader Only**
 

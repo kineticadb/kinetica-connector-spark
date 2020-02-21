@@ -30,30 +30,4 @@ class DefaultSource
         Optional.of( new KineticaDataSourceWriter(schema, options) )
     }
 
-/*
-    // DataSource v1 path
-    override def createRelation(sqlContext: SQLContext, parameters: Map[String, String]): BaseRelation = {
-        try {
-            new KineticaRelation(parameters, sqlContext.sparkSession)
-        } catch {
-            case re: RuntimeException => throw re
-            case e: Exception => throw new RuntimeException(e)
-        }
-    }
-
-    // DataSource v1 path
-    override def createRelation(sqlContext: SQLContext, mode: SaveMode, parameters: Map[String, String], df: DataFrame): BaseRelation = {
-        try {
-            // TODO: What to do with the saveMode?
-            val kineticaRelation: KineticaRelation = new KineticaRelation(parameters, Some(df), sqlContext.sparkSession)
-            kineticaRelation.insert(df, true)
-            kineticaRelation
-        } catch {
-            case re: RuntimeException => throw re
-            case e: Exception => throw new RuntimeException(e)
-        }
-    }
-
-    override def shortName(): String = Constants.KINETICA_FORMAT
-*/
 }

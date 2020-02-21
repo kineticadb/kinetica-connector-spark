@@ -60,21 +60,24 @@ class KineticaDataWriter (schema: StructType, options: Map[String, String], part
         }    
 
     // Keeping some stats
-    private val totalRows        = new LongAccumulator()
-    private val convertedRows    = new LongAccumulator()
-    private val failedConversion = new LongAccumulator()
+    private val totalRows        = new LongAccumulator();
+    private val convertedRows    = new LongAccumulator();
+    private val failedConversion = new LongAccumulator();
 
-
+    private val ingestionUtils = new KineticaSparkDFManager( conf );
+        
+        
     /**
      * Insert a row of record into Kinetica
      */
     def write(record: Row) = {
         // Keep track of how many records have been attempted for insertion
-        totalRows.add( 1 )
+        totalRows.add( 1 );
 
         // Create the record
-        val genericRecord: GenericRecord = new GenericRecord( tableType )
-        var i: Int = 0
+        val genericRecord: GenericRecord = new GenericRecord( tableType );
+        var i: Int = 0;
+        var isRecordGood = true;
         for (column <- tableType.getColumns.asScala) {
             try {
                 var rtemp: Any = record.get({ i += 1; i - 1 })
@@ -82,24 +85,35 @@ class KineticaDataWriter (schema: StructType, options: Map[String, String], part
                     rtemp = record.getAs(column.getName)
                 }
                 if( rtemp != null ) { // This means null value - nothing to do.
-                    if (!KineticaSparkDFManager.putInGenericRecord(genericRecord, rtemp, column)) {
-                        failedConversion.add( 1 )
+                    if (!ingestionUtils.putInGenericRecord(genericRecord, rtemp, column)) {
+                        failedConversion.add( 1 );
+                        isRecordGood = false;
                     }
                 }
             } catch {
-                case e: Exception =>
+                case e: Exception => {
                 //e.printStackTrace()
-                failedConversion.add( 1 )
-                logger.warn(s"Found non-matching column ${column.getName}; skipping record; ", e)
-                throw e
+                    isRecordGood = false;
+                    failedConversion.add( 1 );
+                    logger.warn(s"Found non-matching column ${column.getName}; skipping record");
+                    logger.debug(s"Found non-matching column ${column.getName}; skipping record; reason: ", e);
+                    if ( conf.failOnError ) {
+                        // Throw exception only for fail-fast mode
+                        logger.error(s"Found non-matching column ${column.getName}; skipping record; reason: ", e);
+                        throw e;
+                    }
+                }
             }
         }
 
-        // Insert the record into the queue
-        recordInserter.insert( genericRecord )
+        if ( isRecordGood ) {
+            // Insert the record into the queue only if it was successfully
+            // converted
+            recordInserter.insert( genericRecord );
 
-        // Keep track of how many records have been inserted
-        convertedRows.add( 1 )
+            // Keep track of how many records have been inserted
+            convertedRows.add( 1 );
+        }
     }
 
     def commit(): WriterCommitMessage = {
@@ -109,7 +123,16 @@ class KineticaDataWriter (schema: StructType, options: Map[String, String], part
                                                  totalRows.value, convertedRows.value, failedConversion.value );
         } catch {
             case e: GPUdbException => {
-                throw e
+                logger.error(s"Error flushing records to Kinetica: '${e.getMessage()}'");
+                logger.debug(s"Error flushing records to Kinetica; stacktrace for debugging: ", e);
+                if ( conf.failOnError ) {
+                    throw e;
+                }
+                else {
+                    // Could not ingest any record!
+                    new KineticaDataWriterCommitMessage( partitionId, attemptNumber, conf.getTablename,
+                                                         totalRows.value, 0, totalRows.value );
+                }
             }
         }
     }

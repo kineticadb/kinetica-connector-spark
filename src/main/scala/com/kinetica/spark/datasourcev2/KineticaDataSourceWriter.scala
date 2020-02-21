@@ -19,14 +19,23 @@ class KineticaDataSourceWriter (schema: StructType, options: DataSourceOptions)
     with LazyLogging {
 
     // Parse the options (need a Scala immutable map)--need for table creation
-    val conf: LoaderParams = new LoaderParams(None, options.asMap().asScala.toMap )
+    val conf: LoaderParams = new LoaderParams(None, options.asMap().asScala.toMap );
 
+    // Ingestion related utility class
+    val ingestionUtils = new KineticaSparkDFManager( conf );
+    
     setup( schema );
 
     private def setup( schema: StructType ): Unit = {
 
         logger.info("Executing spark ingest ingest_analysis = {}", conf.isDryRun());
 
+        // We can't proceed if the schema is empty
+        if ( schema.isEmpty ) {
+            logger.warn("The dataframe has no schema; skipping ingestion");
+            return;
+        }
+        
         if (conf.isCreateTable && conf.isAlterTable) {
             throw new RuntimeException("Create table and alter table option set to true. Only one must be set to true ");
         }
@@ -53,13 +62,6 @@ class KineticaDataSourceWriter (schema: StructType, options: DataSourceOptions)
                 case e: Throwable => throw new RuntimeException("Failed with errors ", e);
             }
         }
-
-        logger.debug("Get Kinetica Table Type");
-        KineticaSparkDFManager.setType( conf );
-
-        logger.debug("Set LoaderParms Table Type");
-        conf.setTableType( KineticaSparkDFManager.getType( conf ) );
-
 
         if (conf.isTableReplicated) {
             logger.info("Table is replicated");

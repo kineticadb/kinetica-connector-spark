@@ -10,11 +10,11 @@ import java.security.GeneralSecurityException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
-public class X509TustManagerBypass extends X509ExtendedTrustManager {
+public class X509TrustManagerBypass extends X509ExtendedTrustManager {
 
     public static void install() throws GeneralSecurityException {
 
-        TrustManager[] trustAllCerts = new TrustManager[] { new X509TustManagerBypass() };
+        TrustManager[] trustAllCerts = new TrustManager[] { new X509TrustManagerBypass() };
         SSLContext sslContext = SSLContext.getInstance("SSL");
         sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
         HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());

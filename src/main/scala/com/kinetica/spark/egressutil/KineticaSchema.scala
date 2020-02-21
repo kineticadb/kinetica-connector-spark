@@ -400,7 +400,9 @@ private[kinetica] object KineticaSchema {
             case java.sql.Types.SMALLINT => ShortType
             // case java.sql.Types.SMALLINT => IntegerType
             case java.sql.Types.STRUCT => StringType
-            case java.sql.Types.TIME => TimestampType
+            // For time, use string instead of timestamp since the latter
+            // prepends the CURRENT date to the date
+            case java.sql.Types.TIME => StringType
             case java.sql.Types.TIMESTAMP => TimestampType
             case java.sql.Types.TINYINT => ByteType
             // case java.sql.Types.TINYINT => IntegerType

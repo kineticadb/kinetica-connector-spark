@@ -17,6 +17,8 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.TimeZone;
 import org.apache.spark.sql.Row;
@@ -49,6 +51,59 @@ import org.scalatest.FunSuite;
 trait SparkConnectorBugFixes
     extends SparkConnectorTestFixture { this: FunSuite =>
 
+    var arrayOfLongs = Array(-207196330858L, 20570482791120L, -10319063675830L, 26039799223550L, -3100184703238L,
+                             -28062092568721L, -2858888359697L, -11356447422395L, -16043503414779L, -15184899634567L);
+
+    var arrayOfDateTimes = Array("1963-06-08T21:27:49.142", "2621-11-08T06:59:51.120", "1643-01-01T09:25:24.170", "2795-03-03T13:33:43.550", "1871-10-05T05:34:56.762",
+                                "1080-09-30T06:17:11.279", "1879-05-29T00:20:40.303", "1610-02-16T15:16:17.605", "1461-08-08T07:16:25.221", "1488-10-22T20:19:25.433");
+
+    var arrayOfDateTimesWithTZ = Array( "1963-06-08T21:27:49.142-05:00", "2621-11-08T06:59:51.120-05:00", "1643-01-01T09:25:24.170-05:00", "2795-03-03T13:33:43.550-05:00",
+                                        "1871-10-05T05:34:56.762-05:00", "1080-09-30T06:17:11.279-05:00", "1879-05-29T00:20:40.303-05:00", "1610-02-16T15:16:17.605-05:00",
+                                        "1461-08-08T07:16:25.221-05:00", "1488-10-22T20:19:25.433-05:00");
+
+    var arrayOfDates = Array("1963-06-08", "2621-11-08", "1643-01-01", "2795-03-03", "1871-10-05", "1080-09-30", "1879-05-29", "1610-02-16", "1461-08-08", "1488-10-22");
+
+    var arrayOfTimes = Array("21:27:49.142", "06:59:51.120", "09:25:24.170", "13:33:43.550", "05:34:56.762", "06:17:11.279", "00:20:40.303", "15:16:17.605",
+                             "07:16:25.221", "20:19:25.433");
+
+    var arrayOfTimesWithTZ = Array("21:27:49.142-05:00", "06:59:51.120-05:00", "09:25:24.170-05:00", "13:33:43.550-05:00", "05:34:56.762-05:00",
+                                   "06:17:11.279-05:00", "00:20:40.303-05:00", "15:16:17.605-05:00", "07:16:25.221-05:00", "20:19:25.433-05:00");
+
+    var arrayOfOverlyPreciseDates = Array("1963-06-08T21:27:49.142000000", "2621-11-08T06:59:51.120000000", "1643-01-01T09:25:24.170000000", "2795-03-03T13:33:43.550000000",
+                                          "1871-10-05T05:34:56.762000000", "1080-09-30T06:17:11.279000000", "1879-05-29T00:20:40.303000000", "1610-02-16T15:16:17.605000000",
+                                          "1461-08-08T07:16:25.221000000", "1488-10-22T20:19:25.433000000");
+    var datetime_conversion_expectedVals = Seq( Map("timestamp" -> -207196330858L,
+                                "date" -> "1963-06-08",
+                                "datetime" -> "1963-06-08 21:27:49.142"),
+                            Map("timestamp" -> 20570482791120L,
+                                "date" -> "2621-11-08",
+                                "datetime" -> "2621-11-08 06:59:51.120"),
+                            Map("timestamp" -> -10319063675830L,
+                                "date" -> "1643-01-01",
+                                "datetime" -> "1643-01-01 09:25:24.170"),
+                            Map("timestamp" -> 26039799223550L,
+                                "date" -> "2795-03-03",
+                                "datetime" -> "2795-03-03 13:33:43.550"),
+                            Map("timestamp" -> -3100184703238L,
+                                "date" -> "1871-10-05",
+                                "datetime" -> "1871-10-05 05:34:56.762"),
+                            Map("timestamp" -> -28062092568721L,
+                                "date" -> "1080-09-30",
+                                "datetime" -> "1080-09-30 06:17:11.279"),
+                            Map("timestamp" -> -2858888359697L,
+                                "date" -> "1879-05-29",
+                                "datetime" -> "1879-05-29 00:20:40.303"),
+                            Map("timestamp" -> -11356447422395L,
+                                "date" -> "1610-02-16",
+                                "datetime" -> "1610-02-16 15:16:17.605"),
+                            Map("timestamp" -> -16043503414779L,
+                                "date" -> "1461-08-08",
+                                "datetime" -> "1461-08-08 07:16:25.221"),
+                            Map("timestamp" -> -15184899634567L,
+                                "date" -> "1488-10-22",
+                                "datetime" -> "1488-10-22 20:19:25.433")
+                          );
+
     /**
      * Tests for various bug fixes.
      */
@@ -69,7 +124,7 @@ trait SparkConnectorBugFixes
             columns += new Type.Column( ts_col_name, classOf[java.lang.Long],
                                         ColumnProperty.NULLABLE,
                                         ColumnProperty.TIMESTAMP );
-    
+
             // Create the table (but clear any pre-existing ones)
             val tableName = s"keco_1396_long_timestamp_${package_description}";
             logger.debug( s"Table name '${tableName}'" );
@@ -77,14 +132,6 @@ trait SparkConnectorBugFixes
 
             // Set the default timezone appropriately
             val timeZone = "GMT+0600";
-
-            // The expected values would be of Kinetica format and be local to the specified timezone
-            def getExpectedLongTimeStampValue ( value: String, timeZone : String ) : Long = {
-                val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy[-][/][.]MM[-][/][.]dd[[ ]['T']HH:mm[:ss][.SSS][ ][XXX][Z][z][VV][x]]");
-                val zoneID = TimeZone.getTimeZone( "GMT+0600" ).toZoneId();
-                return java.time.LocalDateTime.parse( value, formatter )
-                              .atZone( zoneID ).toInstant().toEpochMilli();                
-            }
 
             // Create some test data
             val timestamp_data = "1950-02-20T05:40:18.386-05:00" ::
@@ -139,7 +186,7 @@ trait SparkConnectorBugFixes
 
             // This test case has control data; correctness of data
             // is checked after ingestion
-            
+
             // Create a table type with date, time, datetime columns
             val sort_col_name = "i";
             val col1_name     = "date";
@@ -252,7 +299,7 @@ trait SparkConnectorBugFixes
             // This test case does not have any control data; it just egresses
             // some (random) data, and tries to ingest it back, without checking
             // for any correctness
-            
+
             // Create a table type with date, time, datetime columns
             val sort_col_name = "i";
             val col1_name     = "date";
@@ -318,7 +365,7 @@ trait SparkConnectorBugFixes
                 // Write the data read from the CSV file back into Kinetica using the connector
                 logger.debug( s"Writing the data to ${tableName}" );
                 df_csv.write.format( package_to_test ).options( ingest_options ).save();
-                
+
                 // Check that the table size is correct
                 val table_size = get_table_size( tableName );
                 // Generated 10 random records, inserted all of them again once
@@ -334,8 +381,8 @@ trait SparkConnectorBugFixes
                     assert( (false), s"Re-ingesting data obtained by egress via the connector from Kinetica should not fail (without filters)" );
                 }
             }
-            
-            
+
+
             // Test the JDBC connector path
             // ----------------------------
             // Get the data out using the connecotr via the JDBC connector (when filtering IS necessary)
@@ -366,7 +413,7 @@ trait SparkConnectorBugFixes
                 // Write the data read from the CSV file back into Kinetica using the connector
                 logger.debug( s"Writing the data to ${tableName}" );
                 df_csv.write.format( package_to_test ).options( ingest_options ).save();
-                
+
                 // Check that the table size is correct
                 val table_size = get_table_size( tableName );
                 // Generated 10 random records, inserted all of them once; got
@@ -387,7 +434,7 @@ trait SparkConnectorBugFixes
         }  // end test #3 for KECO-1396
 
 
-        
+
         /**
          * Test for ingesting numbers into floats.
          */
@@ -420,7 +467,7 @@ trait SparkConnectorBugFixes
 
             // Generate the schema with a double type
             val schema_d = StructType( StructField( "float_col", DoubleType, true ) :: Nil );
-            
+
             val df1 = createDataFrame( data_d, schema_d );
             logger.debug(s"Created a dataframe with double values in it with (${df1.count} rows)");
 
@@ -434,7 +481,7 @@ trait SparkConnectorBugFixes
 
             // Delete all records from the table for the next test
             delete_all_records( tableName );
-            
+
             // Test inserting float into float
             // --------------------------------
             logger.debug(s"Test inserting float into float");
@@ -455,17 +502,17 @@ trait SparkConnectorBugFixes
 
             // Delete all records from the table for the next test
             delete_all_records( tableName );
-            
+
             // Test inserting int into float
             // --------------------------------
             logger.debug(s"Test inserting integer into float");
 
             // Generate appropriate data
             val data_i = (1 to numRows).map(_ => Seq.fill( numColumns )( Random.nextInt() ) );
-            
+
             // Generate the schema with a float type
             val schema_i = StructType( StructField( "float_col", IntegerType, true ) :: Nil );
-            
+
             val df3 = createDataFrame( data_i, schema_i );
             logger.debug(s"Created a dataframe with integer values in it with (${df3.count} rows)");
 
@@ -479,7 +526,7 @@ trait SparkConnectorBugFixes
 
             // Delete all records from the table for the next test
             delete_all_records( tableName );
-            
+
             // Test inserting long into float
             // --------------------------------
             logger.debug(s"Test inserting long into float");
@@ -487,7 +534,7 @@ trait SparkConnectorBugFixes
             // Generate the data and the schema with a long type
             val data_l = (1 to numRows).map(_ => Seq.fill( numColumns )( Random.nextLong() ) );
             val schema_l = StructType( StructField( "float_col", LongType, true ) :: Nil );
-            
+
             val df4 = createDataFrame( data_l, schema_l );
             logger.debug(s"Created a dataframe with long values in it with (${df4.count} rows)");
 
@@ -501,7 +548,7 @@ trait SparkConnectorBugFixes
 
             // Delete all records from the table for the next test
             delete_all_records( tableName );
-            
+
             // Test inserting string into float
             // --------------------------------
             logger.debug(s"Test inserting string into float");
@@ -509,7 +556,7 @@ trait SparkConnectorBugFixes
             // Generate the data and the schema with a long type
             val data_s = (1 to numRows).map(_ => Seq.fill( numColumns )( "42.42" ) );
             val schema_s = StructType( StructField( "float_col", StringType, true ) :: Nil );
-            
+
             val df5 = createDataFrame( data_s, schema_s );
             logger.debug(s"Created a dataframe with long values in it with (${df5.count} rows)");
 
@@ -522,7 +569,7 @@ trait SparkConnectorBugFixes
             assert( (table_size == numRows), s"Table size ($table_size) should be $numRows" );
         }  // end test for KECO-1355
 
-        
+
         /**
          * Tests for `table.truncate_to_size`
          */
@@ -669,7 +716,7 @@ trait SparkConnectorBugFixes
                                      StructField( bytes_name,    StringType,  true ) :: Nil );
             val df = createDataFrame( data, schema );
             logger.debug(s"Created a dataframe with a bad row in it (${df.count} rows)");
-            
+
 
             // Write to the table
             logger.debug( s"Writing to table ${tableName} via the connector" );
@@ -713,7 +760,7 @@ trait SparkConnectorBugFixes
             val schema = StructType( StructField( "x", IntegerType, true ) :: Nil );
             val df_in = createDataFrame( records, schema );
             logger.debug(s"Created a dataframe with sequential integers in it (${df_in.count} rows)");
-            
+
             // Get the appropriate options for fetching data
             var options = get_default_spark_connector_options();
             options( "table.name"           ) = tableName;
@@ -750,7 +797,7 @@ trait SparkConnectorBugFixes
 
             // Need to mark the table name for post-test clean-up
             mark_table_for_deletion_at_test_end( tableName );
-            
+
             // Test Case: Empty dataframe with no DDL
             // --------------------------------------
             logger.info("Test Case: Empty dataframe with no DDL");
@@ -782,7 +829,7 @@ trait SparkConnectorBugFixes
             // Should not have created a table with the name
             assert( (does_table_exist( tableName ) == false), s"Empty datafame without schema should not create a table" );
 
-            
+
             // Test Case: Empty dataframe with DDL
             // --------------------------------------
             logger.info("Test Case: Empty dataframe with DDL");
@@ -816,7 +863,7 @@ trait SparkConnectorBugFixes
         }  // end test for KECO-1405
 
 
-        
+
         /**
          * Test for fail-fase mode actually failing
          */
@@ -856,7 +903,7 @@ trait SparkConnectorBugFixes
                                      StructField( str_col_name,  StringType,  true ) :: Nil );
             val df = createDataFrame( data, schema );
             logger.debug(s"Created a dataframe with a bad row in it (${df.count} rows)");
-            
+
 
 
             // Test Case 1: Write to the table with fail-fast mode
@@ -895,7 +942,7 @@ trait SparkConnectorBugFixes
 
 
 
-        
+
         /**
          * Test for data with bad format being handled properly
          */
@@ -943,7 +990,7 @@ trait SparkConnectorBugFixes
                                      StructField( str_col_name,  StringType,  true ) :: Nil );
             val df = createDataFrame( data, schema );
             logger.debug(s"Created a dataframe with a bad row in it (${df.count} rows)");
-            
+
 
             // Test Case 2: Write to the table with graceful failure
             logger.info( s"Test Case 2: Write to the table with graceful failure mode" );
@@ -963,7 +1010,7 @@ trait SparkConnectorBugFixes
 
 
 
-        
+
         /**
          * Test for egressing string time values.
          */
@@ -1057,7 +1104,7 @@ trait SparkConnectorBugFixes
         }  // end test for KECO-1419
 
 
-        
+
         /**
          * Test for graceful failures not throwing exceptions
          */
@@ -1121,7 +1168,7 @@ trait SparkConnectorBugFixes
                                      StructField( str_col_name2, IntegerType,  true ) :: Nil );
             val df = createDataFrame( data, schema );
             logger.debug(s"Created a dataframe with a bad row in it (${df.count} rows)");
-            
+
 
             // Write to the table
             logger.debug( s"Writing to table ${tableName} via the connector" );
@@ -1159,7 +1206,7 @@ trait SparkConnectorBugFixes
             // so that internal users can be created
             logger.info( s"Make sure that the user (test runner) passed in the 'admin' username and password (necessary for creating internal users)" );
             assume( m_username == "admin" );
-            
+
             // Create a type
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( "i", classOf[java.lang.Integer] );
@@ -1193,7 +1240,7 @@ trait SparkConnectorBugFixes
             options( "table.name"        ) = tableName;
             options( "database.username" ) = ingest_username;
             options( "database.password" ) = ingest_password;
-            
+
             // Generate some data and the appropriate schema
             val data = Seq( Row( 0, 1.2 ), Row( 1, 2.4 ), Row( 2, 3.5 ), Row( 3, 4.2 ) );
             val expected_values = Seq( Map( "i" -> 0, "d" -> 1.2 ),
@@ -1239,15 +1286,15 @@ trait SparkConnectorBugFixes
             egress_options( "table.name"        ) = tableName;
             egress_options( "database.username" ) = egress_username;
             egress_options( "database.password" ) = egress_password;
-            
+
             // Check egress
             val df_egress = m_sparkSession.sqlContext.read.format( package_to_test )
                                              .options( egress_options ).load();
-            
+
         }  // end test #1 for KECO-1481
 
 
-        
+
         /**
          * Test for ingesting into a sharded table.
          */
@@ -1278,7 +1325,7 @@ trait SparkConnectorBugFixes
 
             // Generate the schema with a double type
             val schema = StructType( StructField( "i", IntegerType, true ) :: Nil );
-            
+
             val df = createDataFrame( data, schema );
             logger.debug(s"Created a dataframe (${df.count} rows)");
 
@@ -1321,7 +1368,7 @@ trait SparkConnectorBugFixes
 
             // Generate the schema with a double type
             val schema = StructType( StructField( "i", IntegerType, true ) :: Nil );
-            
+
             val df = createDataFrame( data, schema );
             logger.debug(s"Created a dataframe (${df.count} rows)");
 
@@ -1333,7 +1380,7 @@ trait SparkConnectorBugFixes
             var table_size = get_table_size( tableName );
             assert( (table_size == numRows), s"Table size ($table_size) should be $numRows" );
         }   // end test #2 for KECO-1503
-        
+
 
         /**
          * Tests for egress with null values via the Java API (no filter push-down)
@@ -1399,7 +1446,7 @@ trait SparkConnectorBugFixes
             val long_val   = Random.nextLong();
             val string_val = "abcd";
             val bytes_val  = "bytes 1";
-            
+
             val expected_values = Seq( Map( sort_col_name -> 1,
                                             int_col_name    -> 1,
                                             int8_col_name   -> 2,
@@ -1492,7 +1539,7 @@ trait SparkConnectorBugFixes
         }  // end test for KECO-1574
 
 
-        
+
         /**
          * Test that the lazy iterator egress is working
          */
@@ -1504,11 +1551,11 @@ trait SparkConnectorBugFixes
             //       datasourcev2 package only!)
             if ( package_to_test != m_v2_package ) {
                 // TODO: Remove the if filtering when KECO-1241 is fixed
-                
+
 
                 // This test case does not have any control data; it just egresses
                 // some (random) data without checking for any correctness
-            
+
                 // Create a table type with date, time, datetime columns
                 val sort_col_name = "i";
                 var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
@@ -1590,8 +1637,776 @@ trait SparkConnectorBugFixes
 
         }  // end test #1 for KECO-1657
 
-    }   // end tests for bugFixes
+        test(s"""$package_description KECO-1648: Timestamp, date, datetime
+             | are converted from long data values when ingested without
+             | issues""".stripMargin.replaceAll("\n", "") ) {
 
+
+            // Create a table type with date, time, datetime columns
+            val sort_col_name = "i";
+            val col1_name     = "timestamp";
+            val col2_name     = "date";
+            val col3_name     = "datetime";
+
+            val tableName = s"keco_1648_long_conversion_${package_description}";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
+            columns += new Type.Column( col1_name, classOf[java.lang.Long],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.TIMESTAMP );
+            columns += new Type.Column( col2_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.DATE );
+            columns += new Type.Column( col3_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.DATETIME );
+
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val timeZone = "UTC";
+
+            // insert into Kinetica table values 1..10, arrayOfLongs:
+            val data = Seq(
+                            Row(0, arrayOfLongs(0), arrayOfLongs(0), arrayOfLongs(0)),
+                            Row(1, arrayOfLongs(1), arrayOfLongs(1), arrayOfLongs(1)),
+                            Row(2, arrayOfLongs(2), arrayOfLongs(2), arrayOfLongs(2)),
+                            Row(3, arrayOfLongs(3), arrayOfLongs(3), arrayOfLongs(3)),
+                            Row(4, arrayOfLongs(4), arrayOfLongs(4), arrayOfLongs(4)),
+                            Row(5, arrayOfLongs(5), arrayOfLongs(5), arrayOfLongs(5)),
+                            Row(6, arrayOfLongs(6), arrayOfLongs(6), arrayOfLongs(6)),
+                            Row(7, arrayOfLongs(7), arrayOfLongs(7), arrayOfLongs(7)),
+                            Row(8, arrayOfLongs(8), arrayOfLongs(8), arrayOfLongs(8)),
+                            Row(9, arrayOfLongs(9), arrayOfLongs(9), arrayOfLongs(9))
+                           );
+
+            val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
+                                     StructField( col1_name,     LongType, true ) ::
+                                     StructField( col2_name,     LongType, true ) ::
+                                     StructField( col3_name,     LongType, true ) :: Nil );
+
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe of all longs with (${df.count} rows)");
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create"          ) = "false";
+            options( "table.name"            ) = tableName;
+            options( "ingester.use_timezone" ) = timeZone;
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            val table_size = get_table_size( tableName );
+            assert( (table_size == df.count), s"Table size ($table_size) should be ${df.count}" );
+
+            // Check the data
+            val columns_to_compare = col1_name :: col2_name :: col3_name :: Nil;
+            compare_table_data( tableName, columns_to_compare, sort_col_name, datetime_conversion_expectedVals );
+        }  // end test #1 for KECO-1648
+
+        test(s"""$package_description KECO-1648: Timestamp, date, datetime
+             | are converted from Timestamp Long data values when ingested without
+             | issues""".stripMargin.replaceAll("\n", "") ) {
+
+
+            // Create a table type with date, time, datetime columns
+            val sort_col_name = "i";
+            val col1_name     = "timestamp";
+            val col2_name     = "date";
+            val col3_name     = "datetime";
+
+            val tableName = s"keco_1648_long_timestamp_conversion_${package_description}";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
+            columns += new Type.Column( col1_name, classOf[java.lang.Long],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.TIMESTAMP );
+            columns += new Type.Column( col2_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.DATE );
+            columns += new Type.Column( col3_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.DATETIME );
+
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val timeZone = "UTC";
+
+            // insert into Kinetica table values 1..10, arrayOfLongs:
+            val data = Seq(
+                            Row(0,
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(0))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(0))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(0)))
+                            ),
+                            Row(1,
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(1))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(1))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(1)))
+                            ),
+                            Row(2,
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(2))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(2))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(2)))
+                            ),
+                            Row(3,
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(3))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(3))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(3)))
+                            ),
+                            Row(4,
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(4))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(4))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(4)))
+                            ),
+                            Row(5,
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(5))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(5))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(5)))
+                            ),
+                            Row(6,
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(6))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(6))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(6)))
+                            ),
+                            Row(7,
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(7))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(7))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(7)))
+                            ),
+                            Row(8,
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(8))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(8))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(8)))
+                            ),
+                            Row(9,
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(9))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(9))),
+                                Timestamp.from(Instant.ofEpochMilli(arrayOfLongs(9)))
+                            )
+                           );
+
+            val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
+                                     StructField( col1_name,     TimestampType, true ) ::
+                                     StructField( col2_name,     TimestampType, true ) ::
+                                     StructField( col3_name,     TimestampType, true ) :: Nil );
+
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe of all longs with (${df.count} rows)");
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create"          ) = "false";
+            options( "table.name"            ) = tableName;
+            options( "ingester.use_timezone" ) = timeZone;
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            val table_size = get_table_size( tableName );
+            assert( (table_size == df.count), s"Table size ($table_size) should be ${df.count}" );
+
+            // Check the data
+            val columns_to_compare = col1_name :: Nil;
+            // Note:: Long Timestamp to Date and Long Timestamp to DateTime fail
+            compare_table_data( tableName, columns_to_compare, sort_col_name, datetime_conversion_expectedVals );
+        }  // end test #2 for KECO-1648
+
+        test(s"""$package_description KECO-1648: Timestamp, date, datetime
+             | are converted from long String literal data values when ingested without
+             | issues""".stripMargin.replaceAll("\n", "") ) {
+
+
+            // Create a table type with date, time, datetime columns
+            val sort_col_name = "i";
+            val col1_name     = "timestamp";
+            val col2_name     = "date";
+            val col3_name     = "datetime";
+
+            val tableName = s"keco_1648_long_conversion_${package_description}";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
+            columns += new Type.Column( col1_name, classOf[java.lang.Long],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.TIMESTAMP );
+            columns += new Type.Column( col2_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.DATE );
+            columns += new Type.Column( col3_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.DATETIME );
+
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val timeZone = "UTC";
+
+            // insert into Kinetica table values 1..10, arrayOfLongs:
+            val data = Seq(
+                            Row(0, arrayOfLongs(0).toString, arrayOfLongs(0).toString, arrayOfLongs(0).toString),
+                            Row(1, arrayOfLongs(1).toString, arrayOfLongs(1).toString, arrayOfLongs(1).toString),
+                            Row(2, arrayOfLongs(2).toString, arrayOfLongs(2).toString, arrayOfLongs(2).toString),
+                            Row(3, arrayOfLongs(3).toString, arrayOfLongs(3).toString, arrayOfLongs(3).toString),
+                            Row(4, arrayOfLongs(4).toString, arrayOfLongs(4).toString, arrayOfLongs(4).toString),
+                            Row(5, arrayOfLongs(5).toString, arrayOfLongs(5).toString, arrayOfLongs(5).toString),
+                            Row(6, arrayOfLongs(6).toString, arrayOfLongs(6).toString, arrayOfLongs(6).toString),
+                            Row(7, arrayOfLongs(7).toString, arrayOfLongs(7).toString, arrayOfLongs(7).toString),
+                            Row(8, arrayOfLongs(8).toString, arrayOfLongs(8).toString, arrayOfLongs(8).toString),
+                            Row(9, arrayOfLongs(9).toString, arrayOfLongs(9).toString, arrayOfLongs(9).toString)
+                           );
+
+            val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
+                                     StructField( col1_name,     StringType, true ) ::
+                                     StructField( col2_name,     StringType, true ) ::
+                                     StructField( col3_name,     StringType, true ) :: Nil );
+
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe of all longs with (${df.count} rows)");
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create"          ) = "false";
+            options( "table.name"            ) = tableName;
+            options( "ingester.use_timezone" ) = timeZone;
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            val table_size = get_table_size( tableName );
+            assert( (table_size == df.count), s"Table size ($table_size) should be ${df.count}" );
+
+            // Check the data
+            val columns_to_compare = col1_name :: col2_name :: col3_name :: Nil;
+            compare_table_data( tableName, columns_to_compare, sort_col_name, datetime_conversion_expectedVals );
+        }  // end test #3 for KECO-1648
+
+        test(s"""$package_description KECO-1648: Timestamp, date, datetime
+             | are converted from String DateTime values when ingested without
+             | issues""".stripMargin.replaceAll("\n", "") ) {
+
+
+            // Create a table type with date, time, datetime columns
+            val sort_col_name = "i";
+            val col1_name     = "timestamp";
+            val col2_name     = "date";
+            val col3_name     = "datetime";
+
+            val tableName = s"keco_1648_lstring_datetime_conversion_${package_description}";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
+            columns += new Type.Column( col1_name, classOf[java.lang.Long],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.TIMESTAMP );
+            columns += new Type.Column( col2_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.DATE );
+            columns += new Type.Column( col3_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.DATETIME );
+
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val timeZone = "GMT-05";
+
+            // insert into Kinetica table values 1..10, arrayOfLongs:
+            val data = Seq(
+                            Row(0, arrayOfDateTimes(0), arrayOfDateTimes(0), arrayOfDateTimes(0)),
+                            Row(1, arrayOfDateTimes(1), arrayOfDateTimes(1), arrayOfDateTimes(1)),
+                            Row(2, arrayOfDateTimes(2), arrayOfDateTimes(2), arrayOfDateTimes(2)),
+                            Row(3, arrayOfDateTimes(3), arrayOfDateTimes(3), arrayOfDateTimes(3)),
+                            Row(4, arrayOfDateTimes(4), arrayOfDateTimes(4), arrayOfDateTimes(4)),
+                            Row(5, arrayOfDateTimes(5), arrayOfDateTimes(5), arrayOfDateTimes(5)),
+                            Row(6, arrayOfDateTimes(6), arrayOfDateTimes(6), arrayOfDateTimes(6)),
+                            Row(7, arrayOfDateTimes(7), arrayOfDateTimes(7), arrayOfDateTimes(7)),
+                            Row(8, arrayOfDateTimes(8), arrayOfDateTimes(8), arrayOfDateTimes(8)),
+                            Row(9, arrayOfDateTimes(9), arrayOfDateTimes(9), arrayOfDateTimes(9))
+                           );
+
+            val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
+                                     StructField( col1_name,     StringType, true ) ::
+                                     StructField( col2_name,     StringType, true ) ::
+                                     StructField( col3_name,     StringType, true ) :: Nil );
+
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe of all longs with (${df.count} rows)");
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create"          ) = "false";
+            options( "table.name"            ) = tableName;
+            options( "ingester.use_timezone" ) = timeZone;
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            val table_size = get_table_size( tableName );
+            assert( (table_size == df.count), s"Table size ($table_size) should be ${df.count}" );
+
+            // Check the data
+            val columns_to_compare = col1_name :: col2_name :: col3_name :: Nil;
+            compare_table_data( tableName, columns_to_compare, sort_col_name, datetime_conversion_expectedVals );
+        }  // end test #4 for KECO-1648
+
+        test(s"""$package_description KECO-1648: Timestamp, date, datetime
+             | are converted from String DateTime with TimeZone suffix
+             | values when ingested without issues""".stripMargin.replaceAll("\n", "") ) {
+
+
+            // Create a table type with date, time, datetime columns
+            val sort_col_name = "i";
+            val col1_name     = "timestamp";
+            val col2_name     = "date";
+            val col3_name     = "datetime";
+
+            val tableName = s"keco_1648_long_conversion_${package_description}";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
+            columns += new Type.Column( col1_name, classOf[java.lang.Long],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.TIMESTAMP );
+            columns += new Type.Column( col2_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.DATE );
+            columns += new Type.Column( col3_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.DATETIME );
+
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val timeZone = "GMT-05";
+
+            // insert into Kinetica table values 1..10, arrayOfLongs:
+            val data = Seq(
+                            Row(0, arrayOfDateTimesWithTZ(0), arrayOfDateTimesWithTZ(0), arrayOfDateTimesWithTZ(0)),
+                            Row(1, arrayOfDateTimesWithTZ(1), arrayOfDateTimesWithTZ(1), arrayOfDateTimesWithTZ(1)),
+                            Row(2, arrayOfDateTimesWithTZ(2), arrayOfDateTimesWithTZ(2), arrayOfDateTimesWithTZ(2)),
+                            Row(3, arrayOfDateTimesWithTZ(3), arrayOfDateTimesWithTZ(3), arrayOfDateTimesWithTZ(3)),
+                            Row(4, arrayOfDateTimesWithTZ(4), arrayOfDateTimesWithTZ(4), arrayOfDateTimesWithTZ(4)),
+                            Row(5, arrayOfDateTimesWithTZ(5), arrayOfDateTimesWithTZ(5), arrayOfDateTimesWithTZ(5)),
+                            Row(6, arrayOfDateTimesWithTZ(6), arrayOfDateTimesWithTZ(6), arrayOfDateTimesWithTZ(6)),
+                            Row(7, arrayOfDateTimesWithTZ(7), arrayOfDateTimesWithTZ(7), arrayOfDateTimesWithTZ(7)),
+                            Row(8, arrayOfDateTimesWithTZ(8), arrayOfDateTimesWithTZ(8), arrayOfDateTimesWithTZ(8)),
+                            Row(9, arrayOfDateTimesWithTZ(9), arrayOfDateTimesWithTZ(9), arrayOfDateTimesWithTZ(9))
+                           );
+
+            val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
+                                     StructField( col1_name,     StringType, true ) ::
+                                     StructField( col2_name,     StringType, true ) ::
+                                     StructField( col3_name,     StringType, true ) :: Nil );
+
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe of all longs with (${df.count} rows)");
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create"          ) = "false";
+            options( "table.name"            ) = tableName;
+            options( "ingester.use_timezone" ) = timeZone;
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            val table_size = get_table_size( tableName );
+            assert( (table_size == df.count), s"Table size ($table_size) should be ${df.count}" );
+
+            // Check the data
+            val columns_to_compare = col1_name :: col2_name :: col3_name :: Nil;
+            compare_table_data( tableName, columns_to_compare, sort_col_name, datetime_conversion_expectedVals );
+        }  // end test #5 for KECO-1648
+
+        test(s"""$package_description KECO-1648: Timestamp, date, datetime
+             | are converted from String Date values when ingested
+             | without issues""".stripMargin.replaceAll("\n", "") ) {
+
+
+            // Create a table type with date, time, datetime columns
+            val sort_col_name = "i";
+            val col1_name     = "timestamp";
+            val col2_name     = "date";
+            val col3_name     = "datetime";
+
+            val tableName = s"keco_1648_string_date_conversion_${package_description}";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
+            columns += new Type.Column( col1_name, classOf[java.lang.Long],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.TIMESTAMP );
+            columns += new Type.Column( col2_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.DATE );
+            columns += new Type.Column( col3_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.DATETIME );
+
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val timeZone = "GMT-05";
+
+            // insert into Kinetica table values 1..10, arrayOfLongs:
+            val data = Seq(
+                            Row(0, arrayOfDates(0), arrayOfDates(0), arrayOfDates(0)),
+                            Row(1, arrayOfDates(1), arrayOfDates(1), arrayOfDates(1)),
+                            Row(2, arrayOfDates(2), arrayOfDates(2), arrayOfDates(2)),
+                            Row(3, arrayOfDates(3), arrayOfDates(3), arrayOfDates(3)),
+                            Row(4, arrayOfDates(4), arrayOfDates(4), arrayOfDates(4)),
+                            Row(5, arrayOfDates(5), arrayOfDates(5), arrayOfDates(5)),
+                            Row(6, arrayOfDates(6), arrayOfDates(6), arrayOfDates(6)),
+                            Row(7, arrayOfDates(7), arrayOfDates(7), arrayOfDates(7)),
+                            Row(8, arrayOfDates(8), arrayOfDates(8), arrayOfDates(8)),
+                            Row(9, arrayOfDates(9), arrayOfDates(9), arrayOfDates(9))
+                           );
+
+            val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
+                                     StructField( col1_name,     StringType, true ) ::
+                                     StructField( col2_name,     StringType, true ) ::
+                                     StructField( col3_name,     StringType, true ) :: Nil );
+
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe of all longs with (${df.count} rows)");
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create"          ) = "false";
+            options( "table.name"            ) = tableName;
+            options( "ingester.use_timezone" ) = timeZone;
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            val table_size = get_table_size( tableName );
+            assert( (table_size == df.count), s"Table size ($table_size) should be ${df.count}" );
+
+            val expectedTimelessVals = Seq( Map("timestamp" -> -207273600000L,
+                                                "date" -> "1963-06-08",
+                                                "datetime" -> "1963-06-08 00:00:00.000"),
+                                            Map("timestamp" -> 20570457600000L,
+                                                "date" -> "2621-11-08",
+                                                "datetime" -> "2621-11-08 00:00:00.000"),
+                                            Map("timestamp" -> -10319097600000L,
+                                                "date" -> "1643-01-01",
+                                                "datetime" -> "1643-01-01 00:00:00.000"),
+                                            Map("timestamp" -> 26039750400000L,
+                                                "date" -> "2795-03-03",
+                                                "datetime" -> "2795-03-03 00:00:00.000"),
+                                            Map("timestamp" -> -3100204800000L,
+                                                "date" -> "1871-10-05",
+                                                "datetime" -> "1871-10-05 00:00:00.000"),
+                                            Map("timestamp" -> -28062115200000L,
+                                                "date" -> "1080-09-30",
+                                                "datetime" -> "1080-09-30 00:00:00.000"),
+                                            Map("timestamp" -> -2858889600000L,
+                                                "date" -> "1879-05-29",
+                                                "datetime" -> "1879-05-29 00:00:00.000"),
+                                            Map("timestamp" -> -11356502400000L,
+                                                "date" -> "1610-02-16",
+                                                "datetime" -> "1610-02-16 00:00:00.000"),
+                                            Map("timestamp" -> -16043529600000L,
+                                                "date" -> "1461-08-08",
+                                                "datetime" -> "1461-08-08 00:00:00.000"),
+                                            Map("timestamp" -> -15184972800000L,
+                                                "date" -> "1488-10-22",
+                                                "datetime" -> "1488-10-22 00:00:00.000")
+                                        );
+
+            // Check the data
+            val columns_to_compare = col1_name :: col2_name :: col3_name :: Nil;
+            // Note:: String date to Long Timestamp comparison fails
+            compare_table_data( tableName, columns_to_compare, sort_col_name, expectedTimelessVals );
+        }  // end test #6 for KECO-1648
+
+        test(s"""$package_description KECO-1648: Timestamp, date, datetime
+             | are converted from  String Time with timezone values when ingested
+             | without issues""".stripMargin.replaceAll("\n", "") ) {
+
+
+            // Create a table type with date, time, datetime columns
+            val sort_col_name = "i";
+            val col1_name     = "time";
+
+            val tableName = s"keco_1648_time_w_o_tz_conversion_${package_description}";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
+            columns += new Type.Column( col1_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.TIME );
+
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val timeZone = "GMT-05";
+
+            // insert into Kinetica table values 1..10, arrayOfLongs:
+            val data = Seq(
+                            Row(0, arrayOfTimesWithTZ(0)),
+                            Row(1, arrayOfTimesWithTZ(1)),
+                            Row(2, arrayOfTimesWithTZ(2)),
+                            Row(3, arrayOfTimesWithTZ(3)),
+                            Row(4, arrayOfTimesWithTZ(4)),
+                            Row(5, arrayOfTimesWithTZ(5)),
+                            Row(6, arrayOfTimesWithTZ(6)),
+                            Row(7, arrayOfTimesWithTZ(7)),
+                            Row(8, arrayOfTimesWithTZ(8)),
+                            Row(9, arrayOfTimesWithTZ(9))
+                           );
+
+            val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
+                                     StructField( col1_name,     StringType, true ) :: Nil );
+
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe of all longs with (${df.count} rows)");
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create"          ) = "false";
+            options( "table.name"            ) = tableName;
+            options( "ingester.use_timezone" ) = timeZone;
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            val table_size = get_table_size( tableName );
+            assert( (table_size == df.count), s"Table size ($table_size) should be ${df.count}" );
+
+            val expectedTimeVals = Seq( Map("time" -> "21:27:49.142"),
+                                        Map("time" -> "06:59:51.120"),
+                                        Map("time" -> "09:25:24.170"),
+                                        Map("time" -> "13:33:43.550"),
+                                        Map("time" -> "05:34:56.762"),
+                                        Map("time" -> "06:17:11.279"),
+                                        Map("time" -> "00:20:40.303"),
+                                        Map("time" -> "15:16:17.605"),
+                                        Map("time" -> "07:16:25.221"),
+                                        Map("time" -> "20:19:25.433")
+                                  );
+
+            // Check the data
+            val columns_to_compare = col1_name :: Nil;
+            compare_table_data( tableName, columns_to_compare, sort_col_name, expectedTimeVals );
+        }  // end test #7 for KECO-1648
+
+
+        test(s"""$package_description KECO-1648: Timestamp, date, datetime
+             | are converted from String Time without timezone values when ingested
+             | without issues""".stripMargin.replaceAll("\n", "") ) {
+
+
+            // Create a table type with date, time, datetime columns
+            val sort_col_name = "i";
+            val col1_name     = "time";
+
+            val tableName = s"keco_1648_time_w_tz_conversion_${package_description}";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
+            columns += new Type.Column( col1_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.TIME );
+
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val timeZone = "UTC";
+
+            // insert into Kinetica table values 1..10, arrayOfLongs:
+            val data = Seq(
+                            Row(0, arrayOfTimes(0)),
+                            Row(1, arrayOfTimes(1)),
+                            Row(2, arrayOfTimes(2)),
+                            Row(3, arrayOfTimes(3)),
+                            Row(4, arrayOfTimes(4)),
+                            Row(5, arrayOfTimes(5)),
+                            Row(6, arrayOfTimes(6)),
+                            Row(7, arrayOfTimes(7)),
+                            Row(8, arrayOfTimes(8)),
+                            Row(9, arrayOfTimes(9))
+                           );
+
+            val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
+                                     StructField( col1_name,     StringType, true ) :: Nil );
+
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe of all longs with (${df.count} rows)");
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create"          ) = "false";
+            options( "table.name"            ) = tableName;
+            options( "ingester.use_timezone" ) = timeZone;
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            val table_size = get_table_size( tableName );
+            assert( (table_size == df.count), s"Table size ($table_size) should be ${df.count}" );
+
+            val expectedTimeVals = Seq( Map("time" -> "21:27:49.142"),
+                                        Map("time" -> "06:59:51.120"),
+                                        Map("time" -> "09:25:24.170"),
+                                        Map("time" -> "13:33:43.550"),
+                                        Map("time" -> "05:34:56.762"),
+                                        Map("time" -> "06:17:11.279"),
+                                        Map("time" -> "00:20:40.303"),
+                                        Map("time" -> "15:16:17.605"),
+                                        Map("time" -> "07:16:25.221"),
+                                        Map("time" -> "20:19:25.433")
+                                  );
+
+            // Check the data
+            val columns_to_compare = col1_name :: Nil;
+
+            compare_table_data( tableName, columns_to_compare, sort_col_name, expectedTimeVals );
+        }   // end test #8 for KECO-1648
+
+        test(s"""$package_description KECO-1651: Timestamp, date, datetime
+             | are converted from extra long String DateTime values when
+             | ingested without issues""".stripMargin.replaceAll("\n", "") ) {
+
+
+            // Create a table type with date, time, datetime columns
+            val sort_col_name = "i";
+            val col1_name     = "timestamp";
+            val col2_name     = "date";
+            val col3_name     = "datetime";
+
+            val tableName = s"keco_1651_lstring_datetime_conversion_${package_description}";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
+            columns += new Type.Column( col1_name, classOf[java.lang.Long],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.TIMESTAMP );
+            columns += new Type.Column( col2_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.DATE );
+            columns += new Type.Column( col3_name, classOf[java.lang.String],
+                                        ColumnProperty.NULLABLE,
+                                        ColumnProperty.DATETIME );
+
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val timeZone = "GMT-05";
+
+            // insert into Kinetica table values 1..10, arrayOfLongs:
+            val data = Seq(
+                            Row(0, arrayOfOverlyPreciseDates(0), arrayOfOverlyPreciseDates(0), arrayOfOverlyPreciseDates(0)),
+                            Row(1, arrayOfOverlyPreciseDates(1), arrayOfOverlyPreciseDates(1), arrayOfOverlyPreciseDates(1)),
+                            Row(2, arrayOfOverlyPreciseDates(2), arrayOfOverlyPreciseDates(2), arrayOfOverlyPreciseDates(2)),
+                            Row(3, arrayOfOverlyPreciseDates(3), arrayOfOverlyPreciseDates(3), arrayOfOverlyPreciseDates(3)),
+                            Row(4, arrayOfOverlyPreciseDates(4), arrayOfOverlyPreciseDates(4), arrayOfOverlyPreciseDates(4)),
+                            Row(5, arrayOfOverlyPreciseDates(5), arrayOfOverlyPreciseDates(5), arrayOfOverlyPreciseDates(5)),
+                            Row(6, arrayOfOverlyPreciseDates(6), arrayOfOverlyPreciseDates(6), arrayOfOverlyPreciseDates(6)),
+                            Row(7, arrayOfOverlyPreciseDates(7), arrayOfOverlyPreciseDates(7), arrayOfOverlyPreciseDates(7)),
+                            Row(8, arrayOfOverlyPreciseDates(8), arrayOfOverlyPreciseDates(8), arrayOfOverlyPreciseDates(8)),
+                            Row(9, arrayOfOverlyPreciseDates(9), arrayOfOverlyPreciseDates(9), arrayOfOverlyPreciseDates(9))
+                           );
+
+            val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
+                                     StructField( col1_name,     StringType, true ) ::
+                                     StructField( col2_name,     StringType, true ) ::
+                                     StructField( col3_name,     StringType, true ) :: Nil );
+
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe of all longs with (${df.count} rows)");
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create"          ) = "false";
+            options( "table.name"            ) = tableName;
+            options( "ingester.use_timezone" ) = timeZone;
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            val table_size = get_table_size( tableName );
+            assert( (table_size == df.count), s"Table size ($table_size) should be ${df.count}" );
+
+            // Check the data
+            val columns_to_compare = col1_name :: col2_name :: col3_name :: Nil;
+            compare_table_data( tableName, columns_to_compare, sort_col_name, datetime_conversion_expectedVals );
+        }  // end test #1 for KECO-1651
+
+        test(s"""$package_description KECO-1651: Long (BIGINT) values are
+             | converted from Integer values when ingested without issues""".stripMargin.replaceAll("\n", "") ) {
+
+
+            // Create a table type with date, time, datetime columns
+            val sort_col_name = "i";
+            val col1_name     = "long_value";
+
+            val tableName = s"keco_1651_int_to_long_conversion_${package_description}";
+            var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
+            columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
+            columns += new Type.Column( col1_name, classOf[java.lang.Long],
+                                        ColumnProperty.NULLABLE);
+
+            logger.debug( s"Table name '${tableName}'" );
+            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+
+            // insert into Kinetica table values 1..10, arrayOfLongs:
+            val data = Seq(
+                            Row(0, 100),
+                            Row(1, 101),
+                            Row(2, 102),
+                            Row(3, 103),
+                            Row(4, 104),
+                            Row(5, 105),
+                            Row(6, 106),
+                            Row(7, 107),
+                            Row(8, 108),
+                            Row(9, 109)
+                           );
+
+            val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
+                                     StructField( col1_name,     IntegerType, true ) :: Nil );
+
+            val df = createDataFrame( data, schema );
+            logger.debug(s"Created a dataframe of all longs with (${df.count} rows)");
+
+            // Get the appropriate options
+            var options = get_default_spark_connector_options();
+            options( "table.create"          ) = "false";
+            options( "table.name"            ) = tableName;
+
+            // Write to the table
+            logger.debug( s"Writing to table ${tableName} via the connector" );
+            df.write.format( package_to_test ).options( options ).save();
+
+            // Check that the table size is correct
+            val table_size = get_table_size( tableName );
+            assert( (table_size == df.count), s"Table size ($table_size) should be ${df.count}" );
+
+            var expectedLongs = Seq( Map("long_value" -> 100),
+                                    Map("long_value" -> 101),
+                                    Map("long_value" -> 102),
+                                    Map("long_value" -> 103),
+                                    Map("long_value" -> 104),
+                                    Map("long_value" -> 105),
+                                    Map("long_value" -> 106),
+                                    Map("long_value" -> 107),
+                                    Map("long_value" -> 108),
+                                    Map("long_value" -> 109)
+                                );
+
+            // Check the data
+            val columns_to_compare = col1_name :: Nil;
+            compare_table_data( tableName, columns_to_compare, col1_name, expectedLongs );
+        }  // end test #2 for KECO-1651
+
+
+    }   // end tests for bugFixes
 
 
 }   // end trait SparkConnectorBugFixes
@@ -1610,7 +2425,7 @@ class TestBugFixes_V1
 
     // Run the tests
     testsFor( bugFixes( m_package_to_test, m_package_descr ) );
-    
+
 }  // TestBugFixes_V1
 
 

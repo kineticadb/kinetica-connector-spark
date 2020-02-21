@@ -17,6 +17,7 @@ import com.typesafe.scalalogging.LazyLogging;
 import java.io.File;
 import java.net.URL;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
@@ -63,8 +64,8 @@ trait SparkConnectorTestFixture
     // Which package the tests use
     val m_package_descr   = m_default_package_descr;
     val m_package_to_test = m_default_package;
-    
-    
+
+
     var m_gpudb : GPUdb = null;
 
     // Various table related options
@@ -90,14 +91,15 @@ trait SparkConnectorTestFixture
     val m_temporary_directory = new File( m_temporary_directory_path );
 
     // User given properties
-    var m_host        : String = "";
-    var m_username    : String = "";
-    var m_password    : String = "";
-    var m_jdbc_url    : String = "";
-    var m_primary_url : String = null;
+    var m_host : String = "";
+    var m_username : String = "";
+    var m_password : String = "";
+    var m_jdbc_url : String = "";
     var m_httpd_trust_store_path : String = "";
     var m_httpd_trust_store_pwd  : String = "";
-    var m_bypass_ssl_cert_check  : Boolean = false;
+    var m_jdbc_trust_store_path  : String = "";
+    var m_jdbc_trust_store_pwd   : String = "";
+    var m_bypass_ssl_cert_check     : Boolean = false;
 
     var m_sparkSession : SparkSession = _;
 
@@ -129,7 +131,7 @@ trait SparkConnectorTestFixture
         //      gets something like "${xxx}", and System.getProperty()'s
         //      default value (the 2nd parameter) is NEVER applied.
         //      Example: <kurl>""</kurl>
-        
+
         // Parse any user given parameters
         m_host = System.getProperty("url", "http://127.0.0.1:9191");
         // Need to check for an empty string explicitly since the behavior
@@ -142,14 +144,6 @@ trait SparkConnectorTestFixture
         }
         logger.info( s"User given parameter host URL value: ${m_host}" );
 
-        // Parse any user given parameters
-        m_primary_url = System.getProperty("primaryURL", null);
-        if ( m_primary_url == null ) {
-            logger.info( s"User given parameter primary URL value: null" );
-        } else {
-            logger.info( s"User given parameter primary URL value: ${m_primary_url}" );
-        }
-
         // Parse user given username and password, if any
         m_username = System.getProperty("username", "");
         m_password = System.getProperty("password", "");
@@ -158,10 +152,14 @@ trait SparkConnectorTestFixture
         // SSL certificate trust store related
         m_httpd_trust_store_path = System.getProperty("httpdTrustStorePath", "");
         m_httpd_trust_store_pwd  = System.getProperty("httpdTrustStorePassword", "");
+        m_jdbc_trust_store_path  = System.getProperty("jdbcTrustStorePath", "");
+        m_jdbc_trust_store_pwd   = System.getProperty("jdbcTrustStorePassword", "");
 
         logger.info( s"User given flag for HTTPD cert verification trust store path:     '${m_httpd_trust_store_path}'" );
         logger.info( s"User given flag for HTTPD cert verification trust store password: '${m_httpd_trust_store_pwd}'" );
-        
+        logger.info( s"User given flag for ODBC cert verification trust store path:      '${m_jdbc_trust_store_path}'" );
+        logger.info( s"User given flag for ODBC cert verification trust store password:  '${m_jdbc_trust_store_pwd}'" );
+
         // The Java API needs to know if the SSL certificate verification
         // needs to be bypassed (will do only if no HTTPD trust store is given.
         m_bypass_ssl_cert_check = (m_httpd_trust_store_path.isEmpty || m_httpd_trust_store_pwd.isEmpty);
@@ -172,21 +170,18 @@ trait SparkConnectorTestFixture
             System.setProperty("javax.net.ssl.trustStore", m_httpd_trust_store_path);
             System.setProperty("javax.net.ssl.trustStorePassword", m_httpd_trust_store_pwd);
         }
-        
+
         val db_options = new GPUdbBase.Options().setBypassSslCertCheck( m_bypass_ssl_cert_check );
         if ( !m_username.isEmpty ) {
             db_options.setUsername( m_username ).setPassword( m_password );
         }
-        if ( (m_primary_url != null) && !m_primary_url.isEmpty ) {
-            db_options.setPrimaryUrl( m_primary_url );
-        }
-        
+
         // Create a DB with the given options (username and password, if any)
         m_gpudb = new GPUdb( m_host, db_options );
 
         // Get the JDBC URL
         m_jdbc_url = get_jdbc_url();
-        
+
         // Create a directory for any test files that may need to be generated
         m_temporary_directory.mkdir();
     }   // end beforeAll
@@ -196,7 +191,7 @@ trait SparkConnectorTestFixture
         // Delete all files created in the temporary test data diretcotry
         remove_directory( m_temporary_directory );
     }
-    
+
 
     // Given the GPUdb connection, get the JDBC URL
     def get_jdbc_url(): String = {
@@ -206,16 +201,10 @@ trait SparkConnectorTestFixture
         val host = m_gpudb.getURL().getHost();
         var jdbc_url : String = "";
         if (s"${version(0)}".toInt > 6) {
-            jdbc_url = s"jdbc:kinetica:URL=${m_host}";
+            jdbc_url = s"jdbc:kinetica://${host}:9191";
         } else {
             jdbc_url = s"jdbc:simba://${host}:9292";
         }
-
-        // Set the primary URL, if any
-        if ( (m_primary_url != null) && !m_primary_url.isEmpty ) {
-            jdbc_url = s"${jdbc_url};PrimaryURL=${m_primary_url}";
-        }
-        
         logger.info(s"JDBC URL: ${jdbc_url}");
         return jdbc_url;
     }
@@ -255,18 +244,19 @@ trait SparkConnectorTestFixture
                                        "table.use_templates" -> "false",
                                        "table.append_new_columns" -> "false",
                                        "table.map_columns_by_name" -> "true"
-                                       );
-
-        // Set the primary URL, if any
-        if ( (m_primary_url != null) && !m_primary_url.isEmpty ) {
-            options( "database.primary_url" ) = m_primary_url;
-        }
+                                );
         // Set SSL related flags only if provided by the user
         if ( !m_httpd_trust_store_path.isEmpty ) {
             options( "ssl.truststore_jks" ) = m_httpd_trust_store_path;
         }
         if ( !m_httpd_trust_store_pwd.isEmpty ) {
             options( "ssl.truststore_password" ) = m_httpd_trust_store_pwd;
+        }
+        if ( !m_jdbc_trust_store_path.isEmpty ) {
+            options( "ssl.odbc_truststore_jks" ) = m_jdbc_trust_store_path;
+        }
+        if ( !m_jdbc_trust_store_pwd.isEmpty ) {
+            options( "ssl.odbc_truststore_password" ) = m_jdbc_trust_store_pwd;
         }
         return options;
     }
@@ -311,7 +301,7 @@ trait SparkConnectorTestFixture
         m_tablesToClear += tableName;
         return;
     }
-    
+
 
     /**
      * Delete the given table.
@@ -412,7 +402,7 @@ trait SparkConnectorTestFixture
         val getRecordsByColumnResponse = m_gpudb.getRecordsByColumn( getRecordsByColumnReq );
         return getRecordsByColumnResponse.getData();
     }
-    
+
 
     /**
      * Delete all existing records of the given table
@@ -471,7 +461,7 @@ trait SparkConnectorTestFixture
         return sb.toString();
     }
 
-    
+
 
     // --------- DataFrame Generator Functions for Testing Convenience ---------
 
@@ -534,7 +524,6 @@ trait SparkConnectorTestFixture
     // -------- Kinetica Table Generator Functions for Testing Convenience ---------
 
 
-
     /**
      * Create a Kinetica table with the given name with the given type.
      * Optionally generate the given number of random records.  If a
@@ -548,7 +537,7 @@ trait SparkConnectorTestFixture
                                              numRows: Int ) : Unit = {
         // Create a type object from the columns
         val type_ = new Type( columns.toList.asJava );
-        
+
         // Set the collection name option for table creation
         collectionName match {
             // A collection name is given; set it
@@ -564,7 +553,7 @@ trait SparkConnectorTestFixture
                 m_createTableInCollectionOptions remove CreateTableRequest.Options.COLLECTION_NAME;
             }
         }
-        
+
         // Delete any pre-existing table with the same name
         clear_table( tableName );
 
@@ -583,7 +572,7 @@ trait SparkConnectorTestFixture
     }
 
 
-    
+
     /**
      * Create a REPLICATED Kinetica table with the given name with the given type.
      * Optionally generate the given number of random records.  If a
@@ -597,7 +586,7 @@ trait SparkConnectorTestFixture
                                                        numRows: Int ) : Unit = {
         // Create a type object from the columns
         val type_ = new Type( columns.toList.asJava );
-        
+
         // Set the collection name option for table creation
         collectionName match {
             // A collection name is given; set it
@@ -613,7 +602,7 @@ trait SparkConnectorTestFixture
                 m_createReplicatedTableInCollectionOptions remove CreateTableRequest.Options.COLLECTION_NAME;
             }
         }
-        
+
         // Delete any pre-existing table with the same name
         clear_table( tableName );
 
@@ -630,6 +619,70 @@ trait SparkConnectorTestFixture
         mark_table_for_deletion_at_test_end( tableName );
         return;
     }
+
+        /**
+     * Helper function converting Date, Time and DateTime strings to compatible
+     * Kinetica format and be local to the specified timezone
+     */
+    def getExpectedLongTimeStampValue ( value: String, timeZone : String ) : Long = {
+        val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy[-][/][.]MM[-][/][.]dd[[ ]['T']HH:mm[:ss][.SSS][ ][XXX][Z][z][VV][x]]");
+        val zoneID = java.util.TimeZone.getTimeZone( timeZone ).toZoneId();
+
+        val MAX_DATE = 29379542399999L;
+        val MIN_DATE = -30610224000000L;
+
+
+        // Get the number of milliseconds since the epoch
+        var sinceepoch : Long = 0;
+
+        try {
+            // Try parsing a full timestamp with date, time and timezone
+            val parsed = java.time.ZonedDateTime.parse( value.toString(), formatter );
+            // get timezone offset in seconds
+            val offset = parsed.get(java.time.temporal.ChronoField.OFFSET_SECONDS);
+            // modify the date with extracted offset, not user-defined timezone,
+            // because offset is already calculated against UTC
+            sinceepoch = parsed
+                .toLocalDateTime()
+                .atZone(  ZoneId.of("UTC")  )
+                .toInstant()
+                .toEpochMilli();
+            if( sinceepoch > MAX_DATE ) {
+                sinceepoch = MAX_DATE;
+            } else if( sinceepoch < MIN_DATE ) {
+                sinceepoch = MIN_DATE;
+            }
+        } catch {
+            case e: java.time.format.DateTimeParseException => {
+                try {
+                    // Try parsing a full local timestamp with date and time
+                    val offset = java.time.ZoneId.systemDefault().getRules()
+                                                 .getOffset(java.time.Instant.now())
+                                                 .getTotalSeconds();
+                    sinceepoch = java.time.LocalDateTime.parse( value.toString(), formatter )
+                        .atZone(  ZoneId.of("UTC")  )
+                        .toInstant()
+                        .toEpochMilli();
+                    if( sinceepoch > MAX_DATE ) {
+                        sinceepoch = MAX_DATE;
+                    } else if( sinceepoch < MIN_DATE ) {
+                        sinceepoch = MIN_DATE;
+                    }
+                } catch {
+                    case e: java.time.format.DateTimeParseException => {
+                        // Try parsing just the date
+                        sinceepoch = java.time.LocalDate.parse( value.toString(), formatter )
+                            .atStartOfDay()
+                            .toInstant( java.time.ZoneOffset.UTC)
+                            .toEpochMilli();
+                    }
+                }
+            }
+        }
+        return sinceepoch;
+    }
+
+
 
 }   // end trait SparkConnectorTestFixture
 
@@ -663,7 +716,7 @@ class SparkConnectorTestBase
         m_tablesToClear.toList.foreach( tableName => clear_table( tableName ) );
         // Empty the list content
         m_tablesToClear.clear();
-        
+
         // Stop the spark session
         m_sparkSession.stop();
     }

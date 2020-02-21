@@ -29,7 +29,7 @@ import org.apache.spark.util.LongAccumulator;
 
 import scala.collection.JavaConverters._;
 
-    
+
 class LoaderParams extends Serializable with LazyLogging {
 
     @BeanProperty
@@ -149,10 +149,10 @@ class LoaderParams extends Serializable with LazyLogging {
 
     @BeanProperty
     var truncateToSize: Boolean = false
-    
+
     @BooleanBeanProperty
     var dryRun: Boolean = false
-    
+
     @BooleanBeanProperty
     var flattenSourceSchema: Boolean = false
 
@@ -300,17 +300,28 @@ class LoaderParams extends Serializable with LazyLogging {
             }
         }
 
-        // Parse the timezone, if any
-        if (timeZoneStr != null ) {
-            timeZone = TimeZone.getTimeZone( timeZoneStr );
+        // Parse the user-defined timezone or use UTC as a default timezone.
+        if (timeZoneStr == null) {
+            timeZoneStr ="UTC";
         } else {
-            timeZone = TimeZone.getDefault();
+            logger.info( s"User provided configuration parameter '${KINETICA_USETIMEZONE_PARAM}' with value '${timeZoneStr}' " +
+                "causes value conversion. Data ingest would offset all datetime and timestamp columns without timezone, " +
+                "converting values from user-defined to UTC timezone. Values with embedded timezone are always converted " +
+                "from embedded timezone to UTC.");
         }
-        
-        
+        try {
+            timeZone = TimeZone.getTimeZone( timeZoneStr );
+        } catch {
+            case e: java.time.format.DateTimeParseException => {
+                logger.warn(s"TimeZone conversion failed for user provided value '${timeZone}'. " +
+                    "It's replaced with default timezone 'UTC'.");
+                timeZone = TimeZone.getTimeZone( "UTC" );
+            }
+        }
+
         // Set the GPUdb and table type
         this.cachedGpudb = connect();
-        
+
     }   // end constructor
 
     // below are not serializable so they are created on demand

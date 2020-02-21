@@ -52,7 +52,12 @@ class KineticaLoaderFunction (
                 case ex: Exception =>
                     val msg = s"Row $rowcount conversion failed: $row"
                     logger.error(msg)
-                    throw new Exception(msg, ex)
+                    logger.error( s"Issue: '${ex.getMessage()}'" );
+                    logger.debug( "Stacktrace for debugging: ", ex );
+
+                    if (loaderConfig.failOnError) {
+                        throw new Exception(msg, ex)
+                    }
             }
             { rowcount += 1; rowcount - 1 }
             if (rowcount % 10000 == 0) {

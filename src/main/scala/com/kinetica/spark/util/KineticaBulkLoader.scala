@@ -56,7 +56,7 @@ class KineticaBulkLoader(lp: LoaderParams) extends LazyLogging {
             return null
         }
 
-        logger.info("multi-head ingest turned on")
+        logger.debug("multi-head ingest turned on")
 
         val pattern: Pattern = null
         if ((lp.KdbIpRegex != null) && !(lp.KdbIpRegex.trim().equalsIgnoreCase(""))) {
@@ -71,7 +71,7 @@ class KineticaBulkLoader(lp: LoaderParams) extends LazyLogging {
 
         var iter: Iterator[URL] = workers.iterator()
         for (url: URL <- workers) {
-            logger.info("Worker: {}", url)
+            logger.debug("Worker: {}", url)
         }
 
         workers

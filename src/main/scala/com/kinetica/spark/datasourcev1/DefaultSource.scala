@@ -9,11 +9,13 @@ import org.apache.spark.sql.sources.DataSourceRegister
 import org.apache.spark.sql.sources.RelationProvider
 
 import com.kinetica.spark.util.Constants
+import com.typesafe.scalalogging.LazyLogging;
+import com.typesafe.scalalogging.Logger;
 
 /*
  * This is the default datasource class which creates and returns the KineticaRelation class doing the actual save/fetch.
  */
-class DefaultSource extends RelationProvider with CreatableRelationProvider with DataSourceRegister {
+class DefaultSource extends RelationProvider with CreatableRelationProvider with DataSourceRegister with LazyLogging {
 
     override def createRelation(sqlContext: SQLContext, parameters: Map[String, String]): BaseRelation = {
         try {
@@ -31,8 +33,16 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider with
             kineticaRelation.insert(df, true)
             kineticaRelation
         } catch {
-            case re: RuntimeException => throw re
-            case e: Exception => throw new RuntimeException(e)
+            case re: RuntimeException => {
+                logger.error( s"DefaultSource encountered RuntimeException: '${re.getMessage()}'");
+                logger.debug( "Stacktrace for debugging: ", re );
+                throw re
+            }
+            case e: Exception => {
+                logger.error( s"DefaultSource encountered Exception: '${e.getMessage()}'");
+                logger.debug( "Stacktrace for debugging: ", e );
+                throw new RuntimeException(e)
+            }
         }
     }
 

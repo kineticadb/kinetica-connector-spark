@@ -23,7 +23,7 @@ object TypeStringProcessor {
     ds.createOrReplaceTempView("temptable")
     val sc = ds.sparkSession.sqlContext
     val colNameWithoutQuotes = columnName.substring(1, columnName.length()-1)
-    val sqlString = s"select max(length(${colNameWithoutQuotes})) from temptable"
+    val sqlString = s"select max(length(`${colNameWithoutQuotes}`)) from temptable"
     //println(" Sql string for temp table is " + sqlString)
     val df = sc.sql(sqlString)
     df

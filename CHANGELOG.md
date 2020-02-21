@@ -2,6 +2,17 @@
 
 ## Version 7.0
 
+### Version 7.0.6.1 -- 2020-02-05
+
+#### Added
+-   Timestamp to Datetime and Datetime to Timestamp conversion logic.
+-   Nanosecond group (up to 9 digits) to Datetime formatter pattern.
+-   Improved logging when `ingester.fail_on_errors` configuration
+    option is set to `true`.
+
+#### Fixed
+-   Enforced saving Spark singleton configuration options without duplication.
+
 ### Version 7.0.6.0 -- 2019-12-05
 
 #### Added

@@ -127,7 +127,7 @@ object SparkKineticaTableUtil extends LazyLogging {
         //execute create table
         logger.info("Create table DDL:  {}", KineticaDDLBuilder.getCreateTableDDL)
 
-        if( !lp.isDryRun() ) {
+        if( !lp.isDryRun() && !lp.hasTable() ) {
             logger.info("Creating table " + lp.getTablename);
             JDBCConnectionUtils.executeSQL(KineticaDDLBuilder.getCreateTableDDL)
             /*Execute alter statements - SIMPLY SAY NO

@@ -76,7 +76,7 @@ class LoaderParams extends Serializable with LazyLogging {
 
     @BeanProperty
     var numPartitions: Int = 4
-        
+
     @BeanProperty
     var egressOffset: Long = 0;
 
@@ -159,7 +159,7 @@ class LoaderParams extends Serializable with LazyLogging {
     @BooleanBeanProperty
     var failOnError: Boolean = false
 
-        
+
     def this(sc: Option[SparkContext], params: Map[String, String]) = {
         this()
 
@@ -186,7 +186,7 @@ class LoaderParams extends Serializable with LazyLogging {
         // We will bypass the HTTPD certificate verification only if no
         // truststore path is given
         bypassCert = (this.trustStorePath == null);
-        
+
         // URL related parameters
         kineticaURL        = params.get(KINETICA_URL_PARAM).getOrElse(null)
         kineticaPrimaryURL = params.get(KINETICA_PRIMARY_URL_PARAM).getOrElse(null)
@@ -196,7 +196,7 @@ class LoaderParams extends Serializable with LazyLogging {
         // Username and password
         kusername = params.get(KINETICA_USERNAME_PARAM).getOrElse("")
         kpassword = params.get(KINETICA_PASSWORD_PARAM).getOrElse("")
-        
+
         // Modify the JDBC connection string as needed (based on options)
         if ( jdbcURL != null ) {
             // Add the primary cluster URL, if given any
@@ -228,7 +228,7 @@ class LoaderParams extends Serializable with LazyLogging {
         }
         // Note: Not throwing an exception if the JDBC URL is not given since it
         //       is not required in every execution path
-        
+
         threads   = params.get(KINETICA_NUMTHREADS_PARAM).getOrElse("4").toInt
 
         insertSize = params.get(KINETICA_BATCHSIZE_PARAM).getOrElse("10000").toInt
@@ -256,8 +256,8 @@ class LoaderParams extends Serializable with LazyLogging {
         if ( egressBatchSize > maxEgressBatchSize ) {
             egressBatchSize = maxEgressBatchSize;
         }
-        
-        
+
+
         // Default setting is 0
         retryCount = params.get(KINETICA_RETRYCOUNT_PARAM).getOrElse("0").toInt
         createTable = params.get(KINETICA_CREATETABLE_PARAM).getOrElse("false").toBoolean
@@ -345,7 +345,7 @@ class LoaderParams extends Serializable with LazyLogging {
         if (this.tableType != null) {
             return this.tableType;
         }
-        
+
         // Need to get a type first
         try {
             this.tableType = Type.fromTable(this.cachedGpudb, getTablename);
@@ -373,7 +373,7 @@ class LoaderParams extends Serializable with LazyLogging {
             logger.info(s"Setting primary URL to <${this.kineticaPrimaryURL}>");
             opts.setPrimaryUrl( this.kineticaPrimaryURL );
         }
-        
+
         logger.info(s"Using URL(s) ${kineticaURL}to create a GPUdb connection");
         val gpudb: GPUdb = new GPUdb(kineticaURL, opts);
         logger.info(s"Connecting to ${gpudb.getURL().toString()} as user <${kusername}>");
@@ -401,7 +401,7 @@ class LoaderParams extends Serializable with LazyLogging {
                 throw e;
             }
         }
-            
+
     }
 
     /**
@@ -415,7 +415,7 @@ class LoaderParams extends Serializable with LazyLogging {
         if ( !gpudbConn.hasTable(this.tablename, null).getTableExists ) {
             return; // table does not exist, so cannot fix egress options
         }
-        
+
         // Offset must be positive integers
         if ( this.egressOffset < 0 ) {
             val errorMsg = (s"Egress offset must be a positive integer; given"
@@ -435,7 +435,7 @@ class LoaderParams extends Serializable with LazyLogging {
             return;
         }
 
-        
+
         // Fix the limit, if any
         if ( this.egressLimit != null ) {
             // Limit must be a positive integer
@@ -445,7 +445,7 @@ class LoaderParams extends Serializable with LazyLogging {
                 logger.error( errorMsg );
                 throw new Exception( errorMsg )
             }
-            
+
             if ( (this.egressOffset + this.egressLimit) > tableSize ) {
                 // The given limit would take us beyond the table, which may
                 // cause problems for some executros.  Cap the limit such
@@ -463,16 +463,17 @@ class LoaderParams extends Serializable with LazyLogging {
      */
     def hasTable(): Boolean = {
         val gpudb: GPUdb = this.getGpudb;
-        if (!gpudb.hasTable(this.tablename, null).getTableExists) {
+        val resp: com.gpudb.protocol.HasTableResponse = gpudb.hasTable(this.tablename, null);
+        if (!resp.getTableExists) {
             false;
         } else {
-            logger.info("Found existing table: {}", this.tablename);
+            logger.info("Found existing table: {}", resp.getTableName);
             true;
         }
     }
 
 
-        
+
     /**
      * Checks if the table belongs to the collection, if
      * given any.  Returns true if no collection is given, or if
@@ -484,7 +485,7 @@ class LoaderParams extends Serializable with LazyLogging {
         // Now check if it's part of the collection, if given any
         if ( !this.schemaname.isEmpty() ) {
             var stOptions = Map( ShowTableRequest.Options.NO_ERROR_IF_NOT_EXISTS -> ShowTableRequest.Options.TRUE );
-            
+
             val rsp: ShowTableResponse = gpudb.showTable( this.tablename, stOptions.asJava );
             if ( rsp.getAdditionalInfo().isEmpty() )
                 return false; // the table does not exist, so collection can't match!

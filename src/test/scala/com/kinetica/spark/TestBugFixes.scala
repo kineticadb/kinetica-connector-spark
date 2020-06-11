@@ -1042,10 +1042,11 @@ trait SparkConnectorBugFixes
             // The expected values would be of Kinetica format and be local to the specified timezone
             val expected_values_via_native_client = Seq( Map( "time" ->"19:50:00.005" ),
                                                          Map( "time" ->"07:50:00.004" ),
-                                                         Map( "time" -> "09:50:00.123" ) );
-            val expected_values_via_jdbc = Seq( Map( "time" ->"19:50:00" ),
-                                                Map( "time" ->"07:50:00" ),
-                                                Map( "time" -> "09:50:00" ) );
+                                                         Map( "time" ->"09:50:00.123" ) );
+            // Expect JDBC to return timestamps converted to local timezone
+            val expected_values_via_jdbc = Seq( Map( "time" ->"01:50:00" ),
+                                                Map( "time" ->"13:50:00" ),
+                                                Map( "time" ->"15:50:00" ) );
 
             // Generate the appropriate schema
             val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
@@ -1074,7 +1075,7 @@ trait SparkConnectorBugFixes
             var egress_options = get_default_spark_connector_options();
             egress_options( "table.name" ) = tableName;
             val records_native = m_sparkSession.sqlContext.read.format( package_to_test )
-                                   .options( options ).load();
+                                   .options( egress_options ).load();
             val fetched_records_native = records_native.orderBy( sort_col_name ).collect();
 
             // Check for data correctness
@@ -1090,7 +1091,7 @@ trait SparkConnectorBugFixes
             val filter_expression = s"i < 1000";
             val records_jdbc = m_sparkSession.sqlContext.read
                                  .format( package_to_test )
-                                 .options( options ).load()
+                                 .options( egress_options ).load()
                                  .filter( filter_expression );
             val fetched_records_jdbc = records_jdbc.orderBy( sort_col_name ).collect();
 

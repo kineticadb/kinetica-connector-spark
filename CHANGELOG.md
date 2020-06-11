@@ -2,6 +2,11 @@
 
 ## Version 7.0
 
+### Version 7.0.6.2 -- 2020-06-10
+
+#### Fixed
+-   Check if table exists before attempting to create Kinetica table.
+
 ### Version 7.0.6.1 -- 2020-02-05
 
 #### Added

@@ -1043,6 +1043,11 @@ trait SparkConnectorBugFixes
             val expected_values_via_native_client = Seq( Map( "time" ->"19:50:00.005" ),
                                                          Map( "time" ->"07:50:00.004" ),
                                                          Map( "time" ->"09:50:00.123" ) );
+            // TODO after KECO-1804 Investigate why Java API timezone and JDBC are applied differently
+            // Original comparison values
+            // val expected_values_via_jdbc = Seq( Map( "time" ->"19:50:00" ),
+            //                                     Map( "time" ->"07:50:00" ),
+            //                                     Map( "time" ->"09:50:00" ) );
             // Expect JDBC to return timestamps converted to local timezone
             val expected_values_via_jdbc = Seq( Map( "time" ->"01:50:00" ),
                                                 Map( "time" ->"13:50:00" ),

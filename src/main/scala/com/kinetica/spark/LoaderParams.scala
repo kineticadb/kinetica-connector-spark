@@ -319,8 +319,10 @@ class LoaderParams extends Serializable with LazyLogging {
             }
         }
 
-        // Set the GPUdb and table type
-        this.cachedGpudb = connect();
+        if (!this.dryRun) {
+            // Set the GPUdb and table type
+            this.cachedGpudb = connect();
+        }
 
     }   // end constructor
 
@@ -377,7 +379,9 @@ class LoaderParams extends Serializable with LazyLogging {
         logger.info(s"Using URL(s) ${kineticaURL}to create a GPUdb connection");
         val gpudb: GPUdb = new GPUdb(kineticaURL, opts);
         logger.info(s"Connecting to ${gpudb.getURL().toString()} as user <${kusername}>");
-        checkConnection(gpudb);
+        if (!this.dryRun) {
+            checkConnection(gpudb);
+        }
 
         // Fix the offset and limit
         fixEgressOffsetLimit( gpudb );
@@ -524,6 +528,11 @@ class LoaderParams extends Serializable with LazyLogging {
             trustManagerList = X509TrustManagerOverride.newManagers(
                 this.trustStorePath,
                 this.trustStorePassword)
+
+            // Set the environment variables for the truststore and its password
+            System.setProperty( "javax.net.ssl.trustStore", this.trustStorePath );
+            System.setProperty( "javax.net.ssl.trustStorePassword",
+                                this.trustStorePassword );
         }
 
         var keyManagerList: Array[KeyManager] = null
@@ -532,16 +541,19 @@ class LoaderParams extends Serializable with LazyLogging {
             keyManagerList = X509KeystoreOverride.newManagers(
                 this.keyStorePath,
                 this.keyStorePassword)
+
+            // Set the environment variables for the truststore and its password
+            System.setProperty( "javax.net.ssl.keyStore", this.keyStorePath );
+            System.setProperty( "javax.net.ssl.keyStorePassword", this.keyStorePassword);
         }
 
-        if (trustManagerList == null && keyManagerList == null) {
+        if ((trustManagerList == null) && (keyManagerList == null)) {
             // nothing to install
             return
         }
 
         val sslContext: SSLContext = SSLContext.getInstance("SSL")
         sslContext.init(keyManagerList, trustManagerList, new java.security.SecureRandom())
-        //SSLContext.setDefault(sslContext);
         HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory)
     }
 }

@@ -2,6 +2,14 @@
 
 ## Version 7.0
 
+### Version 7.0.6.3 -- 2020-07-01
+
+#### Fixed
+-   Check if Spark connector is running in `--analyze-only` mode
+    before conecting to Kinetica instance.
+-   SSL connection error when using custom truststore
+
+
 ### Version 7.0.6.2 -- 2020-06-10
 
 #### Fixed
@@ -238,4 +246,3 @@
 -   Added federated query example
 -   Added PySpark example
 -   Added support for headers and type inference for CSV files.
-

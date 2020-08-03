@@ -44,7 +44,7 @@ private[kinetica] object KineticaSchema {
                 return None;
             }
         }
-        
+
         //println(s"########## Getting schema for table ${table} ############# ")
         try {
             val typeColumns = Type.fromTable(properties.getGpudb(), table).getColumns
@@ -53,12 +53,15 @@ private[kinetica] object KineticaSchema {
             case re: RuntimeException => None
             case e: Exception => None
         }
-        
+
         val conn: Connection = KineticaJdbcUtils.getConnector(url, properties)()
         try {
+            var quotedTableName = KineticaJdbcUtils.quoteTableName(table);
             // Need to quote the table name, but quotess don't work with string
             // interpolation in scala; the following is correct, though ugly
-            val selectQuery = s"""SELECT * FROM "${table}" limit 1""";
+            val selectQuery = s"""SELECT * FROM "$quotedTableName" limit 1""";
+
+
             val rs = conn.prepareStatement( selectQuery ).executeQuery()
             try {
                 val rsmd = rs.getMetaData
@@ -89,7 +92,7 @@ private[kinetica] object KineticaSchema {
             conn.close()
         }
     }  // end getSparkSqlSchema
-    
+
 
     /**
      *
@@ -331,7 +334,7 @@ private[kinetica] object KineticaSchema {
             val columnType = getSparkSqlType(dataType, fieldSize, fieldScale, isSigned);
 
             val metadata = new MetadataBuilder().putString("name", columnName);
-                    
+
             fields( i ) = StructField(columnName, columnType, nullable, metadata.build());
         }
 
@@ -339,7 +342,7 @@ private[kinetica] object KineticaSchema {
         val schema = new StructType( fields );
         schema
     }  // end getRecordSchema
-    
+
 
     def reorderSchemaFieldIndex(columns: java.util.List[Column], columnName: String): Int = {
         val it = columns.iterator()
@@ -350,7 +353,7 @@ private[kinetica] object KineticaSchema {
             }
             ii = ii + 1
         }
-        throw new RuntimeException(" Schema field not found -> " + columnName) 
+        throw new RuntimeException(" Schema field not found -> " + columnName)
     }
 
     /**
@@ -431,7 +434,7 @@ private[kinetica] object KineticaSchema {
             case Some(_) => Unit; // Nothing to do if the schema exists
             case None => throw new RuntimeException( "Must be given a valid schema; given None; " );
         }
-        
+
         val fieldMap = Map(schema.get.fields map { x => x.metadata.getString("name") -> x }: _*)
         val newSchema = new StructType(columns map { name => fieldMap(name) })
         newSchema

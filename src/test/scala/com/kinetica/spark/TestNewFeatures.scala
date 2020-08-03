@@ -63,19 +63,19 @@ trait SparkConnectorNewFeatures
 
             logger.info( s"""$package_description KECO-1611: Case 1 -- Use offset and limit for egressing
              | from Kinetica""".stripMargin.replaceAll("\n", "")  );
-            
+
             // This test fetches some data from the table, and ensures that
             // the offset and limit were honored
-            
+
             // Create a table type with date, time, datetime columns
             val col_name = "i";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( col_name, classOf[java.lang.Integer] );
 
             // Create the table (but clear any pre-existing ones)
-            val tableName  = s"keco_1611_offset_limit_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName  = s"keco_1611_offset_limit_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Generate some test data
             // -----------------------
@@ -99,7 +99,7 @@ trait SparkConnectorNewFeatures
 
             val offset     = 100;
             val batch_size = 5;
-            
+
             // Get the appropriate egress options
             var egress_options = get_default_spark_connector_options();
             egress_options( "table.name"    ) = tableName;
@@ -121,7 +121,7 @@ trait SparkConnectorNewFeatures
                         s"Fetched dataframe size (${fetched_records_native.count}) should be ${numRecords}" );
             }
 
-            
+
             // Test the JDBC connector path
             // ----------------------------
             // Get the data out using the connecotr via the JDBC connector (when filtering IS necessary)
@@ -148,19 +148,19 @@ trait SparkConnectorNewFeatures
             logger.info( s"""$package_description KECO-1611: Case 2 -- use offset and limit
              | for egressing from Kinetica with offset beyond the table size
              | for some executors""".stripMargin.replaceAll("\n", "")  );
-            
+
             // This test fetches some data from the table, and ensures that
             // the offset and limit were honored
-            
+
             // Create a table type with date, time, datetime columns
             val col_name = "i";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( col_name, classOf[java.lang.Integer] );
 
             // Create the table (but clear any pre-existing ones)
-            val tableName  = s"keco_1611_offset_limit_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName  = s"keco_1611_offset_limit_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Generate some test data
             // -----------------------
@@ -185,7 +185,7 @@ trait SparkConnectorNewFeatures
             val offset     = 990;
             val batch_size = 100;
             val expected_num_records = 10;
-            
+
             // Get the appropriate egress options
             var egress_options = get_default_spark_connector_options();
             egress_options( "table.name"    ) = tableName;
@@ -207,7 +207,7 @@ trait SparkConnectorNewFeatures
                         s"Fetched dataframe size (${fetched_records_native.count}) should be ${expected_num_records}" );
             }
 
-            
+
             // Test the JDBC connector path
             // ----------------------------
             // Get the data out using the connecotr via the JDBC connector (when filtering IS necessary)
@@ -222,7 +222,7 @@ trait SparkConnectorNewFeatures
                     s"Fetched dataframe size (${fetched_records_jdbc.count}) should be ${expected_num_records}" );
         }  // end test #2 for KECO-1611
 
-        
+
         /**
          * Test for egressing with offset and limit where the offset is beyond
          * the table size
@@ -239,16 +239,16 @@ trait SparkConnectorNewFeatures
 
             // This test fetches some data from the table, and ensures that
             // the offset and limit were honored
-            
+
             // Create a table type with date, time, datetime columns
             val col_name = "i";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( col_name, classOf[java.lang.Integer] );
 
             // Create the table (but clear any pre-existing ones)
-            val tableName  = s"keco_1611_offset_limit_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName  = s"keco_1611_offset_limit_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Generate some test data
             // -----------------------
@@ -272,7 +272,7 @@ trait SparkConnectorNewFeatures
             val offset     = 20000;
             val batch_size = 50;
             val expected_num_records = 0;
-            
+
             // Get the appropriate egress options
             var egress_options = get_default_spark_connector_options();
             egress_options( "table.name"    ) = tableName;
@@ -294,7 +294,7 @@ trait SparkConnectorNewFeatures
                         s"Fetched dataframe size (${fetched_records_native.count}) should be ${expected_num_records}" );
             }
 
-            
+
             // Test the JDBC connector path
             // ----------------------------
             // Get the data out using the connecotr via the JDBC connector (when filtering IS necessary)
@@ -309,7 +309,7 @@ trait SparkConnectorNewFeatures
                     s"Fetched dataframe size (${fetched_records_jdbc.count}) should be ${expected_num_records}" );
         }  // end test #3 for KECO-1611
 
-        
+
         /**
          * Test for egressing with offset and limit, where the offset is the same
          * as the table size
@@ -323,19 +323,19 @@ trait SparkConnectorNewFeatures
              | for egressing from Kinetica with offset same as the table size;
              | should get zero records instead
              | failing""".stripMargin.replaceAll("\n", "" ) );
-            
+
             // This test fetches some data from the table, and ensures that
             // the offset and limit were honored
-            
+
             // Create a table type with date, time, datetime columns
             val col_name = "i";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( col_name, classOf[java.lang.Integer] );
 
             // Create the table (but clear any pre-existing ones)
-            val tableName  = s"keco_1611_offset_limit_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName  = s"keco_1611_offset_limit_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Generate some test data
             // -----------------------
@@ -359,7 +359,7 @@ trait SparkConnectorNewFeatures
             val offset     = 1000;
             val batch_size = 50;
             val expected_num_records = 0;
-            
+
             // Get the appropriate egress options
             var egress_options = get_default_spark_connector_options();
             egress_options( "table.name"    ) = tableName;
@@ -381,7 +381,7 @@ trait SparkConnectorNewFeatures
                         s"Fetched dataframe size (${fetched_records_native.count}) should be ${expected_num_records}" );
             }
 
-            
+
             // Test the JDBC connector path
             // ----------------------------
             // Get the data out using the connecotr via the JDBC connector (when filtering IS necessary)
@@ -408,19 +408,19 @@ trait SparkConnectorNewFeatures
             logger.info( s"""$package_description KECO-1611: Case 5 -- use offset and limit
              | for egressing from Kinetica with negative offset
              | """.stripMargin.replaceAll("\n", "" ) );
-            
+
             // This test fetches some data from the table, and ensures that
             // the offset and limit were honored
-            
+
             // Create a table type with date, time, datetime columns
             val col_name = "i";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( col_name, classOf[java.lang.Integer] );
 
             // Create the table (but clear any pre-existing ones)
-            val tableName  = s"keco_1611_offset_limit_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName  = s"keco_1611_offset_limit_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Generate some test data
             // -----------------------
@@ -444,7 +444,7 @@ trait SparkConnectorNewFeatures
             val offset     = -100;
             val batch_size = 50;
             val expected_num_records = 0;
-            
+
             // Get the appropriate egress options
             var egress_options = get_default_spark_connector_options();
             egress_options( "table.name"    ) = tableName;
@@ -466,7 +466,7 @@ trait SparkConnectorNewFeatures
                     logger.debug( s"Got expected RUNTIME exception {}", e2 );
                 }
             }
-            
+
             // Test the JDBC connector path
             // ----------------------------
             try {
@@ -498,19 +498,19 @@ trait SparkConnectorNewFeatures
             logger.info( s"""$package_description KECO-1611: Case 6 -- use offset and limit
              | for egressing from Kinetica with negative limit
              | """.stripMargin.replaceAll("\n", "" ) );
-            
+
             // This test fetches some data from the table, and ensures that
             // the offset and limit were honored
-            
+
             // Create a table type with date, time, datetime columns
             val col_name = "i";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( col_name, classOf[java.lang.Integer] );
 
             // Create the table (but clear any pre-existing ones)
-            val tableName  = s"keco_1611_offset_limit_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName  = s"keco_1611_offset_limit_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Generate some test data
             // -----------------------
@@ -534,7 +534,7 @@ trait SparkConnectorNewFeatures
             val offset     = 100;
             val batch_size = -50;
             val expected_num_records = 0;
-            
+
             // Get the appropriate egress options
             var egress_options = get_default_spark_connector_options();
             egress_options( "table.name"    ) = tableName;
@@ -556,7 +556,7 @@ trait SparkConnectorNewFeatures
                     logger.debug( s"Got expected RUNTIME exception {}", e2 );
                 }
             }
-            
+
             // Test the JDBC connector path
             // ----------------------------
             try {
@@ -577,7 +577,7 @@ trait SparkConnectorNewFeatures
 
         }  // end test #6 for KECO-1611
 
-        
+
     }   // end tests for newFeatures
 
 
@@ -598,7 +598,7 @@ class TestNewFeatures_V1
 
     // Run the tests
     testsFor( newFeatures( m_package_to_test, m_package_descr ) );
-    
+
 }  // TestNewFeatures_V1
 
 

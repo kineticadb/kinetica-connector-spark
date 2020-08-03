@@ -49,7 +49,7 @@ private[kinetica] class KineticaRDD(
     conf: LoaderParams
     )
     extends RDD[Row](sc, Nil) with LazyLogging {
-    
+
     /**
      * Retrieve the list of partitions corresponding to this RDD.
      */
@@ -66,7 +66,7 @@ private[kinetica] class KineticaRDD(
             // we use the Java API only in this case is because we cannot push down
             // spark sql filters via the Java API.
             logger.debug("KineticaRDD::compute(): No filters given; use the native path");
-        
+
             // Fetch the rows (after filtering the data server-side)
             val allRowsForPartition = KineticaEgressUtilsNativeClient.getRowsFromKinetica( conf.getGpudb, conf.getTablename,
                                                                                            columns, schema,
@@ -116,7 +116,7 @@ private[kinetica] class KineticaRDD(
         val myrows = internalRows.map(encoder.fromRow)
 
         def close() {
-            
+
             if (closed) return
             try {
                 if (null != rs) {
@@ -155,7 +155,7 @@ private[kinetica] class KineticaRDD(
 //          new InterruptibleIterator(context, rowsIterator), close())
     }   // end fetchRecordsViaJDBC
 
-        
+
     def buildTableQuery(
         conn: Connection,
         table: String,
@@ -178,9 +178,11 @@ private[kinetica] class KineticaRDD(
                 colStrBuilder.append("1")
             }
 
+            var quotedTableName = KineticaJdbcUtils.quoteTableName(table);
             // Need to quote the table name, but quotess don't work with string
             // interpolation in scala; the following is correct, though ugly
-            s"""/* KI_HINT_MAX_ROWS_TO_FETCH($maxRowsToFetch) */SELECT $colStrBuilder FROM "$table" $whereClause"""
+            s"""/* KI_HINT_MAX_ROWS_TO_FETCH($maxRowsToFetch) */SELECT $colStrBuilder FROM "$quotedTableName" $whereClause"""
+
         }
         log.debug("External Table Query: " + baseQuery)
         baseQuery.toString()

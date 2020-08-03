@@ -15,22 +15,29 @@ object KineticaDDLBuilder extends LazyLogging {
     private var firstColumn: Boolean = true
 
     def init(lp: LoaderParams): Unit = {
+        if (!lp.isDryRun()) {
+            // Create table schema if it does not exist
+            lp.createSchema;
+        }
+
         // Get the table creation part of the DDL
-        // First check if the table is replicated
-        var replicated = ""
+        createTableDDL = new StringBuffer().append("CREATE ")
+
+        // Check if the table is replicated
         if (lp.isTableReplicated) {
-            replicated = "REPLICATED"
+            createTableDDL.append("REPLICATED ")
         }
-        
-        createTableDDL = if ( lp.getSchemaname.isEmpty ) {
-            // Regular table (name needs to be quoted)
-            new StringBuffer()
-            .append("CREATE " + replicated + " TABLE \"" + lp.getTablename + "\" (")
-        }
-        else {
-            // Both table and collection names need to be quoted
-            new StringBuffer()
-            .append("CREATE " + replicated + " TABLE \"" + lp.getSchemaname + "\".\"" + lp.getTablename + "\" (")
+
+        // Table name needs to be quoted
+        var qualifiedNameParts = lp.getTablename.split("\\.");
+        if ((lp.getTablename contains ".") && qualifiedNameParts.length==2) {
+            createTableDDL.append(
+                " TABLE \"" +
+                qualifiedNameParts( 0 ) + "\".\"" +
+                qualifiedNameParts( 1 ) + "\" ("
+            )
+        } else {
+            createTableDDL.append(" TABLE \"" + lp.getTablename + "\" (")
         }
         compressDDLs = new ArrayList[String]()
         firstColumn = true
@@ -50,7 +57,7 @@ object KineticaDDLBuilder extends LazyLogging {
         nullable: Boolean): Unit = {
         addToDDL(BuildStringDDL.buildDDL(columnName, maxStringLen), nullable)
     }
-    
+
     def buildDecimal(columnName: String, precision: Int, scale: Int, nullable: Boolean): Unit = {
         addToDDL(BuildDecimalDDL.buildDDL(columnName, precision, scale), nullable)
     }
@@ -62,7 +69,7 @@ object KineticaDDLBuilder extends LazyLogging {
     def buildDate(columnName: String, nullable: Boolean): Unit = {
         addToDDL(BuildDateDDL.buildDDL(columnName), nullable)
     }
-    
+
     def buildByteArray(columnName: String, nullable: Boolean): Unit = {
         addToDDL(BuildByteDDL.buildDDL(columnName), nullable)
     }

@@ -284,19 +284,20 @@ class LoaderParams extends Serializable with LazyLogging {
             throw new Exception( "Parameter is required: " + KINETICA_TABLENAME_PARAM)
         }
 
-        // Instead of diverging the behavior for spark-submit vs spark shell etc.,
-        // just check if a collection name is given, which is indicated by the
-        // user (by default, we'll assume that we're to extract a schema name
-        // from the table name)
-        val tableContainsSchemaName = params.get( KINETICA_TABLENAME_CONTAINS_SCHEMA_PARAM )
-                                            .getOrElse("true").toBoolean;
-        if( tableContainsSchemaName && (tablename contains ".") ) {
+        // By default, we expect table name to be a fully qualified table name
+        // and attempt to validate it and extract a schema name.
+        if( tablename contains "." ) {
+            // Table name contains schema
             val tableParams: Array[String] = tablename.split("\\.")
-            if (tableParams.length > 1) {
-                // A collection name IS given
+            if (tableParams.length == 2) {
+                // A valid schema name is given in fully qualified name
                 schemaname = tableParams( 0 )
-                // The remainder is the table name (which is allowed to have periods)
-                tablename = tablename.substring( schemaname.length + 1 )
+            } else {
+                // More than one schemas found in table name, invalid name
+                throw new Exception( KINETICA_TABLENAME_PARAM + " value is '" +
+                    tablename + "', with " + tableParams.length + "dot-separated " +
+                    "parts. Table name must use a '<SCHEMA_NAME>.<TABLE_NAME>' " +
+                    "notation and cannot contain more than one dot.")
             }
         }
 
@@ -476,44 +477,40 @@ class LoaderParams extends Serializable with LazyLogging {
         }
     }
 
-
+    /**
+     * Checks if the schema exists.
+     */
+    def hasSchema(): Boolean = {
+        val gpudb: GPUdb = this.getGpudb;
+        try {
+            val info = gpudb.showSchema(this.schemaname, null);
+            return true;
+        } catch {
+            case e: Throwable => return false;
+        }
+    }
 
     /**
-     * Checks if the table belongs to the collection, if
-     * given any.  Returns true if no collection is given, or if
-     * one is given AND the table belongs to that collection.
-     * false otherwise.  If the table does not exist, return false.
-     */
-    def doesTableCollectionMatch(): Boolean = {
-        val gpudb: GPUdb = this.getGpudb
-        // Now check if it's part of the collection, if given any
-        if ( !this.schemaname.isEmpty() ) {
-            var stOptions = Map( ShowTableRequest.Options.NO_ERROR_IF_NOT_EXISTS -> ShowTableRequest.Options.TRUE );
-
-            val rsp: ShowTableResponse = gpudb.showTable( this.tablename, stOptions.asJava );
-            if ( rsp.getAdditionalInfo().isEmpty() )
-                return false; // the table does not exist, so collection can't match!
-
-            val rspAdditionalInfo: Map[String, String] = rsp.getAdditionalInfo().get( 0 ).asScala.toMap
-            if ( rspAdditionalInfo.contains( ShowTableResponse.AdditionalInfo.COLLECTION_NAMES ) ) {
-                // Now, is it the same collection?
-                val collName: String = rspAdditionalInfo( ShowTableResponse.AdditionalInfo.COLLECTION_NAMES );
-                if ( collName == this.schemaname) {
-                    // Collection name matches
-                    return true;
-                }
-                else {
-                    // Collection name does not match
-                    return false;
-                }
-            }
-            // The table does not belong to a collection (but is supposed
-            // to), so not quite a match
-            return false;
+     * Creates schema if it does not exist.
+    **/
+    def createSchema(): Unit = {
+        val gpudb: GPUdb = this.getGpudb;
+        if ( !hasSchema ) {
+            gpudb.createSchema(this.schemaname, null);
         }
-        else
-            return true; // no collection name given
     }
+
+    /**
+     * Drops schema if it exists.
+    **/
+    def dropSchema(): Unit = {
+        val gpudb: GPUdb = this.getGpudb;
+        if ( hasSchema ) {
+            gpudb.dropSchema(this.schemaname, null);
+        }
+    }
+
+
 
     private def setupSSL(): Unit = {
         if (this.bypassCert) {

@@ -75,10 +75,10 @@ trait SparkConnectorTestFixture
     val m_createTableOptions = GPUdbBase.options( CreateTableRequest.Options.NO_ERROR_IF_EXISTS,
                                                   CreateTableRequest.Options.TRUE );
 
-    val m_createTableInCollectionOptions = GPUdbBase.options( CreateTableRequest.Options.NO_ERROR_IF_EXISTS,
+    val m_createTableInSchemaOptions = GPUdbBase.options( CreateTableRequest.Options.NO_ERROR_IF_EXISTS,
                                                               CreateTableRequest.Options.TRUE ).asScala;
 
-    val m_createReplicatedTableInCollectionOptions = GPUdbBase.options( CreateTableRequest.Options.NO_ERROR_IF_EXISTS,
+    val m_createReplicatedTableInSchemaOptions = GPUdbBase.options( CreateTableRequest.Options.NO_ERROR_IF_EXISTS,
                                                                         CreateTableRequest.Options.TRUE,
                                                                         CreateTableRequest.Options.IS_REPLICATED,
                                                                         CreateTableRequest.Options.TRUE).asScala;
@@ -104,8 +104,9 @@ trait SparkConnectorTestFixture
     var m_sparkSession : SparkSession = _;
 
 
-    // Names of tables that need to be deleted
+    // Names of tables and schemas that need to be deleted
     var m_tablesToClear : mutable.ListBuffer[String] = mutable.ListBuffer[String]();
+    var m_schemasToClear : mutable.ListBuffer[String] = mutable.ListBuffer[String]();
 
     override def beforeAll() {
 
@@ -237,7 +238,6 @@ trait SparkConnectorTestFixture
                                        "spark.num_partitions" -> "4",
                                        "table.create" -> "false",
                                        "table.is_replicated" -> "false",
-                                       "table.name_contains_schema" -> "true",
                                        "table.truncate" -> "false",
                                        "table.truncate_to_size" -> "false",
                                        "table.update_on_existing_pk" -> "false",
@@ -302,6 +302,13 @@ trait SparkConnectorTestFixture
         return;
     }
 
+    /**
+     * Add to the list of schemas to clear at the end of the test
+     */
+    def mark_schema_for_deletion_at_test_end( name: String ) : Unit = {
+        m_schemasToClear += name;
+        return;
+    }
 
     /**
      * Delete the given table.
@@ -316,6 +323,21 @@ trait SparkConnectorTestFixture
         return;
     }
 
+
+    /**
+     * Delete the given schema.
+     */
+    def clear_schema( schemaName: String ) : Unit = {
+        try {
+            m_gpudb.showSchema( schemaName, null );
+            logger.debug( s"Attempting to drop schema '$schemaName'" );
+            m_gpudb.dropSchema( schemaName, null );
+            logger.debug( s"Dropped schema '$schemaName'" );
+            return;
+        } catch {
+            case e: Throwable => return;
+        }
+    }
 
     /**
      * Delete all the records in the given table.
@@ -349,30 +371,45 @@ trait SparkConnectorTestFixture
         return m_gpudb.hasTable( table_name, null ).getTableExists();
     }
 
+    /**
+     * Given a schema name, check if the schema exists.
+     */
+    def does_schema_exist( schema_name: String ) : Boolean = {
+        try {
+            val info = m_gpudb.showSchema( schema_name, null );
+            return true;
+        } catch {
+            case e: Throwable => return false;
+        }
+    }
 
     /**
-     * Given a table name, check if it belongs to any collection.  If so, return
-     * the collection name, otherwise return None.  Also, return None if the
-     * table does not exist OR if the table itself is a collection.
+     * Create a schema by name if it does not exist.
      */
-    def get_table_collection_name( table_name: String ) : Option[String] = {
+    def create_schema( schema_name: String ) : String = {
+        try {
+            val info = m_gpudb.showSchema( schema_name, null );
+        } catch {
+            case e: Throwable => {
+                m_gpudb.createSchema( schema_name, null )
+            }
+        }
+        return schema_name;
+    }
+
+    /**
+     * Given a table name, retrieve its schema name.
+     * Return None if the table does not exist.
+     */
+    def get_table_schema_name( table_name: String ) : Option[String] = {
         if ( does_table_exist( table_name ) ) {
             val show_table = m_gpudb.showTable( s"${table_name}", null );
-
-            // Check if the given table is actually a collection
-            val table_names = show_table.getTableNames().asScala;
-            if ( table_names.length > 1 ) {
-                return None; // Can't be in another collection
-            }
-
-            // If this table is not a collection, then get its collection
-            // information, if any
-            val info = show_table.getAdditionalInfo().asScala.get( 0 );
-            val collection_name = info get ShowTableResponse.AdditionalInfo.COLLECTION_NAMES;
-            return Option.apply( collection_name );
+            val schema_name = show_table.getAdditionalInfo().get( 0 )
+                                                            .get("schema_name");
+            return Option.apply( schema_name );
         }
 
-        // Table does not exist return an empty string
+        // Table does not exist, return an empty string
         return None;
     }
 
@@ -526,49 +563,48 @@ trait SparkConnectorTestFixture
 
     /**
      * Create a Kinetica table with the given name with the given type.
-     * Optionally generate the given number of random records.  If a
-     * collection name is given, ensure that Kinetica puts
-     * it in that collection.  Clear any pre-existing table with the same
+     * Optionally generate the given number of random records.
+     * If table name is a fully qualified name with schema, ensure that Kinetica puts
+     * it in that schema.  Clear any pre-existing table with the same
      * name first.
      */
     def createKineticaTableWithGivenColumns( tableName: String,
-                                             collectionName: Option[String],
                                              columns: mutable.ListBuffer[Type.Column],
-                                             numRows: Int ) : Unit = {
+                                             numRows: Int ) : String = {
         // Create a type object from the columns
         val type_ = new Type( columns.toList.asJava );
-
-        // Set the collection name option for table creation
-        collectionName match {
-            // A collection name is given; set it
-            case Some( collName ) => {
-                m_createTableInCollectionOptions( CreateTableRequest.Options.COLLECTION_NAME ) = collName;
-
-                // Will need to delete the collection, too
-                mark_table_for_deletion_at_test_end( collName );
-            }
-            // No collection name is given, so ensure the relevant property
-            // is absent from the options
-            case None => {
-                m_createTableInCollectionOptions remove CreateTableRequest.Options.COLLECTION_NAME;
-            }
-        }
 
         // Delete any pre-existing table with the same name
         clear_table( tableName );
 
+        if ( tableName contains "." ) {
+            var schemaName = tableName.split("\\.")( 0 );
+            try {
+                m_gpudb.showSchema(schemaName, null);
+            } catch {
+                case e: Throwable => {
+                    // If the given schema does not exist, create schema
+                    m_gpudb.createSchema(schemaName, null);
+                    logger.debug( s"Created schema $schemaName via the Java API" );
+                    mark_schema_for_deletion_at_test_end( schemaName );
+                }
+            }
+        }
+
         // Create the table
-        m_gpudb.createTable( tableName, type_.create( m_gpudb ),
-                             m_createTableInCollectionOptions );
-        logger.debug( s"Created table $tableName via the Java API" );
+        var resp = m_gpudb.createTable( tableName, type_.create( m_gpudb ),
+                             m_createTableInSchemaOptions );
+        var createdTableName = resp.getInfo().get(com.gpudb.protocol.CreateTableResponse.Info.QUALIFIED_TABLE_NAME)
+        
+        logger.debug( s"Created table $createdTableName via the Java API" );
 
         // Generate some random data, if desired by the caller
         if ( numRows > 0) {
-            m_gpudb.insertRecordsRandom( tableName, numRows, null );
+            m_gpudb.insertRecordsRandom( createdTableName, numRows, null );
         }
 
-        mark_table_for_deletion_at_test_end( tableName );
-        return;
+        mark_table_for_deletion_at_test_end( createdTableName );
+        return createdTableName;
     }
 
 
@@ -581,43 +617,42 @@ trait SparkConnectorTestFixture
      * name first.
      */
     def createReplicatedKineticaTableWithGivenColumns( tableName: String,
-                                                       collectionName: Option[String],
                                                        columns: mutable.ListBuffer[Type.Column],
-                                                       numRows: Int ) : Unit = {
+                                                       numRows: Int ) : String = {
         // Create a type object from the columns
         val type_ = new Type( columns.toList.asJava );
-
-        // Set the collection name option for table creation
-        collectionName match {
-            // A collection name is given; set it
-            case Some( collName ) => {
-                m_createReplicatedTableInCollectionOptions( CreateTableRequest.Options.COLLECTION_NAME ) = collName;
-
-                // Will need to delete the collection, too
-                mark_table_for_deletion_at_test_end( collName );
-            }
-            // No collection name is given, so ensure the relevant property
-            // is absent from the options
-            case None => {
-                m_createReplicatedTableInCollectionOptions remove CreateTableRequest.Options.COLLECTION_NAME;
-            }
-        }
 
         // Delete any pre-existing table with the same name
         clear_table( tableName );
 
+        if ( tableName contains "." ) {
+            var schemaName = tableName.split("\\.")( 0 );
+            try {
+                m_gpudb.showSchema(schemaName, null);
+            } catch {
+                case e: Throwable => {
+                    // If the given schema does not exist, create schema
+                    m_gpudb.createSchema(schemaName, null);
+                    logger.debug( s"Created schema $schemaName via the Java API" );
+                    mark_schema_for_deletion_at_test_end( schemaName );
+                }
+            }
+        }
+
         // Create the replicated table
-        m_gpudb.createTable( tableName, type_.create( m_gpudb ),
-                             m_createReplicatedTableInCollectionOptions );
-        logger.debug( s"Created table $tableName via the Java API" );
+        var resp = m_gpudb.createTable( tableName, type_.create( m_gpudb ),
+                             m_createReplicatedTableInSchemaOptions );
+        var createdTableName = resp.getInfo().get(com.gpudb.protocol.CreateTableResponse.Info.QUALIFIED_TABLE_NAME)
+        
+        logger.debug( s"Created table $createdTableName via the Java API" );
 
         // Generate some random data, if desired by the caller
         if ( numRows > 0) {
-            m_gpudb.insertRecordsRandom( tableName, numRows, null );
+            m_gpudb.insertRecordsRandom( createdTableName, numRows, null );
         }
 
-        mark_table_for_deletion_at_test_end( tableName );
-        return;
+        mark_table_for_deletion_at_test_end( createdTableName );
+        return createdTableName;
     }
 
         /**
@@ -716,6 +751,10 @@ class SparkConnectorTestBase
         m_tablesToClear.toList.foreach( tableName => clear_table( tableName ) );
         // Empty the list content
         m_tablesToClear.clear();
+
+        m_schemasToClear.toList.foreach( schemaName => clear_schema( schemaName ) );
+        // Empty the list content
+        m_schemasToClear.clear();
 
         // Stop the spark session
         m_sparkSession.stop();

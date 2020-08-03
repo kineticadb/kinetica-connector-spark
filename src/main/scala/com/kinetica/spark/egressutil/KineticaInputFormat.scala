@@ -19,9 +19,11 @@ private[kinetica] object KineticaInputFormat {
 
         // query to get maximum number of data slices in the database.
         val whereClause = KineticaFilters.getWhereClause(filters)
+        var quotedTableName = KineticaJdbcUtils.quoteTableName(table);
         // Need to quote the table name, but quotess don't work with string
         // interpolation in scala; the following is correct, though ugly
-        var query = s"""select count(*) from "${table}""""
+        var query = s"""select count(*) from "$quotedTableName" """
+
         if (whereClause.length > 0) {
             query += " " + whereClause
         }
@@ -37,7 +39,7 @@ private[kinetica] object KineticaInputFormat {
                     // there should always be some data slices with kinetica
                     throw new Exception("No data slice ids returned.");
                 }
-                */ 
+                */
                 //println(s"Total rows in table ${table} is ${numberOfRows}")
                 return numberOfRows
             } finally {
@@ -60,15 +62,15 @@ private[kinetica] object KineticaInputFormat {
             numberOfRows = limit;
         }
         var rowsPerPartition = numberOfRows / numPartitions
-        
+
         val extra = numberOfRows % numPartitions
 
         /*
-        println(s"Number of rows is ${numberOfRows}") 
-        println(s"Rows per partition is ${rowsPerPartition}") 
-        println(s"Number of partitions is ${numPartitions}") 
+        println(s"Number of rows is ${numberOfRows}")
+        println(s"Rows per partition is ${rowsPerPartition}")
+        println(s"Number of partitions is ${numPartitions}")
 		*/
-        
+
         if (rowsPerPartition <= 1) {
             Array[Partition](KineticaPartition( offset, numberOfRows, 0))
         } else {
@@ -79,7 +81,7 @@ private[kinetica] object KineticaInputFormat {
                 if( index == (numPartitions-1) ) {
                     numRows = numRows + extra
                 }
-                //println(s"Partition is ${start}/${numRows}/${index}") 
+                //println(s"Partition is ${start}/${numRows}/${index}")
                 ans += KineticaPartition(start, numRows, index)
                 start = start + numRows;
             }

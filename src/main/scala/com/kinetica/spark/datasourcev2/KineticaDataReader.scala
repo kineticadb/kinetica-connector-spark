@@ -7,11 +7,12 @@ import org.apache.spark.sql.types.StructType;
 import com.kinetica.spark.LoaderParams;
 import com.kinetica.spark.egressutil.KineticaEgressUtilsNativeClient;
 import com.kinetica.spark.egressutil.KineticaEgressUtilsJdbc;
+import com.kinetica.spark.egressutil.KineticaJdbcUtils;
 import com.kinetica.spark.util.ConfigurationConstants._;
 // import com.typesafe.scalalogging.Logger;
 import com.typesafe.scalalogging.LazyLogging;
 
-    
+
 class KineticaDataReader (
     val conf: LoaderParams,
     val tableSchema: StructType,
@@ -19,15 +20,15 @@ class KineticaDataReader (
     val requiredSchema: StructType)
     extends DataReader[Row]
     with LazyLogging {
- 
+
     // val logger = Logger("KineticaDataReader");
-  
+
     val requiredColumns = requiredSchema.fieldNames;
 
     val numPartitions = conf.getNumPartitions;
     val url   = if (conf.getJdbcURL   != null ) conf.getJdbcURL   else sys.error("Option 'database.jdbc_url' not specified");
     val table = if (conf.getTablename != null ) conf.getTablename else sys.error("Option 'table.name' not specified");
-        
+
     // // Handle the case when no required column is given
     // if ( requiredColumns.isEmpty ) {
     // }
@@ -35,11 +36,11 @@ class KineticaDataReader (
 
     val gpudbConn = conf.getGpudb;
     val tableName = conf.getTablename;
-    
+
     // Get the table size
     val tableSize = KineticaEgressUtilsNativeClient.getKineticaTableSize( gpudbConn, tableName );
     logger.debug("KineticaDataReader: got table size {}", tableSize);
-     
+
     // Read the table's rows in batches (default is 10k)
     val batchSize = conf.getEgressBatchSize;
 
@@ -51,8 +52,8 @@ class KineticaDataReader (
         // Use the table size as the limit
         limit = tableSize;
     }
-        
-    
+
+
     // Retrieve the records
     val myRows: Iterator[Row] = {
 
@@ -72,14 +73,14 @@ class KineticaDataReader (
             val conn = com.kinetica.spark.egressutil.KineticaJdbcUtils.getConnector(url, conf)();
             val stmt = conn.prepareStatement( queryStr );
             val rs = stmt.executeQuery;
-        
+
             val internalRows = KineticaEgressUtilsJdbc.resultSetToSparkInternalRows( rs, requiredSchema );
             val encoder = org.apache.spark.sql.catalyst.encoders.RowEncoder.apply( requiredSchema ).resolveAndBind();
             internalRows.map( encoder.fromRow );
         }
     }
 
-  
+
     override def next(): Boolean = {
         myRows.hasNext
     }
@@ -91,7 +92,7 @@ class KineticaDataReader (
     override def close(): Unit = {
     }
 
-    
+
     private def buildTableQuery(
         table: String,
         columns: Array[String],
@@ -121,13 +122,14 @@ class KineticaDataReader (
                 // Remove the trailing AND
                 sb.substring(0, sb.length - 5);
             } else "";
-                           
+
             // Replace backticks with double quotes
             whereClause = whereClause.replace( '`', '"' );
 
+            var quotedTableName = KineticaJdbcUtils.quoteTableName(table);
             // Need to quote the table name, but quotess don't work with string
             // interpolation in scala; the following is correct, though ugly
-            s"""SELECT $colStrBuilder FROM "$table" $whereClause LIMIT $offset,$limit"""
+            s"""SELECT $colStrBuilder FROM "$quotedTableName" $whereClause LIMIT $offset,$limit"""
         }
         logger.info("Query for retrieving records: " + baseQuery)
         baseQuery.toString()

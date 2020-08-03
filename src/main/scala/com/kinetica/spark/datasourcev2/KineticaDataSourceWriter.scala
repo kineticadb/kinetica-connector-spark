@@ -23,7 +23,7 @@ class KineticaDataSourceWriter (schema: StructType, options: DataSourceOptions)
 
     // Ingestion related utility class
     val ingestionUtils = new KineticaSparkDFManager( conf );
-    
+
     setup( schema );
 
     private def setup( schema: StructType ): Unit = {
@@ -35,26 +35,27 @@ class KineticaDataSourceWriter (schema: StructType, options: DataSourceOptions)
             logger.warn("The dataframe has no schema; skipping ingestion");
             return;
         }
-        
+
         if (conf.isCreateTable && conf.isAlterTable) {
             throw new RuntimeException("Create table and alter table option set to true. Only one must be set to true ");
         }
 
         if( conf.hasTable() ) {
-            if ( conf.doesTableCollectionMatch() ) {
-                if( conf.truncateTable ) {
-                    logger.info("Truncating/Creating table " + conf.getTablename);
-                    try {
-                        SparkKineticaTableUtil.truncateTable(None, conf);
-                    } catch {
-                        case e: Throwable => throw new RuntimeException("Failed with errors ", e);
-                    }
+            if( conf.truncateTable ) {
+                logger.info("Truncating/Creating table " + conf.getTablename);
+                try {
+                    SparkKineticaTableUtil.truncateTable(None, conf);
+                } catch {
+                    case e: Throwable => throw new RuntimeException("Failed with errors ", e);
                 }
             }
-            else {
-                throw new RuntimeException( s"Table '${conf.getTablename}' exists but not in the given collection '${conf.getSchemaname}'" );
-            }
         } else if (conf.isCreateTable) {
+            if ( !conf.hasSchema ) {
+                logger.info("Creating schema " + conf.getSchemaname +
+                    " for table " + conf.getTablename);
+                conf.createSchema;
+            }
+
             logger.info("Creating table " + conf.getTablename);
             try {
                 SparkKineticaTableUtil.createTable(None, Option.apply( schema ), conf);

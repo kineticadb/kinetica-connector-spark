@@ -83,14 +83,15 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
     }
 
     private def createTable(): Unit = {
-        logger.info( "Creating table <{}.{}> (type={})", this.schemaName, this.tableName, this.destTypeId)
+        if ( !conf.hasSchema ) {
+            logger.info( "Creating schema <{}> for table <{}>.", this.schemaName, this.tableName);
+            conf.createSchema
+        }
+        logger.info( "Creating table <{}> (type={})", this.tableName, this.destTypeId)
 
         var options : java.util.Map[String, String] = null
         if( conf.tableReplicated ) {
-            options = GPUdbBase.options(CreateTableRequest.Options.COLLECTION_NAME, this.schemaName,
-                    CreateTableRequest.Options.IS_REPLICATED, CreateTableRequest.Options.TRUE)
-        } else {
-            options = GPUdbBase.options(CreateTableRequest.Options.COLLECTION_NAME, this.schemaName)
+            options = GPUdbBase.options(CreateTableRequest.Options.IS_REPLICATED, CreateTableRequest.Options.TRUE)
         }
 
         this.gpudb.createTable(
@@ -115,7 +116,7 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
     }
 
     private def resolveTemplate(): Unit = {
-        val templateSchema: String = this.schemaName + ".template"
+        val templateSchema: String = this.schemaName + "_template"
 
         val options: java.util.HashMap[String, String] = new java.util.HashMap[String, String]()
         options.put(
@@ -130,15 +131,15 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
             .filter(x => x.startsWith(prefix))
             .sorted.lastOption.getOrElse {
                 throw new Exception(
-                    String.format("Could not find a suitable template in <%s> for table <%s.%s>",
-                        templateSchema, this.schemaName, this.tableName))
+                    String.format("Could not find a suitable template in <%s> for table <%s>",
+                        templateSchema, this.tableName))
             }
 
         val tableIndex: Int = tableNames.indexOf(templateName)
         setTypeFromResponse(response, tableIndex)
         logger.info("Found template table: {} (ID={}) ", templateName, this.destTypeId)
     }
-    
+
     def adjustSourceSchema(df: org.apache.spark.sql.DataFrame): org.apache.spark.sql.DataFrame = {
         if( !conf.csvHeader && conf.hasTable) {
             val response: ShowTableResponse = this.gpudb.showTable(this.tableName, null)
@@ -147,7 +148,7 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
             val colNames = destCols.map(t => t.getName.toUpperCase).toArray
             val dfRenamed = df.toDF(colNames: _*)
             return dfRenamed
-        } 
+        }
         df
     }
 
@@ -202,8 +203,8 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
 
         if (unMappedSource.nonEmpty) {
             val unMappedCols: String = unMappedSource.keySet.mkString(",")
-            logger.info("The following columns in the dataframe were not mapped to table <{}.{}>: [{}]",
-                this.schemaName, this.tableName, unMappedCols)
+            logger.info("The following columns in the dataframe were not mapped to table <{}>: [{}]",
+                this.tableName, unMappedCols)
         }
         if (unMappedDest.nonEmpty) {
             val nullColumnList = unMappedDest.values.filter(x => !x.isNullable).map(_.getName)
@@ -211,13 +212,13 @@ class SchemaManager (conf: LoaderConfiguration) extends LazyLogging {
             if (nullColumnList.nonEmpty) {
                 val nullColumns: String = nullColumnList.mkString(",")
                 throw new Exception(
-                    String.format("The following columns in <%s.%s> are nullable and not mapped: %s",
-                        this.schemaName, this.tableName, nullColumns))
+                    String.format("The following columns in <%s> are nullable and not mapped: %s",
+                        this.tableName, nullColumns))
             }
 
             val unMappedCols: String = String.join(", ", unMappedDest.keySet)
-            logger.info("The following columns in table <{}.{}> were not mapped from the dataframe: [{}]",
-                this.schemaName, this.tableName, unMappedCols)
+            logger.info("The following columns in table <{}> were not mapped from the dataframe: [{}]",
+                this.tableName, unMappedCols)
         }
         columnMap
     }

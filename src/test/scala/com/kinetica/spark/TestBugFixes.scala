@@ -126,9 +126,9 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.TIMESTAMP );
 
             // Create the table (but clear any pre-existing ones)
-            val tableName = s"keco_1396_long_timestamp_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName = s"keco_1396_long_timestamp_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Set the default timezone appropriately
             val timeZone = "GMT+0600";
@@ -205,9 +205,9 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.DATETIME );
 
             // Create the table (but clear any pre-existing ones)
-            val tableName = s"keco_1396_string_date_time_datetime_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName = s"keco_1396_string_date_time_datetime_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Create some test data
             val dateFormat = new SimpleDateFormat( "yyyy/MM/dd" );
@@ -322,10 +322,10 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.TIMESTAMP );
 
             // Create the table (but clear any pre-existing ones)
-            val tableName  = s"keco_1396_date_time_datetime_timestamp_${package_description}";
+            val initialTableName  = s"keco_1396_date_time_datetime_timestamp_${package_description}";
             val numRecords = 10;
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, numRecords );
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, numRecords );
 
             // Get the appropriate ingest options
             var ingest_options = get_default_spark_connector_options();
@@ -447,9 +447,9 @@ trait SparkConnectorBugFixes
             columns += new Type.Column( "float_col", classOf[java.lang.Float] );
 
             // Create the table
-            val tableName = s"keco_1355_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName = s"keco_1355_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -624,9 +624,9 @@ trait SparkConnectorBugFixes
                                         classOf[java.nio.ByteBuffer] );
 
             // Create the table
-            val tableName = s"keco_1371_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName = s"keco_1371_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -744,11 +744,11 @@ trait SparkConnectorBugFixes
              | passed to the connector""".stripMargin.replaceAll("\n", "") ) {
 
             // Create a table (but clear any pre-existing ones)
-            val tableName = s"keco_1402_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
+            val initialTableName = s"keco_1402_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( "x", classOf[java.lang.Integer], ColumnProperty.NULLABLE );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
             // createKineticaTableOneIntNullableColumn( tableName, None, 0 );
 
             // Create some test data for a single int column where the first
@@ -881,9 +881,9 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.DATE );
 
             // Create the table
-            val tableName = s"keco_1415_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName = s"keco_1415_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -959,9 +959,9 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.DATE );
 
             // Create the table
-            val tableName = s"keco_1415_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName = s"keco_1415_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -1027,9 +1027,9 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.TIME );
 
             // Create the table (but clear any pre-existing ones)
-            val tableName = s"keco_1419_string_time_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName = s"keco_1419_string_time_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Create some test data
             // Set the default timezone appropriately
@@ -1049,9 +1049,9 @@ trait SparkConnectorBugFixes
             //                                     Map( "time" ->"07:50:00" ),
             //                                     Map( "time" ->"09:50:00" ) );
             // Expect JDBC to return timestamps converted to local timezone
-            val expected_values_via_jdbc = Seq( Map( "time" ->"01:50:00" ),
-                                                Map( "time" ->"13:50:00" ),
-                                                Map( "time" ->"15:50:00" ) );
+            val expected_values_via_jdbc = Seq( Map( "time" ->"14:50:00" ),
+                                                Map( "time" ->"02:50:00" ),
+                                                Map( "time" ->"04:50:00" ) );
 
             // Generate the appropriate schema
             val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::
@@ -1132,9 +1132,9 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.NULLABLE );
 
             // Create the table
-            val tableName = s"keco_1457_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName = s"keco_1457_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Need to mark the table name for post-test clean-up
             mark_table_for_deletion_at_test_end( tableName );
@@ -1219,8 +1219,8 @@ trait SparkConnectorBugFixes
             columns += new Type.Column( "d", classOf[java.lang.Double] );
 
             // Create a table
-            val tableName = s"keco_1481_${package_description}";
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName = s"keco_1481_${package_description}";
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Create a user and a password
             // ----------------------------
@@ -1313,9 +1313,9 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.SHARD_KEY );
 
             // Create the table
-            val tableName = s"keco_1503_sharded_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName = s"keco_1503_sharded_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -1356,9 +1356,9 @@ trait SparkConnectorBugFixes
                                         classOf[java.lang.Integer] );
 
             // Create the table
-            val tableName = s"keco_1503_replicated_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createReplicatedKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName = s"keco_1503_replicated_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createReplicatedKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Get the appropriate options
             var options = get_default_spark_connector_options();
@@ -1440,9 +1440,9 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.NULLABLE );
 
             // Create the table
-            val tableName = s"keco_1574_${package_description}";
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            val initialTableName = s"keco_1574_${package_description}";
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // Get some test data with null values
             // -----------------------------------
@@ -1568,10 +1568,10 @@ trait SparkConnectorBugFixes
                 columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
 
                 // Create the table (but clear any pre-existing ones)
-                val tableName  = s"keco_1657_lazy_iterator_egress_${package_description}";
+                val initialTableName  = s"keco_1657_lazy_iterator_egress_${package_description}";
                 val numRecords = 100;
-                logger.debug( s"Table name '${tableName}'" );
-                createKineticaTableWithGivenColumns( tableName, None, columns, numRecords );
+                logger.debug( s"Table name '${initialTableName}'" );
+                val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, numRecords );
 
                 // We'll use a very tiny egress batch size
                 val egress_batch_size = "10";
@@ -1654,7 +1654,7 @@ trait SparkConnectorBugFixes
             val col2_name     = "date";
             val col3_name     = "datetime";
 
-            val tableName = s"keco_1648_long_conversion_${package_description}";
+            val initialTableName = s"keco_1648_long_conversion_${package_description}";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
             columns += new Type.Column( col1_name, classOf[java.lang.Long],
@@ -1667,8 +1667,8 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.NULLABLE,
                                         ColumnProperty.DATETIME );
 
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
             val timeZone = "UTC";
 
             // insert into Kinetica table values 1..10, arrayOfLongs:
@@ -1723,7 +1723,7 @@ trait SparkConnectorBugFixes
             val col2_name     = "date";
             val col3_name     = "datetime";
 
-            val tableName = s"keco_1648_long_timestamp_conversion_${package_description}";
+            val initialTableName = s"keco_1648_long_timestamp_conversion_${package_description}";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
             columns += new Type.Column( col1_name, classOf[java.lang.Long],
@@ -1736,8 +1736,8 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.NULLABLE,
                                         ColumnProperty.DATETIME );
 
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
             val timeZone = "UTC";
 
             // insert into Kinetica table values 1..10, arrayOfLongs:
@@ -1833,7 +1833,7 @@ trait SparkConnectorBugFixes
             val col2_name     = "date";
             val col3_name     = "datetime";
 
-            val tableName = s"keco_1648_long_conversion_${package_description}";
+            val initialTableName = s"keco_1648_long_conversion_${package_description}";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
             columns += new Type.Column( col1_name, classOf[java.lang.Long],
@@ -1846,8 +1846,8 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.NULLABLE,
                                         ColumnProperty.DATETIME );
 
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
             val timeZone = "UTC";
 
             // insert into Kinetica table values 1..10, arrayOfLongs:
@@ -1902,7 +1902,7 @@ trait SparkConnectorBugFixes
             val col2_name     = "date";
             val col3_name     = "datetime";
 
-            val tableName = s"keco_1648_lstring_datetime_conversion_${package_description}";
+            val initialTableName = s"keco_1648_lstring_datetime_conversion_${package_description}";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
             columns += new Type.Column( col1_name, classOf[java.lang.Long],
@@ -1915,8 +1915,8 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.NULLABLE,
                                         ColumnProperty.DATETIME );
 
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
             val timeZone = "GMT-05";
 
             // insert into Kinetica table values 1..10, arrayOfLongs:
@@ -1971,7 +1971,7 @@ trait SparkConnectorBugFixes
             val col2_name     = "date";
             val col3_name     = "datetime";
 
-            val tableName = s"keco_1648_long_conversion_${package_description}";
+            val initialTableName = s"keco_1648_long_conversion_${package_description}";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
             columns += new Type.Column( col1_name, classOf[java.lang.Long],
@@ -1984,8 +1984,8 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.NULLABLE,
                                         ColumnProperty.DATETIME );
 
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
             val timeZone = "GMT-05";
 
             // insert into Kinetica table values 1..10, arrayOfLongs:
@@ -2040,7 +2040,7 @@ trait SparkConnectorBugFixes
             val col2_name     = "date";
             val col3_name     = "datetime";
 
-            val tableName = s"keco_1648_string_date_conversion_${package_description}";
+            val initialTableName = s"keco_1648_string_date_conversion_${package_description}";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
             columns += new Type.Column( col1_name, classOf[java.lang.Long],
@@ -2053,8 +2053,8 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.NULLABLE,
                                         ColumnProperty.DATETIME );
 
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
             val timeZone = "GMT-05";
 
             // insert into Kinetica table values 1..10, arrayOfLongs:
@@ -2140,15 +2140,15 @@ trait SparkConnectorBugFixes
             val sort_col_name = "i";
             val col1_name     = "time";
 
-            val tableName = s"keco_1648_time_w_o_tz_conversion_${package_description}";
+            val initialTableName = s"keco_1648_time_w_o_tz_conversion_${package_description}";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
             columns += new Type.Column( col1_name, classOf[java.lang.String],
                                         ColumnProperty.NULLABLE,
                                         ColumnProperty.TIME );
 
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
             val timeZone = "GMT-05";
 
             // insert into Kinetica table values 1..10, arrayOfLongs:
@@ -2212,15 +2212,15 @@ trait SparkConnectorBugFixes
             val sort_col_name = "i";
             val col1_name     = "time";
 
-            val tableName = s"keco_1648_time_w_tz_conversion_${package_description}";
+            val initialTableName = s"keco_1648_time_w_tz_conversion_${package_description}";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
             columns += new Type.Column( col1_name, classOf[java.lang.String],
                                         ColumnProperty.NULLABLE,
                                         ColumnProperty.TIME );
 
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
             val timeZone = "UTC";
 
             // insert into Kinetica table values 1..10, arrayOfLongs:
@@ -2286,7 +2286,7 @@ trait SparkConnectorBugFixes
             val col2_name     = "date";
             val col3_name     = "datetime";
 
-            val tableName = s"keco_1651_lstring_datetime_conversion_${package_description}";
+            val initialTableName = s"keco_1651_lstring_datetime_conversion_${package_description}";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
             columns += new Type.Column( col1_name, classOf[java.lang.Long],
@@ -2299,8 +2299,8 @@ trait SparkConnectorBugFixes
                                         ColumnProperty.NULLABLE,
                                         ColumnProperty.DATETIME );
 
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
             val timeZone = "GMT-05";
 
             // insert into Kinetica table values 1..10, arrayOfLongs:
@@ -2352,14 +2352,14 @@ trait SparkConnectorBugFixes
             val sort_col_name = "i";
             val col1_name     = "long_value";
 
-            val tableName = s"keco_1651_int_to_long_conversion_${package_description}";
+            val initialTableName = s"keco_1651_int_to_long_conversion_${package_description}";
             var columns : mutable.ListBuffer[Type.Column] = new mutable.ListBuffer[Type.Column]();
             columns += new Type.Column( sort_col_name, classOf[java.lang.Integer] );
             columns += new Type.Column( col1_name, classOf[java.lang.Long],
                                         ColumnProperty.NULLABLE);
 
-            logger.debug( s"Table name '${tableName}'" );
-            createKineticaTableWithGivenColumns( tableName, None, columns, 0 );
+            logger.debug( s"Table name '${initialTableName}'" );
+            val tableName = createKineticaTableWithGivenColumns( initialTableName, columns, 0 );
 
             // insert into Kinetica table values 1..10, arrayOfLongs:
             val data = Seq(

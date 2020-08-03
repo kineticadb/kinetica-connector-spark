@@ -1,5 +1,25 @@
 # Kinetica Spark Connector Changelog
 
+## Version 7.1
+
+### Version 7.1.0.0 -- 2020-06-26
+
+#### Deprecated
+-   Option `table.name_contains_schema`.
+    Kinetica 7.1 has new restrictions on table and schema names preventing
+    dot symbol in the name literal. Therefore any single dot in the value of
+    Spark connector option `table.name` is parsed as if `table.name` is in
+    `SCHEMA_NAME.TABLE_NAME` notation, multiple dots are prohibited, and
+    there is no table name referencing ambiguity that has to be resolved with
+    a separate option `table.name_contains_schema`.
+
+#### Changed
+-   When using templates with Spark connector we recommend to start using `_`
+    symbol in place of `.` to comply with Kinetica 7.1 table and schema
+    naming restrictions.
+-   Non-existent table schema provided as a part of qualified table name would
+    be explicitly created before creating the table object.
+
 ## Version 7.0
 
 ### Version 7.0.6.3 -- 2020-07-01

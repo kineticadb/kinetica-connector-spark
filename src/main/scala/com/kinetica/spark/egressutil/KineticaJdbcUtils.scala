@@ -48,6 +48,24 @@ private[kinetica] object KineticaJdbcUtils extends LazyLogging {
     }
 
     /**
+     * Given a table name literal, returns a
+     * qualified table name.
+     *
+     * @param  tableName  An unquoted name string
+     * @return A "<schema>"."<table>" qualified name representation
+     */
+    def quoteTableName(tableName: String): String = {
+        var tableNameParts = tableName.split("\\.");
+        if ( tableName.contains(".") && tableNameParts.length == 2) {
+            var schema = tableNameParts( 0 );
+            var table = tableNameParts( 1 );
+            s"""$schema"."$table"""
+        } else {
+            s"""$tableName"""
+        }
+    }
+
+    /**
      * Given a database connection and a SQL query, executes the query and
      * returns a function that generates a result set.
      *
@@ -67,9 +85,10 @@ private[kinetica] object KineticaJdbcUtils extends LazyLogging {
         table: String,
         filters: Array[Filter]): Long = {
         val whereClause = KineticaFilters.getFilterClause(filters)
+        var quotedTableName = quoteTableName(table);
         // Need to quote the table name, but quotess don't work with string
         // interpolation in scala; the following is correct, though ugly
-        val countQuery = s"""SELECT count(*) FROM "$table" $whereClause"""
+        val countQuery = s"""SELECT count(*) FROM "$quotedTableName" $whereClause"""
         logger.info(countQuery)
         val conn = KineticaJdbcUtils.getConnector(url, properties)()
         var count: Long = 0

@@ -34,3 +34,6 @@ spark-solr.iws
 .DS_Store
 /.pydevproject
 /spark-warehouse/
+
+
+_build

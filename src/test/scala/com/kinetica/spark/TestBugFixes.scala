@@ -1049,9 +1049,9 @@ trait SparkConnectorBugFixes
             //                                     Map( "time" ->"07:50:00" ),
             //                                     Map( "time" ->"09:50:00" ) );
             // Expect JDBC to return timestamps converted to local timezone
-            val expected_values_via_jdbc = Seq( Map( "time" ->"14:50:00" ),
-                                                Map( "time" ->"02:50:00" ),
-                                                Map( "time" ->"04:50:00" ) );
+            val expected_values_via_jdbc = Seq( Map( "time" ->"01:50:00" ),
+                                                Map( "time" ->"13:50:00" ),
+                                                Map( "time" ->"15:50:00" ) );
 
             // Generate the appropriate schema
             val schema = StructType( StructField( sort_col_name, IntegerType, true ) ::

@@ -132,12 +132,6 @@
                 <version>${scala-maven-plugin.version}</version>
                 <executions>
                     <execution>
-                        <id>eclipse-add-source</id>
-                        <goals>
-                            <goal>add-source</goal>
-                        </goals>
-                    </execution>
-                    <execution>
                         <id>scala-compile-first</id>
                         <phase>process-resources</phase>
                         <goals>
@@ -310,11 +304,18 @@
                 <version>2.1</version>
                 <executions>
                     <execution>
+                         <id>make-shaded-scalalogging-assembly</id>
                         <phase>package</phase>
                         <goals>
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <transformers>
+                                <transformer
+                                    implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.kinetica.spark.SparkKineticaDriver</mainClass>
+                                </transformer>
+                            </transformers>
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>
@@ -330,6 +331,39 @@
                                     <pattern>com.typesafe.scalalogging</pattern>
                                     <shadedPattern>com.kinetica.scalalogging</shadedPattern>
                                 </relocation>
+                                <relocation>
+                                    <pattern>com.gpudb</pattern>
+                                    <shadedPattern>com.kinetica.kinetica-java-api</shadedPattern>
+                                </relocation>
+                            </relocations>
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>jar-with-shaded-scalalogging</shadedClassifierName>
+                        </configuration>
+                    </execution>
+                    <execution>
+                         <id>make-assembly</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer
+                                    implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.kinetica.spark.SparkKineticaDriver</mainClass>
+                                </transformer>
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <relocations>
                                 <relocation>
                                     <pattern>com.gpudb</pattern>
                                     <shadedPattern>com.kinetica.kinetica-java-api</shadedPattern>

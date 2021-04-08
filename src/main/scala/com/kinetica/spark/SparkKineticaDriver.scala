@@ -113,10 +113,6 @@ class SparkKineticaDriver(args: Array[String]) extends LazyLogging {
                 throw new Exception("You must specify parameter 'source.data_format'")
             }
 
-            if (dataFormat.equalsIgnoreCase("avro")) {
-                dataFormat = "com.databricks.spark.avro"
-            }
-
             logger.info("Attempting to load file as {}: {}", dataFormat, dataPath)
             val dfReader: DataFrameReader = sess.read.format(dataFormat)
 

@@ -2,6 +2,12 @@
 
 ## Version 7.1
 
+### Version 7.1.1.0 -- 2021-04-08
+
+#### Changed
+-   Adding support for Spark 2.4.5
+
+
 ### Version 7.1.0.0 -- 2020-06-26
 
 #### Deprecated
@@ -22,15 +28,21 @@
 
 ## Version 7.0
 
+### Version 7.0.7.0 -- 2021-04-02
+
+#### Changed
+-   Adding support for Spark 2.4.5
+
+
 ### Version 7.0.6.4 -- 2020-08-17
 
 #### Added
-
 -   Creating two Spark Connector build artifacts; one for regular use
     (`kinetica-spark-7.1.0.0-jar-with-dependencies.jar`) and another
     with shaded `com.typesafe.scalalogging` to be used with production
     level Spark server deployments that could have a version conflict with scalalogging
     dependency (`kinetica-spark-7.1.0.0-jar-with-shaded-scalalogging.jar`).
+
 
 ### Version 7.0.6.3 -- 2020-07-01
 

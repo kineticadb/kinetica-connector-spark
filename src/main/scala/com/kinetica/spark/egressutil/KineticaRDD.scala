@@ -8,6 +8,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.{ Partition, SparkContext, TaskContext }
+import org.apache.spark.sql.sources.Filter;
 
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.InternalRow
@@ -82,7 +83,7 @@ private[kinetica] class KineticaRDD(
 
             def close() {
             }
-            context.addTaskCompletionListener { context => close(); }
+            context.addTaskCompletionListener { context => close(); Unit }
 
             allRowsForPartition
         } else {
@@ -149,10 +150,8 @@ private[kinetica] class KineticaRDD(
             }
             closed = true
         }
-        context.addTaskCompletionListener { context => close() }
+        context.addTaskCompletionListener { context => close(); Unit }
         myrows
-//            CompletionIterator[InternalRow, Iterator[InternalRow]](
-//          new InterruptibleIterator(context, rowsIterator), close())
     }   // end fetchRecordsViaJDBC
 
 
@@ -179,7 +178,7 @@ private[kinetica] class KineticaRDD(
             }
 
             var quotedTableName = KineticaJdbcUtils.quoteTableName(table);
-            // Need to quote the table name, but quotess don't work with string
+            // Need to quote the table name, but quotes don't work with string
             // interpolation in scala; the following is correct, though ugly
             s"""/* KI_HINT_MAX_ROWS_TO_FETCH($maxRowsToFetch) */SELECT $colStrBuilder FROM "$quotedTableName" $whereClause"""
 

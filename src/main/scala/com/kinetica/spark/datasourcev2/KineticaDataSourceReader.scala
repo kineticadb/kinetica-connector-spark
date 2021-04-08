@@ -7,12 +7,13 @@ import com.kinetica.spark.util.ConfigurationConstants._;
 import com.kinetica.spark.egressutil.KineticaSchema;
 import com.gpudb._;
 import com.typesafe.scalalogging.LazyLogging;
+import org.apache.spark.sql.sources.Filter;
+import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.sources.v2.DataSourceOptions;
 import org.apache.spark.sql.sources.v2.reader.DataSourceReader;
-import org.apache.spark.sql.sources.v2.reader.DataReaderFactory;
-import org.apache.spark.sql.sources.v2.reader.SupportsPushDownCatalystFilters;
+import org.apache.spark.sql.sources.v2.reader.InputPartition;
+import org.apache.spark.sql.sources.v2.reader.SupportsPushDownFilters;
 import org.apache.spark.sql.sources.v2.reader.SupportsPushDownRequiredColumns;
-import org.apache.spark.sql.catalyst.expressions.Expression;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.Row;
 import scala.collection.JavaConverters._;
@@ -22,7 +23,7 @@ import scala.collection.JavaConverters._;
 
 class KineticaDataSourceReader (options: DataSourceOptions)
     extends DataSourceReader
-    with SupportsPushDownCatalystFilters
+    with SupportsPushDownFilters
     with SupportsPushDownRequiredColumns
     with LazyLogging {
 
@@ -31,8 +32,8 @@ class KineticaDataSourceReader (options: DataSourceOptions)
 
     // Get some parameters
     val tableName = if (conf.getTablename != null ) conf.getTablename else sys.error("Option 'table.name' not specified");
-    
-    
+
+
     // Get the schema of the table; throw if it doesn't exist
     lazy val tableSchema: StructType = {
         val url = if (conf.getJdbcURL != null ) conf.getJdbcURL   else sys.error("Option 'database.jdbc_url' not specified");
@@ -40,34 +41,38 @@ class KineticaDataSourceReader (options: DataSourceOptions)
         KineticaSchema.getSparkSqlSchema(url, conf, tableName, throwIfNotExists).get;
     }
 
-
-    override def createDataReaderFactories(): java.util.List[DataReaderFactory[Row]] = {
-        val factoryList = List( new KineticaDataReaderFactory(conf, tableSchema, pushedCatalystFilters, requiredSchema).asInstanceOf[DataReaderFactory[Row]] );
-        factoryList.asJava;
+    override def planInputPartitions(): java.util.List[InputPartition[InternalRow]] = {
+        val factoryList = new java.util.ArrayList[InputPartition[InternalRow]]
+        factoryList.add(new KineticaInputPartition(conf, tableSchema, pushedFilters, requiredSchema) )
+        factoryList
     }
-    
+
     /**
-     * Returns the table schema
+     * Returns the most applicable schema for the data--either derived from
+     * the filters pushed down, or if no filter is given, the table's schema.
      */
     override def readSchema(): StructType = {
-        return tableSchema
+        if ( requiredSchema != null ) {
+            return requiredSchema;
+        } else {
+            return tableSchema;
+        }
     }
 
-    /* SupportsPushDownCatalystFilters */
-    var pushedCatalystFilters = Array[Expression]()
-    
-    override def pushCatalystFilters(filters: Array[Expression]): Array[Expression] = {
-      pushedCatalystFilters = filters
-      pushedCatalystFilters
+    /* For supporting SupportsPushDownFilters */
+    var pushedFilters = Array[Filter]()
+
+    override def pushFilters(filters: Array[Filter]): Array[Filter] = {
+      pushedFilters = filters
+      pushedFilters
     }
 
-    /* SupportsPushDownRequiredColumns */
-    
-    private var requiredSchema: StructType = new StructType()
- 
+    /* For supporting SupportsPushDownRequiredColumns */
+
+    private var requiredSchema: StructType = null;
+
     override def pruneColumns(schema: StructType): Unit = {
       requiredSchema = schema
     }
-    
-}   // end class KineticaDataSourceReader
 
+}   // end class KineticaDataSourceReader

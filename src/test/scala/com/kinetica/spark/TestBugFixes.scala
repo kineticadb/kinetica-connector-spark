@@ -913,28 +913,28 @@ trait SparkConnectorBugFixes
 
             try {
                 df.write.format( package_to_test ).options( options ).save();
-                assert( (false), s"Nul value for non-nullable column should fail for failfast mode" );
+                assert( (false), s"Null value for non-nullable column should fail for failfast mode" );
             } catch {
                 case e: com.kinetica.spark.util.table.KineticaException => {
                     logger.debug( s"Got KINETICA exception: '${e.toString()}'" );
                     assert( (e.toString() contains "Could not encode object"),
-                            s"Nul value for non-nullable column should fail for failfast mode" );
+                            s"Null value for non-nullable column should fail for failfast mode" );
                 }
                 case e: com.gpudb.GPUdbException => {
                     logger.debug( s"Got KINETICA Java API exception: '${e.getMessage()}'" );
                     assert( (e.getMessage() contains "Could not encode object"),
-                            s"Nul value for non-nullable column should fail for failfast mode" );
+                            s"Null value for non-nullable column should fail for failfast mode" );
                 }
                 case e2: java.lang.RuntimeException => {
                     logger.debug( s"Got RUNTIME exception: '${e2.toString()}'" );
-                    assert( (e2.toString() contains "Could not encode object"),
-                            s"Nul value for non-nullable column should fail for failfast mode" );
+                    assert( (e2.toString() contains "Failed to set value for column"),
+                            s"Null value for non-nullable column should fail for failfast mode" );
                 }
                 case e2: Exception => {
                     logger.debug( s"Got SCALA exception: '${e2.toString()}'" );
                     assert( ( (e2.toString() contains "Could not encode object") // package v1 propagates GPUdbException errors
                               || (e2.toString() contains "org.apache.spark.SparkException: Writing job aborted") ),  // package v2 does not
-                            s"Nul value for non-nullable column should fail for failfast mode" );
+                            s"Null value for non-nullable column should fail for failfast mode" );
                 }
             }
 

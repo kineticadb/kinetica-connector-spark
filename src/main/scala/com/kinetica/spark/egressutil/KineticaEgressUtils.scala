@@ -71,7 +71,7 @@ object KineticaEgressUtilsJdbc extends LazyLogging {
                     case e: Exception => logger.warn("Exception closing resultset", e)
                 }
             }
-            
+
             override protected def getNext(): InternalRow = {
                 if (rs.next()) {
                       var i = 0
@@ -128,7 +128,7 @@ object KineticaEgressUtilsJdbc extends LazyLogging {
     			throw new Exception(s"unable to convert $bigD to Spark Decimal")
     		}
     	}
-                
+
         case DoubleType =>
             (rs: ResultSet, row: InternalRow, pos: Int) =>
                 row.setDouble(pos, rs.getDouble(pos + 1))
@@ -163,7 +163,9 @@ object KineticaEgressUtilsJdbc extends LazyLogging {
         case StringType =>
             (rs: ResultSet, row: InternalRow, pos: Int) =>
                 // TODO(davies): use getBytes for better performance, if the encoding is UTF-8
-                row.update(pos, UTF8String.fromString(rs.getString(pos + 1)))
+        {
+            row.update(pos, UTF8String.fromString(rs.getString(pos + 1)))
+        }
 
         case TimestampType =>
             (rs: ResultSet, row: InternalRow, pos: Int) =>
@@ -232,7 +234,7 @@ object KineticaEgressUtilsJdbc extends LazyLogging {
     	}
     }
 
-    
+
     private def nullSafeConvert[T](input: T, f: T => Any): Any = {
         if (input == null) {
             null
@@ -266,7 +268,7 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
             lazy val emptyIterator : NextIterator[InternalRow] = new  NextIterator[InternalRow] {
                 override protected def close(): Unit = {
                 }
-                
+
                 override protected def getNext(): InternalRow = {
                     finished = true
                     null.asInstanceOf[InternalRow]
@@ -284,7 +286,7 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
             private[this] val rs = resultSet
             private[this] val dataArrIt = resp.iterator
             private[this] val getters: Array[JDBCValueGetter] = makeGetters( recordType )
-            
+
             private[this] val mutableRow = {
                 new SpecificInternalRow( recordSchema.fields.map(x => {
                             x.dataType}) );
@@ -456,12 +458,12 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
 
     private def makeGetters(schema: StructType): Array[JDBCValueGetter] = {
         val jdbcvg = schema.fields.map(sf => makeGetter(sf.dataType, sf.metadata))
-        jdbcvg        
+        jdbcvg
     }
 
     private def makeGetter(dt: DataType, metadata: Metadata): JDBCValueGetter = {
         dt match {
-   
+
         case BooleanType =>
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
                 if( gr.getInt(pos) != null ) {
@@ -507,7 +509,7 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
     	        row.update(pos, null)
     	    }
     	}
-                
+
         case DoubleType =>
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
                 val d = gr.getDouble(pos)
@@ -534,8 +536,8 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
                 } else {
                     row.update(pos, null)
                 }
-        
-        /*        
+
+        /*
         case LongType if metadata.contains("binarylong") =>
             (rs: ResultSet, gr: GenericRecord, row: InternalRow, pos: Int) =>
                 val bytes = rs.getBytes(pos + 1)
@@ -547,7 +549,7 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
                 }
                 row.setLong(pos, ans)
 		*/
-                
+
         case LongType =>
             (rs: ResultSet, gr: Record, row: InternalRow, pos: Int) =>
                 val l = gr.getLong(pos)
@@ -573,7 +575,7 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
                 if( s != null ) {
                     row.update(pos, UTF8String.fromString(s))
                 } else {
-                    row.update(pos, null) 
+                    row.update(pos, null)
                 }
 
         case TimestampType =>
@@ -634,7 +636,7 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
 
         case _ => throw new IllegalArgumentException(s"Unsupported type ${dt.simpleString}")
     }
-        
+
     }
 
     private def nullSafeConvert2[T, R](input: T, f: T => R): Option[R] = {
@@ -645,7 +647,7 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
     	}
     }
 
-    
+
     private def nullSafeConvert[T](input: T, f: T => Any): Any = {
         if (input == null) {
             null
@@ -717,10 +719,10 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
             // Use the given column names
             columns.foreach( f => column_names.add( f ) );
         }
-        
+
         // Call /get/records/bycolumn repeatedly with a max rows of batchSize till we have done numRows
         // Collect the list of records in a separate list and pass into resultSetToSparkInternalRows
-        
+
         val extraRows = numRows % batchSize;
         var loopCount = numRows / batchSize;
 
@@ -734,7 +736,7 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
 
         // Get an ID for this invocation of this function (useful for logging)
         val id = Random.nextInt();
-       
+
         var ii = 0;
         while ( ii < loopCount ) {
 
@@ -753,11 +755,60 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
             allRecords.addAll( getRecordsByColumnResponse.getData );
             ii = ii + 1;
         }
-        
+
         // Return the records
         allRecords
     }   // end getRecordsFromKinetica
 
+
+    /*
+     * Given a GPUdb connection, table name, offset, total number of rows to fetch,
+     * and an internal batch size, fetch records from Kinetica using its native
+     * Java client API.  Encode the records into Row so that spark can understand them
+     * using the given schema and return the rows (internalRows).
+     */
+    def getInternalRowsFromKinetica(
+        gpudbConn:  com.gpudb.GPUdb,
+        tableName:  String,
+        columns:    Array[String],
+        schema:     StructType,
+        startRow:   Long,
+        numRows:    Long,
+        batchSize:  Long,
+        useLazyIterator: Boolean = false ): Iterator[InternalRow] = {
+
+        if ( useLazyIterator ) {
+            logger.debug( s"getInternalRowsFromKinetica(): Using lazy iterator (start: $startRow, # rows: $numRows)");
+            // Use a lazy iterator to optimize batch performance
+            val recordRange = startRow to (numRows + startRow - 1)
+
+            // Create a sliding iterator with a step size of batchSize
+            val groupedRanges = recordRange.iterator.sliding( batchSize.toInt, batchSize.toInt ).toList
+
+            // Use a lazy view to stream the records one batch at a time
+            groupedRanges.view.map( group => {
+                getInternalRowsFromKinetica( gpudbConn, tableName, columns, schema,
+                                             startRow = group.head, numRows = group.length, batchSize, false)
+            }).flatten.toIterator
+
+        } else {
+            logger.debug( s"getInternalRowsFromKinetica(): in else block (start: $startRow, # rows: $numRows)");
+            // Fetch the records from Kinetica in the native format
+            val allRecords = getRecordsFromKinetica( gpudbConn, tableName, columns,
+                                                     startRow, numRows, batchSize )
+
+            // Note: Beware of calling .size or other functions on the rows created below
+            //       (even in a debug print); it may have unintended consequences based
+            //       on where this function is being called from.  For example, KineticaRDD's
+            //       compute() calls this, and due to a debug print with ${myRows.size} in it,
+            //       the RDD was ALWAYS thought to be empty.  Bottom line: do NOT iterate over
+            //       the rows being returned.
+
+            // Convert the records so that spark can understand it
+            val internalRows = resultSetToSparkInternalRows( null, allRecords )
+            internalRows
+        }
+    }
 
     /*
      * Given a GPUdb connection, table name, offset, total number of rows to fetch,
@@ -775,39 +826,15 @@ object KineticaEgressUtilsNativeClient extends LazyLogging {
         batchSize:  Long,
         useLazyIterator: Boolean = false ): Iterator[Row] = {
 
-        if ( useLazyIterator ) {
-            logger.debug( s"getRowsFromKinetica(): Using lazy iterator (start: $startRow, # rows: $numRows)");
-            // Use a lazy iterator to optimize batch performance
-            val recordRange = startRow to (numRows + startRow - 1)
+        // Get the records out in the InternalRow format
+        val internalRows = getInternalRowsFromKinetica( gpudbConn, tableName, columns,
+                                                        schema, startRow, numRows,
+                                                        batchSize, useLazyIterator )
 
-            // Create a sliding iterator with a step size of batchSize
-            val groupedRanges = recordRange.iterator.sliding( batchSize.toInt, batchSize.toInt ).toList
-
-            // Use a lazy view to stream the records one batch at a time
-            groupedRanges.view.map( group => {
-                getRowsFromKinetica( gpudbConn, tableName, columns, schema,
-                                     startRow = group.head, numRows = group.length, batchSize, false)
-            }).flatten.toIterator
-            
-        } else {
-            logger.debug( s"getRowsFromKinetica(): in else block (start: $startRow, # rows: $numRows)");
-            // Fetch the records from Kinetica in the native format
-            val allRecords = getRecordsFromKinetica( gpudbConn, tableName, columns,
-                                                     startRow, numRows, batchSize )
-
-            // Note: Beware of calling .size or other functions on the rows created below
-            //       (even in a debug print); it may have unintended consequences based
-            //       on where this function is being called from.  For example, KineticaRDD's
-            //       compute() calls this, and due to a debug print with ${myRows.size} in it,
-            //       the RDD was ALWAYS thought to be empty.  Bottom line: do NOT iterate over
-            //       the rows being returned.
-        
-            // Convert the records so that spark can understand it
-            val internalRows = resultSetToSparkInternalRows( null, allRecords )
-            val encoder = RowEncoder.apply( schema ).resolveAndBind()
-            val myRows = internalRows.map( encoder.fromRow )
-            myRows
-        }
+        // Convert the records so that spark can understand it
+        val encoder = RowEncoder.apply( schema ).resolveAndBind()
+        val myRows = internalRows.map( encoder.fromRow )
+        myRows
     }
 
 

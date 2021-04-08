@@ -121,7 +121,9 @@ object SparkKineticaTableUtil extends LazyLogging {
      */
     def createTable(ds: Option[DataFrame], schema: Option[StructType], lp: LoaderParams): Unit = {
         logger.info("Creating table from schema")
-        verifyJdbcUrl(lp)
+        if ( !lp.isDryRun() ) {
+            verifyJdbcUrl(lp)
+        }
         buildCreateTableDDL(ds, schema, lp)
         //execute create table
         logger.info("Create table DDL:  {}", KineticaDDLBuilder.getCreateTableDDL)

@@ -5,6 +5,7 @@ import com.kinetica.spark.util.ConfigurationConstants._
 import com.kinetica.spark.util._
 import com.kinetica.spark.util.table._
 import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.sources.v2.DataSourceOptions
 import org.apache.spark.sql.sources.v2.writer.DataSourceWriter
 import org.apache.spark.sql.sources.v2.writer.DataWriterFactory
@@ -23,7 +24,7 @@ class KineticaDataSourceWriter (schema: StructType, options: DataSourceOptions)
 
     // Ingestion related utility class
     val ingestionUtils = new KineticaSparkDFManager( conf );
-    
+
     setup( schema );
 
     private def setup( schema: StructType ): Unit = {
@@ -35,7 +36,7 @@ class KineticaDataSourceWriter (schema: StructType, options: DataSourceOptions)
             logger.warn("The dataframe has no schema; skipping ingestion");
             return;
         }
-        
+
         if (conf.isCreateTable && conf.isAlterTable) {
             throw new RuntimeException("Create table and alter table option set to true. Only one must be set to true ");
         }
@@ -96,7 +97,7 @@ class KineticaDataSourceWriter (schema: StructType, options: DataSourceOptions)
         // }
     }   // end setup
 
-    override def createWriterFactory(): DataWriterFactory[Row] = {
+    override def createWriterFactory(): DataWriterFactory[InternalRow] = {
 
         // Need to convert options to a Scala map 'cause spark's closure complains about
         // its own DataSourceOptions (not serializable)

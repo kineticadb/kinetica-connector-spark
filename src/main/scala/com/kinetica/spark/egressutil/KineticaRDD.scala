@@ -8,6 +8,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.{ Partition, SparkContext, TaskContext }
+import org.apache.spark.sql.sources.Filter;
 
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.InternalRow
@@ -49,7 +50,7 @@ private[kinetica] class KineticaRDD(
     conf: LoaderParams
     )
     extends RDD[Row](sc, Nil) with LazyLogging {
-    
+
     /**
      * Retrieve the list of partitions corresponding to this RDD.
      */
@@ -66,7 +67,7 @@ private[kinetica] class KineticaRDD(
             // we use the Java API only in this case is because we cannot push down
             // spark sql filters via the Java API.
             logger.debug("KineticaRDD::compute(): No filters given; use the native path");
-        
+
             // Fetch the rows (after filtering the data server-side)
             val allRowsForPartition = KineticaEgressUtilsNativeClient.getRowsFromKinetica( conf.getGpudb, conf.getTablename,
                                                                                            columns, schema,
@@ -82,7 +83,7 @@ private[kinetica] class KineticaRDD(
 
             def close() {
             }
-            context.addTaskCompletionListener { context => close(); }
+            context.addTaskCompletionListener { context => close(); Unit }
 
             allRowsForPartition
         } else {
@@ -116,7 +117,7 @@ private[kinetica] class KineticaRDD(
         val myrows = internalRows.map(encoder.fromRow)
 
         def close() {
-            
+
             if (closed) return
             try {
                 if (null != rs) {
@@ -149,13 +150,11 @@ private[kinetica] class KineticaRDD(
             }
             closed = true
         }
-        context.addTaskCompletionListener { context => close() }
+        context.addTaskCompletionListener { context => close(); Unit }
         myrows
-//            CompletionIterator[InternalRow, Iterator[InternalRow]](
-//          new InterruptibleIterator(context, rowsIterator), close())
     }   // end fetchRecordsViaJDBC
 
-        
+
     def buildTableQuery(
         conn: Connection,
         table: String,

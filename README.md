@@ -74,6 +74,13 @@ This sequence produces the connector JAR, which will be made available to the
 
     target/kinetica-spark-7.0.<X>.<Y>-jar-with-dependencies.jar
 
+It will also produce at the same location the connector JAR with shaded package
+`com.typesafe.scalalogging` dependency that can be used instead in enterprise-level
+*Spark* environment with other third-party deployments that can have a potential
+conflict with scalalogging library version:
+
+    target/kinetica-spark-7.0.<X>.<Y>-jar-with-shaded-scalalogging.jar
+
 It will also produce a testing JAR under the same directory, which will be
 referenced later in this guide for use in testing the *Spark* connector:
 
@@ -1073,7 +1080,7 @@ Configure JDBC for source database and specify query for map key ``dbtable``;
 be sure to provide an appropriate value for ``<KineticaHostName/IP>``, as
 well as ``<Username>`` & ``<Password>``, if the database is configured to
 require authentication.
-   
+
 **NOTE:**  When using the JDBC driver directly, make sure to use the JDBC
            authentication parameter names ``UID`` & ``PWD`` for username &
            password, respectively.

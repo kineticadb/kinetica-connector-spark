@@ -2,6 +2,12 @@
 
 ## Version 7.1
 
+### Version 7.1.2.0 -- 2022-05-23
+
+#### Changed
+-   Updated Nexus links
+
+
 ### Version 7.1.1.0 -- 2021-04-08
 
 #### Changed

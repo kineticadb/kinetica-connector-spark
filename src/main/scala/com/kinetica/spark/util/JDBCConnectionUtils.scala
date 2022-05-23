@@ -7,8 +7,9 @@ import java.sql.Statement
 import java.sql.DatabaseMetaData
 import java.util.Properties
 import com.kinetica.spark.LoaderParams
+import com.typesafe.scalalogging.LazyLogging
 
-object JDBCConnectionUtils {
+object JDBCConnectionUtils extends LazyLogging {
 
     private var connection: Connection = null
 
@@ -51,7 +52,7 @@ object JDBCConnectionUtils {
         try {
             stmt.execute(sqlStatement)
             stmt.getResultSet
-            stmt.close
+            stmt.close()
         } catch {
             case e: Exception => {
                 e.printStackTrace()
@@ -61,8 +62,10 @@ object JDBCConnectionUtils {
     }
 
     def tableExists(tableName: String): Boolean = {
-        val dbm = connection.getMetaData();
-        val tables = dbm.getTables(null, null, tableName, null);
+        val tableNameMinusSchema = if (tableName.split("\\.").length == 2 ) tableName.split("\\.")(1) else tableName
+
+        val dbm = connection.getMetaData;
+        val tables = dbm.getTables(null, null, tableNameMinusSchema, null);
         if (tables.next()) {
             true
         } else {

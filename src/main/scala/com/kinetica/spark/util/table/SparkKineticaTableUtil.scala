@@ -146,7 +146,9 @@ object SparkKineticaTableUtil extends LazyLogging {
         verifyJdbcUrl(lp)
         JDBCConnectionUtils.Init(lp)
         //execute truncate table
-        JDBCConnectionUtils.executeSQL(s"TRUNCATE TABLE ${lp.tablename}")
+        val tableName = if (lp.tablename.split("\\.").length == 2 ) lp.tablename.split("\\.").map( ("\"" + _ + "\"") ).toList.mkString(".") else lp.tablename
+
+        JDBCConnectionUtils.executeSQL(s"TRUNCATE TABLE ${tableName}")
         JDBCConnectionUtils.close()
     }
 

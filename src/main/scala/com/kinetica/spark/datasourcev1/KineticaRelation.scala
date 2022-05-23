@@ -193,14 +193,14 @@ class KineticaRelation(
                 if (conf.truncateTable) {
                     logger.info("Truncating/Creating table " + conf.getTablename);
                     try {
-                        SparkKineticaTableUtil.truncateTable(Option.apply(dfSource), conf);
+                        SparkKineticaTableUtil.truncateTable(Option(dfSource), conf);
                     } catch {
                         case e: Throwable => throw new RuntimeException("Failed with errors ", e);
                     }
                 }
             } else if (conf.isCreateTable) {
                 try {
-                    SparkKineticaTableUtil.createTable( Option.apply(dfSource), None, conf );
+                    SparkKineticaTableUtil.createTable( Option(dfSource), None, conf );
                 } catch {
                     case e: Throwable => throw new RuntimeException("Failed with errors ", e);
                 }

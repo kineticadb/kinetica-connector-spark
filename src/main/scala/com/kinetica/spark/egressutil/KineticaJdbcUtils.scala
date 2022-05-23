@@ -55,10 +55,10 @@ private[kinetica] object KineticaJdbcUtils extends LazyLogging {
      * @return A "<schema>"."<table>" qualified name representation
      */
     def quoteTableName(tableName: String): String = {
-        var tableNameParts = tableName.split("\\.");
+        val tableNameParts = tableName.split("\\.");
         if ( tableName.contains(".") && tableNameParts.length == 2) {
-            var schema = tableNameParts( 0 );
-            var table = tableNameParts( 1 );
+            val schema = tableNameParts(0);
+            val table = tableNameParts(1);
             s"""$schema"."$table"""
         } else {
             s"""$tableName"""

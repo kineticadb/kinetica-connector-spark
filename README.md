@@ -1,18 +1,192 @@
 # Kinetica Spark Connector
 
-This project contains the **7.1** version of the **Kinetica Spark Connector**
+This project contains the **7.1** version of the **Legacy Kinetica Spark Connector**
 for bidirectional integration of *Kinetica* with *Spark*.
 
-This guide exists on-line at:  [Kinetica Spark Connector Guide](http://www.kinetica.com/docs/7.1/connectors/spark_guide.html)
+This guide exists on-line at:  [Kinetica Spark Connector Guide](https://docs.kinetica.com/7.1/connectors/spark_guide.html)
 
-More information can be found at:  [Kinetica Documentation](http://www.kinetica.com/docs/7.1/index.html)
+More information can be found at:  [Kinetica Documentation](https://docs.kinetica.com/7.1/index.html)
 
 -----
 
-# Kinetica Spark Connector Guide
+# Kinetica Spark Guide
 
 The following guide provides step by step instructions to get started using
-*Spark* with *Kinetica*.  The *Spark Connector* provides easy integration of
+*Spark* with *Kinetica*.
+
+There are two primary methods by which *Kinetica* & *Spark* can be integrated:
+
+* [SQL via JDBC](#sql) *(Preferred)*
+* [Legacy Spark Connector](#legacy-spark-connector) *(Deprecated)*
+
+**NOTE:**  The *Spark Connector* has been deprecated in favor of SQL via the
+           *Kinetica* JDBC driver.  For alternative means of rapid ingest, see:
+
+* SQL [CREATE EXTERNAL TABLE](https://docs.kinetica.com/7.1/concepts/sql/#create-external-table)
+* SQL [LOAD INTO](https://docs.kinetica.com/7.1/concepts/sql/#load-into)
+* [Multi-Head Ingest](https://docs.kinetica.com/7.1/tuning/multihead/multihead_ingest/)
+
+
+## SQL
+
+SQL queries can be issued against *Kinetica* through the *Spark* JDBC interface.
+This allows access to native *Kinetica* functions, including geospatial
+operations.  These queries will not be partitioned, however, like queries made
+through the *Egress Processor* of the *Legacy Spark Connector*.
+
+See [Connecting via JDBC](https://docs.kinetica.com/7.1/connectors/sql_guide/#java-client-via-jdbc)
+for obtaining the JDBC driver.
+
+The following example shows how to execute queries against *Kinetica*.  It will
+use JDBC as the read format, require the *Kinetica* JDBC driver to be accessible
+and load it, and allow the specified query to run.  The result of the query will
+be loaded into a ``DataFrame`` and the schema and result set will be output to
+the console.
+
+This example makes use of the NYC taxi trip table, which can be loaded using
+*GAdmin* from the *Demo Data* page, under *Cluster* > *Demo*.
+
+Launch *Spark Shell*:
+
+```shell
+$ spark-shell --jars kinetica-jdbc-7.1.*-jar-with-dependencies.jar
+```
+
+Configure JDBC for source database and specify query for map key ``dbtable``;
+be sure to provide an appropriate value for ``<KineticaHostName/IP>``, as
+well as ``<Username>`` & ``<Password>``, if the database is configured to
+require authentication.
+
+   
+**NOTE:**  If connecting over SSL, see
+           [JDBC Secure Connections](https://docs.kinetica.com/7.1/connectors/sql_guide/#odbc-connecting-secure)
+           for the modified URL to use.
+
+```scala
+val host = "<KineticaHostName/IP>"
+var url = s"jdbc:kinetica://${host}:9191"
+val username = "<Username>"
+val password = "<Password>"
+val options = Map(
+   "url" -> url,
+   "driver" -> "com.kinetica.jdbc.Driver",
+   "UID" -> username,
+   "PWD" -> password,
+   "dbtable" -> s"""(
+      SELECT
+         vendor_id,
+         DECIMAL(MIN(geo_miles)) AS min_geo_miles,
+         DECIMAL(AVG(geo_miles)) AS avg_geo_miles,
+         DECIMAL(MAX(geo_miles)) AS max_geo_miles
+      FROM
+      (
+         SELECT
+            vendor_id,
+            DECIMAL(GEODIST(pickup_longitude, pickup_latitude, dropoff_longitude, dropoff_latitude) * 0.000621371) AS geo_miles
+         FROM demo.nyctaxi
+      )
+      WHERE geo_miles BETWEEN .01 AND 100
+      GROUP BY vendor_id
+   )"""
+)
+```
+
+Get *Spark* SQL context:
+
+```scala
+val sqlContext = spark.sqlContext
+```
+
+Read queried data from *Kinetica* into ``DataFrame``:
+
+```scala
+val df = sqlContext.read.format("jdbc").options(options).load()
+```
+
+Output ``DataFrame`` schema for query:
+
+```scala
+df.printSchema
+```
+
+Verify output:
+
+    root
+     |-- vendor_id: string (nullable = true)
+     |-- min_geo_miles: decimal(20,4) (nullable = true)
+     |-- avg_geo_miles: decimal(20,4) (nullable = true)
+     |-- max_geo_miles: decimal(20,4) (nullable = true)
+
+Output query result set:
+
+```scala
+df.orderBy("vendor_id").show
+```
+
+Verify output (may contain additional records from streaming test):
+
+    +---------+-------------+-------------+-------------+
+    |vendor_id|min_geo_miles|avg_geo_miles|max_geo_miles|
+    +---------+-------------+-------------+-------------+
+    |      CMT|       0.0100|       2.0952|      80.8669|
+    |      DDS|       0.0148|       2.7350|      64.2944|
+    |      NYC|       0.0101|       2.1548|      36.9236|
+    |      VTS|       0.0100|       2.0584|      94.5213|
+    |     YCAB|       0.0100|       2.1049|      36.0565|
+    +---------+-------------+-------------+-------------+
+
+
+### Mapping Spark to Kinetica
+
+Some *Spark* data types and functions may need custom mappings to *Kinetica*.
+
+The following dialect snippet is a custom mapping, which maps:
+
+* *Spark's* CLOB/VARCHAR types to the *Kinetica* ``VARCHAR`` type
+* *Spark's* BLOB type to the *Kinetica* ``BLOB`` type
+* *Spark's* boolean type to the *Kinetica* ``TINYINT`` type
+* The truncate command (which does ``DROP``/``CREATE``, by default) to
+  *Kinetica's* ``TRUNCATE TABLE`` command
+
+```scala
+import org.apache.spark.sql.jdbc.{JdbcDialects, JdbcDialect, JdbcType}
+import java.sql.Types
+import java.util.Locale
+
+import org.apache.spark.sql.types._
+
+val KineticaDialect = new JdbcDialect {
+    override def canHandle(url: String): Boolean =
+        url.toLowerCase(Locale.ROOT).startsWith("jdbc:kinetica")
+    override def getJDBCType(dt: DataType): Option[JdbcType] = dt match {
+        case StringType => Some(JdbcType("TEXT", java.sql.Types.VARCHAR))
+        case BinaryType => Some(JdbcType("VARBINARY", java.sql.Types.VARBINARY))
+        case BooleanType => Option(JdbcType("TINYINT", java.sql.Types.TINYINT))
+        case _ => None
+    }
+    override def isCascadingTruncateTable(): Option[Boolean] = Some(false)
+    override def getTruncateQuery(
+        table: String,
+        cascade: Option[Boolean] = isCascadingTruncateTable
+    ): String = { s"TRUNCATE TABLE $table" }
+}
+JdbcDialects.registerDialect(KineticaDialect)
+```
+
+After running the application code, the dialect can be unregistered as follows:
+
+```scala
+JdbcDialects.unregisterDialect(KineticaDialect)
+```
+
+
+
+## Legacy Spark Connector
+
+**Important:**  This connector has been deprecated.  See note at
+                [top](#kinetica-spark-guide).
+
+The legacy *Spark Connector* provides easy integration of
 *Spark v2.3.x* with *Kinetica* via the *Spark Data Source API*.
 
 There are two packages in this project:
@@ -43,7 +217,7 @@ Source code for the connector can be found at:
 
 * <https://github.com/kineticadb/kinetica-connector-spark>
 
-## Contents
+### Contents
 
 * [Build & Install](#build--install)
 * [Usage](#usage)
@@ -56,7 +230,7 @@ Source code for the connector can be found at:
 
 
 
-## Build & Install
+### Build & Install
 
 The connector JAR can be built with *Maven* as follows:
 
@@ -96,7 +270,7 @@ In order to run the pre-packaged tests, run:
 for running the tests.
 
 
-## Usage
+### Usage
 
 To run the *Data Loader* on a *Spark* cluster, run the following command; be
 sure to provide appropriate values for ``<SparkMasterHostName/IP>``,
@@ -119,7 +293,10 @@ To run the *Ingest/Egress Processor* through the *PySpark* shell:
     $ pyspark --jars kinetica-spark-7.1.<X>.<Y>-jar-with-dependencies.jar
 
 
-## Spark Data Loader
+### Spark Data Loader
+
+**Important:**  This loader has been deprecated.  See note at
+                [top](#kinetica-spark-guide).
 
 The *Spark Data Loader* fetches data from a SQL ``SELECT`` statement or data
 file and inserts the results into a *Kinetica* table.
@@ -136,7 +313,7 @@ Features include:
   reconciled
 
 
-### Property Specification
+#### Property Specification
 
 Properties can be set in one of the following locations:
 
@@ -157,7 +334,7 @@ An example SSL configuration is available in the connector distribution, under
 ``src/test/resources/gpudb-secure.properties``.
 
 
-### Template Tables
+#### Template Tables
 
 The *template table* feature is activated when ``table.use_templates`` is set to
 ``true``.  It provides a method for schema versioning when tables are created
@@ -186,7 +363,7 @@ When creating the table ``avro_test``, the loader will use the schema from
 ``avro_test.20180230`` because it shows up first in the reverse sort.
 
 
-### Schema Merging
+#### Schema Merging
 
 The *Spark DataFrame* and *Kinetica* table schemas may have different columns or
 the columns may have different types. In this situation, the loader will apply
@@ -220,7 +397,7 @@ The following conditions will cause the mapping to fail:
 **NOTE:** If either condition is detected during setup, no workers are launched.
 
 
-### Examples
+#### Examples
 
 The distribution contains example jobs for *Avro* and CSV data sets. They
 contain the following files.
@@ -254,7 +431,10 @@ environment, and execute ``run-spark-loader.sh`` from within the
     INFO  org.apa.spa.SparkContext (Logging.scala:54) - Successfully stopped SparkContext
 
 
-## Spark Ingest/Egress Processor
+### Spark Ingest/Egress Processor
+
+**Important:**  This processor has been deprecated.  See note at
+                [top](#kinetica-spark-guide).
 
 The *Spark Ingest/Egress Processor* provides an easy API-level interface for
 moving data between *Spark* and *Kinetica*.
@@ -263,7 +443,7 @@ It is designed to interface with *Kinetica* through *Spark DataFrames*, and
 optimize data type conversions between the two.
 
 
-### Architecture
+#### Architecture
 
 The connector API will extract the data types from a *Spark* ``DataFrame`` and
 construct a table in *Kinetica* with the corresponding schema.  The following
@@ -294,7 +474,7 @@ For the *Ingest Processor*, each *Spark* ``DataFrame`` partition instantiates a
 *Kinetica* ``BulkInserter``, which is a native API for rapid data ingest.
 
 
-### Property Specification
+#### Property Specification
 
 Both the *Ingest Processor* & *Egress Processor* accept properties
 programmatically, as format options.
@@ -303,9 +483,9 @@ In the examples here, map objects will be used for configuring the specifics of
 processing and passed in as format options as a set.
 
 
-### Data Ingest
+#### Data Ingest
 
-#### Process Flow
+##### Process Flow
 
 1. Create a ``Map`` and initialize with appropriate connection config
 2. Create a ``SparkSession``
@@ -314,7 +494,7 @@ processing and passed in as format options as a set.
 4. Write out the ``DataFrame`` using the *Kinetica* custom format and ``Map``
    options
 
-#### Creating Schemas
+##### Creating Schemas
 
 The *Ingest Processor* can create the target table, if necessary, and then load
 data into it.  It will perform automatic right-sizing of string and numeric
@@ -323,7 +503,7 @@ fields when creating column types & sizes.
 To use the automatic schema creation option, set the ``table.create`` parameter
 to ``true`` in the options ``Map``.
 
-#### Complex Data Types
+##### Complex Data Types
 
 The *Ingest Processor* is able to perform conversions on several complex data
 types to fit them into a single target table.  The following complex types are
@@ -336,7 +516,7 @@ supported:
 To use the complex data type conversion option, set the
 ``ingester.flatten_source_schema`` parameter to ``true`` in the options ``Map``.
 
-##### Struct
+###### Struct
 
 Each leaf node of a *struct* will result in a single column in the target table.
 The column's name will be the concatenation of the attribute at each level of
@@ -370,7 +550,7 @@ CREATE TABLE customer
 )
 ```
 
-##### Array
+###### Array
 
 Each *array* will result in a single column in the target table, named the same
 as the *array* field.  Each element in the *array* will result in a separate
@@ -411,7 +591,7 @@ This table will be created:
     |Mary         |                    5|
     +-------------+---------------------+
 
-##### Map
+###### Map
 
 Each unique *map key* will result in a single column in the target table.  Each
 column's name is derived from the *map* name and *map key*, separated by an
@@ -459,7 +639,7 @@ This table will be created:
     |Mary         |                   |444-444-4444       |333-333-3333       |
     +-------------+-------------------+-------------------+-------------------+
 
-#### Drifting/Evolving Schemas
+##### Drifting/Evolving Schemas
 
 The *Ingest Processor* can handle drifting/evolving schemas:
 
@@ -471,16 +651,16 @@ To use the drifting/evolving schema option, set the ``table.append_new_columns``
 parameter to ``true`` in the options ``Map``.
 
 
-### Data Egress
+#### Data Egress
 
-#### Process Flow
+##### Process Flow
 
 1. Create a ``Map`` and initialize with appropriate connection config
 2. Create a ``SparkSession``
 3. Load data from *Kinetica* into a ``DataFrame``, using the
    ``com.kinetica.spark`` read format with the session's ``sqlContext``
 
-#### Filter Pass-Down
+##### Filter Pass-Down
 
 When using ``filter`` operations, the query will be split into the number of
 partitions specified by ``spark.num_partitions`` in the configuration ``Map``.
@@ -489,7 +669,7 @@ will only extract those *Kinetica*-filtered records.  Presently, ``filter`` is
 the only operation that takes advantage of this pass-down optimization.
 
 
-### Usage Considerations
+#### Usage Considerations
 
 * The connector does not perform any ETL transformations
 * Data types must match between *Spark* and *Kinetica*, with the exception of
@@ -501,7 +681,7 @@ the only operation that takes advantage of this pass-down optimization.
   valid certificate must be used
 
 
-### Examples
+#### Examples
 
 These examples will demonstrate ingesting data into *Kinetica*, extracting data
 from *Kinetica*, and using *PySpark* with *Kinetica*.
@@ -515,7 +695,7 @@ This example assumes the ``2008.csv`` and *Spark* connector JAR
 the ``/opt/gpudb/connectors/spark`` directory on the *Spark* master node.
 
 
-#### Analyze Data
+##### Analyze Data
 
 Before loading data into the database, an analysis of the data to ingest can be
 done.  This will scan through the source data to determine what the target table
@@ -572,7 +752,7 @@ After this is complete, the log should contain the ``CREATE TABLE`` statement
 for the table appropriate for the airline dataset contained in :file:`2008.csv`.
 
 
-#### Ingest
+##### Ingest
 
 The following example shows how to load data into *Kinetica* via ``DataFrame``.
 It will first read airline data from CSV into a ``DataFrame``, and then load the
@@ -653,7 +833,7 @@ $ spark-submit \
 ```
 
 
-#### Egress
+##### Egress
 
 The following example shows how to extract data from *Kinetica* into a
 ``DataFrame``.  It will first read table data into a ``DataFrame`` and then
@@ -771,7 +951,7 @@ $ spark-submit \
        <KineticaHostName/IP> <Username> <Password>
 ```
 
-#### PySpark
+##### PySpark
 
 The following example shows how to load data into *Kinetica* via ``DataFrame``
 using *PySpark*.  It will first read airline data from CSV into a ``DataFrame``,
@@ -857,13 +1037,16 @@ $ spark-submit \
 ```
 
 
-## Spark Streaming Processor
+### Spark Streaming Processor
+
+**Important:**  This processor has been deprecated.  See note at
+                [top](#kinetica-spark-guide).
 
 The *Spark Streaming Processor* provides an easy API-level interface for
 streaming data from *Kinetica* to *Spark*.
 
 
-### Architecture
+#### Architecture
 
 The connector API creates a *table monitor* in *Kinetica*, which will watch for
 record inserts into a given table and publish them on a *ZMQ* topic.  A *Spark*
@@ -873,7 +1056,7 @@ added records available to the API user within *Spark*.
 *ZMQ* runs on the *Kinetica* head node on the default port of ``9002``.
 
 
-### Property Specification
+#### Property Specification
 
 The *Streaming Processor* accepts properties programmatically, via
 ``LoaderParams``.
@@ -882,7 +1065,7 @@ In the examples here, map objects will be used for configuring the specifics of
 processing and passed in to ``LoaderParams``.
 
 
-### Establishing a Data Stream
+#### Establishing a Data Stream
 
 1. Create a ``LoaderParams`` and initialize with appropriate connection config.
 2. Create a ``StreamingContext``.
@@ -890,7 +1073,7 @@ processing and passed in to ``LoaderParams``.
 4. Create a ``DStream``, subscribing to the new record topic.
 
 
-### Usage Considerations
+#### Usage Considerations
 
 * The *table monitor* only watches for record inserts; thus, the ``DStream``
   will only contain table inserts, not updates or deletions.
@@ -898,7 +1081,7 @@ processing and passed in to ``LoaderParams``.
   streaming is not supported at this time.
 
 
-### Examples
+#### Examples
 
 This example will demonstrate streaming data to & from *Kinetica*.
 
@@ -1048,305 +1231,16 @@ having been created via ``spark-shell`` in the manual *Spark* streaming
 example above.
 
 
-## SQL
+### Property Reference
 
-SQL queries can be issued against *Kinetica* through the *Spark* JDBC interface.
-This allows access to native *Kinetica* functions, including geospatial
-operations.  These queries will not be partitioned, however, like queries made
-through the *Egress Processor*.
-
-The following example shows how to execute arbitrary queries against *Kinetica*.
-It will use JDBC as the read format, require the *Kinetica* JDBC driver (found,
-in default *Kinetica* installations, at
-``/opt/gpudb/connectors/jdbc/kinetica-jdbc-7.1.<X>.<Y>-jar-with-dependencies.jar``)
-to be accessible and loaded, and allow the specification of a query to run.  The
-result of the query will be loaded into a ``DataFrame`` and the schema and
-result set will be output to the console.
-
-This example makes use of the NYC taxi trip table, which can be loaded using
-*GAdmin* from the *Demo Data* page, under *Cluster* > *Demo*.
-
-**NOTE:**  The ``nyctaxi`` table **must** exist before this example can be run.
-
-Launch *Spark Shell*:
-
-```shell
-$ spark-shell --jars \
-    /opt/gpudb/connectors/spark/kinetica-spark-7.1.*-jar-with-dependencies.jar \
-    /opt/gpudb/connectors/jdbc/kinetica-jdbc-7.1.*-jar-with-dependencies.jar
-```
-
-Configure JDBC for source database and specify query for map key ``dbtable``;
-be sure to provide an appropriate value for ``<KineticaHostName/IP>``, as
-well as ``<Username>`` & ``<Password>``, if the database is configured to
-require authentication.
-
-**NOTE:**  When using the JDBC driver directly, make sure to use the JDBC
-           authentication parameter names ``UID`` & ``PWD`` for username &
-           password, respectively.
-
-```scala
-val host = "<KineticaHostName/IP>"
-val username = "<Username>"
-val password = "<Password>"
-val url = s"http://${host}:9191"
-val options = Map(
-   "url" -> s"jdbc:kinetica://${host}:9191",
-   "driver" -> "com.kinetica.jdbc.Driver",
-   "UID" -> username,
-   "PWD" -> password,
-   "dbtable" -> s"""(
-      SELECT
-         vendor_id,
-         DECIMAL(MIN(geo_miles)) AS min_geo_miles,
-         DECIMAL(AVG(geo_miles)) AS avg_geo_miles,
-         DECIMAL(MAX(geo_miles)) AS max_geo_miles
-      FROM
-      (
-         SELECT
-            vendor_id,
-            DECIMAL(GEODIST(pickup_longitude, pickup_latitude, dropoff_longitude, dropoff_latitude) * 0.000621371) AS geo_miles
-         FROM nyctaxi
-      )
-      WHERE geo_miles BETWEEN .01 AND 100
-      GROUP BY vendor_id
-   )"""
-)
-```
-
-Get *Spark* SQL context:
-
-```scala
-val sqlContext = spark.sqlContext
-```
-
-Read queried data from *Kinetica* into ``DataFrame``:
-
-```scala
-val df = sqlContext.read.format("jdbc").options(options).load()
-```
-
-Output ``DataFrame`` schema for query:
-
-```scala
-df.printSchema
-```
-
-Verify output:
-
-    root
-     |-- vendor_id: string (nullable = true)
-     |-- min_geo_miles: decimal(20,4) (nullable = true)
-     |-- avg_geo_miles: decimal(20,4) (nullable = true)
-     |-- max_geo_miles: decimal(20,4) (nullable = true)
-
-Output query result set:
-
-```scala
-df.orderBy("vendor_id").show
-```
-
-Verify output (may contain additional records from streaming test):
-
-    +---------+-------------+-------------+-------------+
-    |vendor_id|min_geo_miles|avg_geo_miles|max_geo_miles|
-    +---------+-------------+-------------+-------------+
-    |      CMT|       0.0100|       2.0952|      80.8669|
-    |      DDS|       0.0148|       2.7350|      64.2944|
-    |      NYC|       0.0101|       2.1548|      36.9236|
-    |      VTS|       0.0100|       2.0584|      94.5213|
-    |     YCAB|       0.0100|       2.1049|      36.0565|
-    +---------+-------------+-------------+-------------+
-
-
-## Federated Queries
-
-*Spark* provides support for *federated queries*--combining multiple queries
-over disparate sources; e.g., joining CSV data with the results of a database
-query.
-
-The following example demonstrates the joining of an *Ingest Processor* result
-set with a JDBC result set.  It will use JDBC as the read format for the query,
-require the *Kinetica* JDBC driver (found, in default *Kinetica* installations,
-at ``/opt/gpudb/connectors/jdbc/kinetica-jdbc-7.1.<X>.<Y>-jar-with-dependencies.jar``)
-to be accessible and loaded, and allow the specification of the query to run.
-The result of both the *Ingest Processor* & JDBC query will be loaded into
-``DataFrame`` objects and be joined together via *Spark*.  The result of the
-join will be output to the console.
-
-This example makes use of the NYC taxi trip data set, which can be loaded using
-*GAdmin* from the *Demo Data* page, under *Cluster* > *Demo*.
-
-**NOTE:**  The ``nyctaxi`` table **must** exist before this example can be run.
-
-It supplements that data with the NYC taxi zone data set, available in the
-connector project dirctory under ``scripts/data/taxi_zone.csv``.
-
-This example assumes the ``taxi_zone.csv`` file and *Spark* connector JAR
-(``kinetica-spark-7.1.<X>.<Y>-jar-with-dependencies.jar``) have been copied to
-the ``/opt/gpudb/connectors/spark`` directory on the *Spark* master node.
-
-Launch *Spark Shell*:
-
-```shell
-$ spark-shell --jars \
-    /opt/gpudb/connectors/spark/kinetica-spark-7.1.*-jar-with-dependencies.jar \
-    /opt/gpudb/connectors/jdbc/kinetica-jdbc-7.1.*-jar-with-dependencies.jar
-```
-
-Configure *Ingest Processor* to load a new taxi zone table and be sure to
-provide an appropriate value for ``<KineticaHostName/IP>``, as well as
-``<Username>`` & ``<Password>``, if the database is configured to require
-authentication; note assignment of ``geom`` column as a *WKT* type--this will
-be necessary for the geospatial join in the JDBC query:
-
-```scala
-val host = "<KineticaHostName/IP>"
-val username = "<Username>"
-val password = "<Password>"
-val url = s"http://${host}:9191"
-val jdbcUrl = s"jdbc:kinetica://${host}:9191"
-val options = Map(
-   "database.url" -> url,
-   "database.jdbc_url" -> jdbcUrl,
-   "database.username" -> username,
-   "database.password" -> password,
-   "ingester.ip_regex" -> "",
-   "ingester.batch_size" -> "10000",
-   "ingester.num_threads" -> "4",
-   "table.name" -> "taxi_zone",
-   "table.is_replicated" -> "true",
-   "table.update_on_existing_pk" -> "true",
-   "table.map_columns_by_name" -> "false",
-   "table.create" -> "true"
-)
-
-com.kinetica.spark.util.table.SparkKineticaTableUtil.setWktfield("geom")
-```
-
-Read taxi zone data from CSV file into ``DataFrame``:
-
-```scala
-val dfTaxiZone = spark.read.
-                 format("csv").
-                 option("header", "true").
-                 option("inferSchema", "true").
-                 option("delimiter", ",").
-                 csv("/opt/gpudb/connectors/spark/taxi_zone.csv")
-```
-
-Write taxi zone data into new table; the ``DataFrame`` will be written to
-*Kinetica* for use in the JDBC query and also be reused itself in the
-federated join:
-
-```scala
-dfTaxiZone.write.format("com.kinetica.spark").options(options).save()
-```
-
-Specify taxi trip and taxi zone JDBC query for map key ``dbtable``:
-
-```scala
-val options = Map(
-   "url" -> jdbcUrl,
-   "driver" -> "com.kinetica.jdbc.Driver",
-   "UID" -> username,
-   "PWD" -> password,
-   "dbtable" -> s"""(
-      SELECT *
-      FROM
-      (
-        SELECT
-          objectid,
-          IF (GROUPING(vendor_id) = 1, 'ALL', vendor_id) AS vendor_name,
-          COUNT(*) AS total_pickups,
-          DECIMAL(SUM(IF(HOUR(pickup_datetime) BETWEEN 5 AND 19, 0, 1))) / COUNT(*) * 100 AS night_pickup_percentage
-        FROM
-          nyctaxi AS t
-          JOIN taxi_zone z
-            ON STXY_Intersects(t.pickup_longitude, t.pickup_latitude, z.geom) = 1
-        GROUP BY
-          objectid,
-          ROLLUP(vendor_id)
-      )
-      PIVOT
-      (
-        MAX(total_pickups) AS tp,
-        MAX(night_pickup_percentage) AS npp
-        FOR vendor_name IN ('ALL', 'CMT', 'NYC', 'VTS', 'YCAB')
-      )
-   )"""
-)
-```
-
-Get *Spark* SQL context for JDBC query:
-
-```scala
-val sqlContext = spark.sqlContext
-```
-
-Read queried data from *Kinetica* into ``DataFrame``:
-
-```scala
-val dfTaxiTrip = sqlContext.read.format("jdbc").options(options).load()
-```
-
-Perform federated join of taxi zone ``DataFrame`` and taxi trip JDBC
-``DataFrame``:
-
-```scala
-val dfFedJoin = dfTaxiTrip.join(dfTaxiZone, Seq("objectid"))
-```
-
-Filter, sort, label, & output *federated query* result set:
-
-```scala
-dfFedJoin.
-   where(
-      "all_tp > 500 AND all_npp > 50"
-   ).
-   orderBy($"all_npp".desc).
-   select(
-      $"zone".as("Pickup Zone"),
-      $"all_tp".as("Total Pickups"),
-      $"all_npp".as("Overall Night Pickup Percentage"),
-      $"cmt_npp".as("CMT NPP"),
-      $"nyc_npp".as("NYC NPP"),
-      $"vts_npp".as("VTS NPP"),
-      $"ycab_npp".as("YCAB NPP")
-   ).
-   show(false)
-```
-
-Verify output, showing the taxi pickup zones with the greatest percentage of
-overall & per-vendor night time pickups.  For instance *79.82%* of the *1,363*
-pickups in *Williamsburg (North Side)* were at night (after *8:00pm* and
-before *5:00am*), though *85%* of the pickups for vendor *VTS* at that
-location were at night:
-
-    +-----------------------------+-------------+-------------------------------+-------+-------+-------+--------+
-    |Pickup Zone                  |Total Pickups|Overall Night Pickup Percentage|CMT NPP|NYC NPP|VTS NPP|YCAB NPP|
-    +-----------------------------+-------------+-------------------------------+-------+-------+-------+--------+
-    |East Williamsburg            |561          |82.53                          |83.33  |81.53  |81.9   |83.24   |
-    |Williamsburg (North Side)    |1363         |79.82                          |82.4   |79.19  |85.04  |74.67   |
-    |Williamsburg (South Side)    |982          |75.96                          |75.9   |77.63  |75.94  |74.07   |
-    |Park Slope                   |833          |67.46                          |72.45  |67.29  |72.15  |60.28   |
-    |Lower East Side              |7848         |67.17                          |62.86  |69.6   |66.8   |67.71   |
-    |Fort Greene                  |533          |60.22                          |58.57  |62.94  |60.15  |58.28   |
-    |Two Bridges/Seward Park      |1148         |57.49                          |59.47  |58.33  |57.81  |55.55   |
-    |East Village                 |16979        |56.18                          |57.49  |56.23  |54.79  |56.76   |
-    |Greenwich Village South      |7433         |53.78                          |52.79  |55.74  |52.42  |54.01   |
-    |Boerum Hill                  |676          |53.55                          |54.83  |54.54  |59.39  |47.39   |
-    |Meatpacking/West Village West|7071         |50.09                          |54.21  |48.89  |48.13  |50.24   |
-    +-----------------------------+-------------+-------------------------------+-------+-------+-------+--------+
-
-
-## Property Reference
+**Important:**  These properties pertain to deprecated interfaces.  See note at
+                [top](#kinetica-spark-guide).
 
 This section describes properties used to configure the connector.  Many
 properties are applicable to both connector modes; exceptions will be noted.
 
 
-### Connection Properties
+#### Connection Properties
 
 The following properties control the authentication & connection to *Kinetica*.
 
@@ -1387,7 +1281,7 @@ truststore can be specified to override the default from the JVM.
 | ``ssl.truststore_jks``      | *<none>*  | Java trust store for CA certificate check for the HTTPD server.  If not provided, then the Kinetica server's certificate will not be verified.  To allow for a self-signed certificate, omit this option.
 | ``ssl.truststore_password`` | *<none>*  | Java trust store password
 
-### Data Source/Target Properties
+##### Data Source/Target Properties
 
 The following properties govern the *Kinetica* table being accessed, as well as
 the access mechanism.

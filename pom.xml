@@ -29,7 +29,7 @@
         <slf4j.version>1.7.25</slf4j.version>
         <scala-logging.version>3.8.0</scala-logging.version>
         <scalatest.version>3.0.3</scalatest.version>
-        <jackson-databind.version>2.6.7.4</jackson-databind.version>
+        <jackson-databind.version>2.13.4.1</jackson-databind.version>
         <maven-javadoc-plugin.version>2.10.3</maven-javadoc-plugin.version>
         <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
         <maven-shade-plugin.version>3.2.4</maven-shade-plugin.version>
